@@ -1,0 +1,10 @@
+*~
+.DS_Store
+*.xml
+.idea/
+__pycache__/
+logs/
+trained_models/
+*egg-info
+dist/
+archive/
