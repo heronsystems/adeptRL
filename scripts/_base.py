@@ -141,4 +141,5 @@ class BaseTrainingLoop:
             # check if done training
             if step_count > args.max_steps:
                 self._save_top_models(top_3_models)
+                self.envs.close()
                 break

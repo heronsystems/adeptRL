@@ -117,4 +117,16 @@ if __name__ == '__main__':
     parser = base_parser()
     parser.add_argument('--name', default='lstm', help='logdir/tensorboard name')
     args = parser.parse_args()
-    TrainingLoop(args).run()
+    training_loop = TrainingLoop(args)
+
+    if args.profile:
+        from pyinstrument import Profiler
+
+        profiler = Profiler()
+        profiler.start()
+        training_loop.run()
+        profiler.stop()
+        print(profiler.output_text(unicode=True, color=True))
+    else:
+        training_loop.run()
+

@@ -219,6 +219,15 @@ class CircularBuffer(object):
         return self._data.__repr__() + ' (' + str(len(self._data))+' items)'
 
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def base_parser():
     root_dir = os.path.abspath(os.pardir)
 
@@ -291,7 +300,9 @@ def base_parser():
     )
     parser.add_argument(
         '--max-steps',
+        type=int,
         default=10e6
     )
     parser.add_argument('--batch-norm', default=True)
+    parser.add_argument('--profile', type=str2bool, nargs='?', const=True, default=False)
     return parser

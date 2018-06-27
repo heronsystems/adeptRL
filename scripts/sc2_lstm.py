@@ -141,12 +141,8 @@ def process_logits_by_head(logits_batch_by_hn, available_actions_batch):
     """
     acts_batch_by_hn, lprobs_batch_by_hn, ents_batch_by_hn = {}, {}, {}
     for headname, logits_exmpl in logits_batch_by_hn.items():
-        if headname == 'func_id':
-            acts_batch_by_hn[headname], lprobs_batch_by_hn[headname], ents_batch_by_hn[headname] = \
-                process_logits_by_batch(logits_batch_by_hn[headname], available_actions_batch)
-        else:
-            acts_batch_by_hn[headname], lprobs_batch_by_hn[headname], ents_batch_by_hn[headname] = \
-                process_logits_by_batch(logits_batch_by_hn[headname])
+        acts_batch_by_hn[headname], lprobs_batch_by_hn[headname], ents_batch_by_hn[headname] = \
+            process_logits_by_batch(logits_batch_by_hn[headname])
     return acts_batch_by_hn, lprobs_batch_by_hn, ents_batch_by_hn
 
 
@@ -209,7 +205,7 @@ class TrainingLoop(BaseTrainingLoop):
         ).to(self.device)
 
     def _forward_step(self):
-        available_actions_batch = [state['available_actions'] for state in self.states_batch]
+        available_actions_batch = [set(state['available_actions']) for state in self.states_batch]
         actions_batch, values_batch, log_probs_batch, entropies_batch, self.hxs, self.cxs = action_train(
             self.model,
             self._states_to_device(self.states_batch),
@@ -224,7 +220,7 @@ class TrainingLoop(BaseTrainingLoop):
             available_actions = set(available_actions_batch[i])
             if func_id not in available_actions:
                 actions_batch[i] = {'func_id': 0}  # no op
-                print('warning: sampled an invalid action', func_id, available_actions)
+                # print('warning: sampled an invalid action', func_id, available_actions)
 
         states_batch, rewards_unclipped, dones, infos = self.envs.step(actions_batch)
 
@@ -283,13 +279,18 @@ class TrainingLoop(BaseTrainingLoop):
 
 
 if __name__ == '__main__':
-    # from absl import flags
-    # from absl.flags import Flag
-    # FLAGS = flags.FLAGS
-    # FLAGS(['sc2_lstm.py'])
-    # FLAGS['sc2_run_config'].parse('Linux')
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = base_parser()
-    parser.add_argument('--name', default='sc2_lstm', help='logdir/tensorboard name')
+    parser.add_argument('--name', default='lstm', help='logdir/tensorboard name')
     args = parser.parse_args()
-    TrainingLoop(args).run()
+    training_loop = TrainingLoop(args)
+
+    if args.profile:
+        from pyinstrument import Profiler
+        profiler = Profiler()
+        profiler.start()
+        training_loop.run()
+        profiler.stop()
+        print(profiler.output_text(unicode=True, color=True))
+    else:
+        training_loop.run()

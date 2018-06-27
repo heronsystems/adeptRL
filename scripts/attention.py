@@ -105,4 +105,15 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='attention', help='logdir/tensorboard name')
     parser.add_argument('--nb-head', default=1, type=int, help='number of attention heads')
     args = parser.parse_args()
-    TrainingLoop(args).run()
+    training_loop = TrainingLoop(args)
+
+    if args.profile:
+        from pyinstrument import Profiler
+
+        profiler = Profiler()
+        profiler.start()
+        training_loop.run()
+        profiler.stop()
+        print(profiler.output_text(unicode=True, color=True))
+    else:
+        training_loop.run()
