@@ -81,6 +81,15 @@ def from_numpy(arr, device):
     return Variable(torch.from_numpy(arr).float().to(device))
 
 
+def isnan(tensor):
+    # Gross: https://github.com/pytorch/pytorch/issues/4767
+    return (tensor != tensor)
+
+
+def hasnan(tensor):
+    return isnan(tensor).any()
+
+
 class RolloutCache(dict):
     def __init__(self, *keys):
         super(RolloutCache, self).__init__()

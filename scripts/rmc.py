@@ -7,9 +7,8 @@ import torch
 from torch.nn import functional as F
 
 from scripts._base import BaseTrainingLoop
-from src.models.cnn import SimpleCNN
-from src.utils import RolloutCache, base_parser
-from src.utils import from_numpy
+from src.models.rmc import RMCModel
+from src.utils import from_numpy, RolloutCache, base_parser
 
 
 def unroll(cache, gamma, tau):
@@ -46,15 +45,15 @@ def unroll(cache, gamma, tau):
     return losses, metrics
 
 
-def action_train(model, states):
+def action_train(model, states, memories):
     model.train()
-    values, logits = model(states)
-    prob = F.softmax(logits, dim=1)
-    log_probs = F.log_softmax(logits, dim=1)
+    values, logit, memories = model(states, memories)
+    prob = F.softmax(logit, dim=1)
+    log_probs = F.log_softmax(logit, dim=1)
     entropies = -(log_probs * prob).sum(1)
     actions = prob.multinomial(1)
     log_probs = log_probs.gather(1, actions)
-    return actions.squeeze(1), values.squeeze(1), log_probs.squeeze(1), entropies
+    return actions.squeeze(1), values.squeeze(1), log_probs.squeeze(1), entropies, memories
 
 
 def action_test(model, states, hxs, cxs):
@@ -66,22 +65,40 @@ def action_test(model, states, hxs, cxs):
     return action
 
 
+def calc_initial_memory(nb_embed, nb_chan):
+    memory = torch.eye(nb_embed)
+    if nb_chan > nb_embed:
+        diff = nb_chan - nb_embed
+        pad = torch.zeros(nb_embed, diff)
+        memory = torch.cat([memory, pad], dim=1)
+    elif nb_embed > nb_chan:
+        memory = memory[:, :nb_chan]
+    return memory
+
+
 class TrainingLoop(BaseTrainingLoop):
     def __init__(self, args):
-        frame_stack = True
+        frame_stack = False
         rollout_cache = RolloutCache('rewardss', 'valuess', 'entropiess', 'log_probss', 'maskss')
         super(TrainingLoop, self).__init__(args, frame_stack, rollout_cache)
+        self.initial_memory = calc_initial_memory(100, 34)
+        self.memories = [self.initial_memory.to(self.device) for _ in range(args.workers)]
 
     def _setup_model(self):
-        return SimpleCNN(
+        return RMCModel(
             self.envs.observation_space.shape[0], self.envs.action_space.n, self.args.batch_norm
         ).to(self.device)
 
     def _forward_step(self):
-        actions, values, log_probs, entropies = action_train(self.model, from_numpy(self.states, self.device))
+        actions, values, log_probs, entropies, self.memories =\
+            action_train(self.model, from_numpy(self.states_batch, self.device), self.memories)
         states, rewards_unclipped, dones, infos = self.envs.step(actions.cpu().numpy())
 
-        self.states = states
+        for i in range(self.args.workers):
+            if dones[i]:
+                self.memories[i] = self.initial_memory.to(self.device)
+
+        self.states_batch = states
         rewards = torch.tensor([max(min(reward, 1), -1) for reward in rewards_unclipped]).to(self.device)
         masks = (1. - torch.from_numpy(np.array(dones, dtype=np.float32))).unsqueeze(1).to(self.device)
         self.rollout_cache.append({
@@ -99,17 +116,20 @@ class TrainingLoop(BaseTrainingLoop):
     def _weight_losses(self, loss_dict):
         return loss_dict['policy_loss'] + 0.5 * loss_dict['value_loss']
 
+    def _after_backwards(self):
+        super(TrainingLoop, self)._after_backwards()
+        self.memories = [memory.detach() for memory in self.memories]
+
 
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = base_parser()
-    parser.add_argument('--name', default='cnn', help='logdir/tensorboard name')
+    parser.add_argument('--name', default='rmc', help='logdir/tensorboard name')
     args = parser.parse_args()
     training_loop = TrainingLoop(args)
 
     if args.profile:
         from pyinstrument import Profiler
-
         profiler = Profiler()
         profiler.start()
         training_loop.run()

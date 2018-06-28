@@ -77,10 +77,10 @@ class TrainingLoop(BaseTrainingLoop):
         ).to(self.device)
 
     def _forward_step(self):
-        actions, values, log_probs, entropies = action_train(self.model, from_numpy(self.states, self.device))
+        actions, values, log_probs, entropies = action_train(self.model, from_numpy(self.states_batch, self.device))
         states, rewards_unclipped, dones, infos = self.envs.step(actions.cpu().numpy())
 
-        self.states = states
+        self.states_batch = states
         rewards = torch.tensor([max(min(reward, 1), -1) for reward in rewards_unclipped]).to(self.device)
         masks = (1. - torch.from_numpy(np.array(dones, dtype=np.float32))).unsqueeze(1).to(self.device)
         self.rollout_cache.append({
