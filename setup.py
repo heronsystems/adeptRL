@@ -1,16 +1,17 @@
 from setuptools import setup
+from adept.globals import VERSION
 
 setup(
     name='adeptRL',
 
-    version='0.0',
+    version=VERSION,
     description='adeptRL',
     url='https://github.com/heronsystems/adeptRL',
     author='heron',
     license='GNU',
     packages=[
-        'src',
-        'scripts'
+        'adept',
+        'scripts',
     ],
 
     entry_points={
