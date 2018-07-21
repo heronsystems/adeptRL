@@ -20,7 +20,7 @@ def main(args):
     train_args.seed = 2
 
     # construct env
-    env = atari_from_args(train_args, args.seed, dummy=True)
+    env = atari_from_args(train_args, train_args.seed, dummy=True)
 
     # construct network
     network_head_shapes = agent_output_shape(env.action_space, env.engine, train_args)

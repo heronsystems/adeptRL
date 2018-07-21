@@ -1,6 +1,7 @@
 import abc
 from ._base import HasAgent, CountsRewards
 import numpy as np
+import time
 
 
 class EvalBase(HasAgent, abc.ABC):
@@ -42,6 +43,7 @@ class Renderer(EvalBase):
     def run(self):
         next_obs = self.environment.reset()
         while True:
+            time.sleep(1. / 60.)
             self.environment.render()
             obs = next_obs
             actions = self.agent.act_eval(obs)
