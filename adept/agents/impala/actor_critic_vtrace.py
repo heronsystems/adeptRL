@@ -82,7 +82,7 @@ class ActorCriticVtrace(TrainAgent, EnvBase):
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
-            actions, _, _ = self.process_logits(logits, obs, deterministic=True)
+            actions, _ = self.process_logits(logits, obs, deterministic=True)
         self.internals = internals
         return actions
 
@@ -130,10 +130,13 @@ class ActorCriticVtrace(TrainAgent, EnvBase):
     def preprocess_logits(self, logits):
         return logits['actor']
 
-    def process_logits(self, logits, obs):
+    def process_logits(self, logits, obs, deterministic=False):
         prob = F.softmax(logits, dim=1)
         log_probs = F.log_softmax(logits, dim=1)
-        actions = prob.multinomial(1)
+        if not deterministic:
+            actions = prob.multinomial(1)
+        else:
+            actions = torch.argmax(prob, 1, keepdim=True)
         log_probs = log_probs.gather(1, actions)
 
         return actions.squeeze(1).cpu().numpy(), log_probs.squeeze(1)
@@ -153,8 +156,14 @@ class ActorCriticVtrace(TrainAgent, EnvBase):
         rewards = torch.cat(rollouts['rewards'], 1).to(self.device)
         terminals_mask = torch.cat(rollouts['terminals'], 1).to(self.device)
         discount_terminal_mask = self.discount * terminals_mask
-        states = {'obs': torch.cat(rollouts['obs'], 1)}
-        next_states = {'obs': torch.cat(rollouts['next_obs-obs'], 0)}  # 0 dim here is batch since next obs has no seq
+        states = {
+            k.split('-')[-1]: torch.cat(rollouts[k], 1)
+            for k, v in rollouts.items() if 'rollout_obs-' in k
+        }
+        next_states = {
+            k.split('-')[-1]: torch.cat(rollouts[k], 0)  # 0 dim here is batch since next obs has no seq
+            for k, v in rollouts.items() if 'next_obs-' in k
+        }
         behavior_log_prob_of_action = torch.cat(rollouts['log_prob_of_action'], 1).to(self.device)
         behavior_sampled_action = torch.cat(rollouts['sampled_action'], 1).long().to(self.device)
         # internals are prefixed like internals-

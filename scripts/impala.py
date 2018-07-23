@@ -1,16 +1,10 @@
 import os
 from mpi4py import MPI as mpi
-
-# mpi comm, rank, and size
-comm = mpi.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
-
 import torch
 from absl import flags
 from adept.containers import ImpalaHost, ImpalaWorker
 from adept.utils.script_helpers import make_agent, make_network, make_env, agent_output_shape
-from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args
+from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
 from tensorboardX import SummaryWriter
 from datetime import datetime
 
@@ -18,6 +12,11 @@ from datetime import datetime
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
+
+# mpi comm, rank, and size
+comm = mpi.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 
 def main(args):
@@ -35,6 +34,7 @@ def main(args):
     if rank == 0:
         print_ascii_logo()
         os.makedirs(log_id_dir)
+        saver = SimpleModelSaver(log_id_dir)
     comm.Barrier()
 
     # construct env
@@ -96,6 +96,7 @@ def main(args):
         logger = make_logger('ImpalaHost', os.path.join(log_id_dir, 'train_log{}.txt'.format(rank)))
         summary_writer = SummaryWriter(os.path.join(log_id_dir, str(rank)))
         log_args(logger, args)
+        write_args_file(log_id_dir, args)
 
         # no need for the env anymore
         env.close()
@@ -105,7 +106,8 @@ def main(args):
             opt = torch.optim.RMSprop(params, lr=args.learning_rate, eps=1e-5, alpha=0.99)
             return opt
 
-        container = ImpalaHost(agent, comm, make_optimizer, summary_writer, args.summary_frequency, args.host_training_info_interval, use_local_buffers=args.use_local_buffers)
+        container = ImpalaHost(agent, comm, make_optimizer, summary_writer, args.summary_frequency, saver,
+                               args.epoch_len, args.host_training_info_interval, use_local_buffers=args.use_local_buffers)
 
         # Run the container
         if args.profile:

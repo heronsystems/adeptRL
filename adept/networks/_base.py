@@ -34,7 +34,9 @@ class NetworkHead(torch.nn.Module):
         super().__init__()
 
         self.heads = torch.nn.ModuleList()
-        for head_name, head_size in head_dict.items():
+        # Must be sorted for mpi methods so that the creation order is deterministic
+        for head_name in sorted(head_dict.keys()):
+            head_size = head_dict[head_name]
             self.heads.add_module(head_name, torch.nn.Linear(input_shape, head_size))
 
     def forward(self, embedding, internals):

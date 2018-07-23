@@ -92,3 +92,21 @@ class ModelSaver:
                 buff_entry.optimizer,
                 os.path.join(save_dir, 'optimizer_{}_{}.pth'.format(j + 1, int(buff_entry.reward)))
             )
+
+
+class SimpleModelSaver:
+    def __init__(self, log_id_dir):
+        self._log_id_dir = log_id_dir
+
+    def save_state_dicts(self, network, step_count, optimizer=None):
+        save_dir = os.path.join(self._log_id_dir, str(step_count))
+        os.makedirs(save_dir)
+        torch.save(
+            network,
+            os.path.join(save_dir, 'model_{}.pth'.format(step_count))
+        )
+        if optimizer is not None:
+            torch.save(
+                optimizer,
+                os.path.join(save_dir, 'optimizer_{}.pth'.format(step_count))
+            )

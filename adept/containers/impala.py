@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 
 class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
-    def __init__(self, agent, mpi_comm, make_optimizer, summary_writer, summary_frequency, summary_steps, use_local_buffers=False):
+    def __init__(self, agent, mpi_comm, make_optimizer, summary_writer, summary_frequency, saver, save_interval, summary_steps, use_local_buffers=False):
         """
             use_local_buffers: bool If true does not send the network's buffers to the workers (noisy batch norm)
         """
@@ -16,6 +16,8 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         self._optimizer = make_optimizer(self.network.parameters())
         self._summary_writer = summary_writer
         self._summary_frequency = summary_frequency
+        self.saver = saver
+        self.save_interval = save_interval
         self.comm = mpi_comm
         self.sent_parameters_count = 0
         self.summary_steps = summary_steps
@@ -76,7 +78,7 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
             recv_timestep = unflattened_rollout.pop()
 
             # to dict of tensors
-            rollout = {k: torch.from_numpy(v) for k, v in zip(
+            rollout = {k: torch.from_numpy(v).to(self.agent.device) for k, v in zip(
                 self.sorted_keys,
                 unflattened_rollout  # timestep has been popped
                 )
@@ -92,6 +94,17 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
     def _threaded_global_step(self):
         return sum(self._thread_steps)[0]  # numpy array
 
+    def _saver_thread(self):
+        next_save_step = self.save_interval
+        while not self._threads_should_be_done:
+            current_step = self._threaded_global_step()
+            if current_step > next_save_step:
+                self.saver.save_state_dicts(self.network, int(current_step), optimizer=self.optimizer)
+                next_save_step += self.save_interval
+            time.sleep(1)
+        # final save
+        self.saver.save_state_dicts(self.network, int(self._threaded_global_step()), optimizer=self.optimizer)
+
     def run(self, num_rollouts_in_batch, max_items_in_queue, max_steps=float('inf'), dynamic=False):
         from threading import Thread
         size = self.comm.Get_size()
@@ -102,10 +115,14 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         # shared done flag and steps
         self._threads_should_be_done = False
         self._thread_steps = [np.ones((1)) for i in range(1, size)]
-        # start threads
+        # start batch adding threads
         threads = [Thread(target=self._batch_add_thread, args=(i, self._thread_steps[i - 1], max_items_in_queue, )) for i in range(1, size)]
         for t in threads:
             t.start()
+
+        # start saver thread
+        saver_thread = Thread(target=self._saver_thread)
+        saver_thread.start()
 
         # this runs a "busy" loop assuming that loss.backward takes longer than accumulating batches
         # removing the need for the threads to notify of new batches
@@ -170,6 +187,9 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
 
         # cleanup mpi
         self.stop_mpi_workers()
+
+        # join saver after mpi workers are done to prevent infinite waiting
+        saver_thread.join()
 
     def stop_mpi_workers(self):
         size = self.comm.Get_size()
@@ -295,15 +315,10 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
             # sorted keys to ensure deterministic order
             shapes = OrderedDict()
             for k in sorted(rollout._fields):
-                # value
-                v = getattr(rollout, k)
-                # value can be a list of dict of tensor if state
-                if isinstance(v[0], dict):
-                    dlist = listd_to_dlist(v)
-                    for dict_key in sorted(dlist.keys()):
-                        shapes[dict_key] = (len(dlist[dict_key]), ) + (len(dlist[dict_key][0]), ) + dlist[dict_key][0][0].shape
-                # value is list of tensors, or can be a single tensor
-                else:
+                if k != 'states':
+                    # value
+                    v = getattr(rollout, k)
+                    # value is list of tensors
                     shapes[k] = (len(v), ) + v[0].shape
 
             # add internals shapes, sorted again
@@ -311,11 +326,16 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
                 v = self._starting_internals[k]
                 shapes['internals-' + k] = (len(v), ) + v[0].shape
 
+            # add obs, sorted
+            state_dlist = listd_to_dlist(rollout.states)
+            for dict_key in sorted(state_dlist.keys()):
+                shapes['rollout_obs-' + dict_key] = (len(state_dlist[dict_key]), ) + (len(state_dlist[dict_key][0]), ) + \
+                                                    state_dlist[dict_key][0][0].shape
+
             # add next obs, sorted
             for k in sorted(next_obs.keys()):
                 v = next_obs[k]
                 shapes['next_obs-' + k] = (len(v), ) + v[0].shape
-
             parameter_shapes = self.get_parameter_shapes()
             self.mpi_helper = MPIHelper(shapes, parameter_shapes, 0, self.max_parameter_skip, self.send_warning_time, self.recv_warning_time)
 
@@ -324,26 +344,26 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         # combine rollout and internals
         sends = []
         for k in sorted(rollout._fields):
-            # value
-            v = getattr(rollout, k)
-            # value is list of tensors, or can be a single tensor, or numpy array (in the case of actions)
-            if isinstance(v[0], np.ndarray):
-                v = [torch.from_numpy(x) for x in v]
-            # value can be a list of dict of tensor if state
-            if isinstance(v[0], dict):
-                dlist = listd_to_dlist(v)
-                for dict_key in sorted(dlist.keys()):
-                    stacked = []
-                    for item in dlist[dict_key]:
-                        stacked.append(torch.stack(item))
-                    sends.append(torch.stack(stacked))
-            else:
+            if k != 'states':
+                # value
+                v = getattr(rollout, k)
+                # value is list of tensors, or can be a single tensor, or numpy array (in the case of actions)
+                if isinstance(v[0], np.ndarray):
+                    v = [torch.from_numpy(x) for x in v]
                 sends.append(torch.stack(v))
 
         # add internals shapes, sorted again
         for k in sorted(self._starting_internals.keys()):
             v = self._starting_internals[k]
             sends.append(torch.stack(v))
+
+        # add obs, sorted
+        state_dlist = listd_to_dlist(rollout.states)
+        for dict_key in sorted(state_dlist.keys()):
+            stacked = []
+            for item in state_dlist[dict_key]:
+                stacked.append(torch.stack(item))
+            sends.append(torch.stack(stacked))
 
         # add next obs, sorted
         for k in sorted(next_obs.keys()):
