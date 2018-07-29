@@ -6,7 +6,7 @@ from tensorboardX import SummaryWriter
 
 from adept.containers import ToweredHost, ToweredWorker
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file
-from adept.utils.script_helpers import make_agent, make_network, make_env, agent_output_shape
+from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes
 from datetime import datetime
 
 
@@ -43,7 +43,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = agent_output_shape(env.action_space, env.engine, args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, args)
     network = make_network(env.observation_space, network_head_shapes, args)
 
     # sync network params

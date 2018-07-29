@@ -3,7 +3,8 @@ import os
 from gym import spaces
 from adept.agents import AGENTS, AGENT_ARGS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
-from adept.networks import NETWORKS, NETWORK_ARGS, FRAME_STACK_NETWORKS
+from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
+from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
 from adept.utils.util import parse_bool, json_to_dict
 from adept.environments.atari import make_atari_env
 from adept.environments import reward_normalizer_by_env_id
@@ -26,25 +27,19 @@ def sc2_from_args(args, seed):
     return SubProcEnv([make_sc2_env(args.env_id, seed + i) for i in range(args.nb_env)], Engines.SC2)
 
 
-def atari_from_args(args, seed, dummy=False):
-    setup_json = json_to_dict(args.atari_config)
-    env_conf = setup_json["Default"]
-    for i in setup_json.keys():
-        if i in args.env_id:
-            env_conf = setup_json[i]
+def atari_from_args(args, seed, subprocess=True):
+    do_frame_stack = args.network_body == 'Linear'
 
-    frame_stack = args.network in FRAME_STACK_NETWORKS
-
-    env_wrapper_class = DummyVecEnv if dummy else SubProcEnv
+    env_wrapper_class = SubProcEnv if subprocess else DummyVecEnv
     envs = env_wrapper_class(
         [
             make_atari_env(
                 args.env_id,
-                env_conf,
                 args.skip_rate,
                 args.max_episode_length,
-                seed + i,
-                frame_stack
+                args.zscore_norm_env,
+                do_frame_stack,
+                seed + i
             ) for i in range(args.nb_env)
         ], Engines.ATARI
     )
@@ -52,16 +47,42 @@ def atari_from_args(args, seed, dummy=False):
 
 
 def make_network(observation_space, network_head_shapes, args):
-    # TODO let networks take observation space and build input heads accordingly
+    # split args into args.visual_pathway, args.discrete_pathway, args.network_body, args.metalearning
+    # TODO support different resolutions
+    nb_discrete_channel = 0
+    nb_visual_channel = 0
+
     if isinstance(observation_space, spaces.Dict):
-        nb_channel = 0
         for space in observation_space.spaces.values():
-            nb_channel += space.shape[0]
+            if isinstance(space, spaces.Box):
+                nb_visual_channel += space.shape[0]
+            elif isinstance(space, spaces.Discrete):
+                nb_discrete_channel += space.shape[0]
+            else:
+                raise NotImplementedError('This observation space is not currently supported: {}'.format(space))
     elif isinstance(observation_space, spaces.Box):
-        nb_channel = observation_space.shape[0]
+        nb_visual_channel += observation_space.shape[0]
     else:
         raise NotImplementedError('This observation space is not currently supported: {}'.format(observation_space))
-    return NETWORKS[args.network](nb_channel, network_head_shapes, *NETWORK_ARGS[args.network](args))
+
+    pathways_by_name = {}
+    if nb_visual_channel > 0:
+        pathways_by_name['visual'] = VISION_NETWORKS[args.visual_pathway].from_args(nb_visual_channel, args)
+    if nb_discrete_channel > 0:
+        if args.metalearning:
+            nb_metalearning_channel = None
+            pathways_by_name['discrete'] = DISCRETE_NETWORKS[args.discrete_pathway].from_args(
+                nb_discrete_channel + nb_metalearning_channel,
+                args
+            )
+        else:
+            pathways_by_name['discrete'] = DISCRETE_NETWORKS[args.discrete_pathway].from_args(nb_discrete_channel, args)
+
+    trunk = NetworkTrunk(pathways_by_name)
+    body = NETWORK_BODIES[args.network_body].from_args(trunk.nb_output_channel, 512, args)  # TODO don't hardcode
+    head = NetworkHead(body.nb_output_channel, network_head_shapes)
+    network = ModularNetwork(trunk, body, head)
+    return network
 
 
 def count_parameters(model):
@@ -82,8 +103,8 @@ def make_agent(network, device, engine, args):
     return agent_class(network, device, reward_normalizer, *AGENT_ARGS[args.agent](args))
 
 
-def agent_output_shape(action_space, engine, args):
-    agent_class = get_agent_class(args.agent, engine)
+def get_head_shapes(action_space, engine, agent_name):
+    agent_class = get_agent_class(agent_name, engine)
     return agent_class.output_shape(action_space)
 
 
@@ -142,8 +163,8 @@ def add_base_args(parser):
     """
     # Atari
     parser.add_argument(
-        '--atari-config', default=os.path.join(root_dir, 'atari_config.json'),
-        help='Crop and resize info for Atari (default: atari_config.json)'
+        '--zscore-norm-env', type=parse_bool, nargs='?', const=True, default=False,
+        help='Normalize the environment using running statistics'
     )
     parser.add_argument(
         '--skip-rate', type=int, default=4,

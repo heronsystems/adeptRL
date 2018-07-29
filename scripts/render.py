@@ -5,7 +5,7 @@ import torch
 
 from adept.containers import Renderer
 from adept.utils.logging import print_ascii_logo
-from adept.utils.script_helpers import make_agent, make_network, agent_output_shape, atari_from_args
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, atari_from_args
 from adept.utils.util import dotdict
 
 
@@ -20,10 +20,10 @@ def main(args):
     train_args.seed = 2
 
     # construct env
-    env = atari_from_args(train_args, train_args.seed, dummy=True)
+    env = atari_from_args(train_args, train_args.seed, subprocess=False)
 
     # construct network
-    network_head_shapes = agent_output_shape(env.action_space, env.engine, train_args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args)
     network = make_network(
         env.observation_space,
         network_head_shapes,

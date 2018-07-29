@@ -5,11 +5,11 @@ from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
-from .._base import TrainAgent, EnvBase
+from .._base import Agent, EnvBase
 from .._helpers import obs_to_device
 
 
-class ActorCriticVtrace(TrainAgent, EnvBase):
+class ActorCriticVtrace(Agent, EnvBase):
     def __init__(self, network, device, reward_normalizer, nb_env, nb_rollout, discount,
                  minimum_importance_value=1.0, minimum_importance_policy=1.0, entropy_weight=0.01):
         self.discount = discount

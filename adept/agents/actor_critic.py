@@ -4,11 +4,11 @@ from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
-from ._base import TrainAgent, EnvBase
+from ._base import Agent, EnvBase
 from ._helpers import obs_to_device
 
 
-class ActorCritic(TrainAgent, EnvBase):
+class ActorCritic(Agent, EnvBase):
     def __init__(self, network, device, reward_normalizer, nb_env, nb_rollout, discount, gae, tau):
         self.discount, self.gae, self.tau = discount, gae, tau
 
@@ -52,7 +52,7 @@ class ActorCritic(TrainAgent, EnvBase):
 
     def act(self, obs):
         self.network.train()
-        results, internals = self.network(obs_to_device(obs, self.device), self.internals)
+        results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
         values = results['critic'].squeeze(1)
         logits = {k: v for k, v in results.items() if k != 'critic'}
 
@@ -70,7 +70,7 @@ class ActorCritic(TrainAgent, EnvBase):
     def act_eval(self, obs):
         self.network.eval()
         with torch.no_grad():
-            results, internals = self.network(obs_to_device(obs, self.device), self.internals)
+            results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
@@ -96,7 +96,7 @@ class ActorCritic(TrainAgent, EnvBase):
     def compute_loss(self, rollouts, next_obs):
         # estimate value of next state
         with torch.no_grad():
-            next_obs_on_device = obs_to_device(next_obs, self.device)
+            next_obs_on_device = self.obs_to_pathways(next_obs, self.device)
             results, _ = self.network(next_obs_on_device, self.internals)
             last_values = results['critic'].squeeze(1).data
 

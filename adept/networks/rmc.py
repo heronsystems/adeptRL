@@ -2,10 +2,15 @@ import torch
 from torch.nn import Conv2d, Linear, BatchNorm2d, BatchNorm1d, functional as F
 
 from adept.modules import RMCCell, Identity
-from ._base import Network
+from ._base import NetworkInterface
 
 
-class RMC(Network):
+# TODO
+class RMC(NetworkInterface):
+    """
+    Relational Memory Core
+    https://arxiv.org/pdf/1806.01822.pdf
+    """
     def __init__(self, nb_in_chan, output_shape_dict, normalize):
         self.embedding_size = 512
         super(RMC, self).__init__(self.embedding_size, output_shape_dict)

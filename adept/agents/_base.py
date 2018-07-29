@@ -1,5 +1,7 @@
 import abc
 
+import torch
+
 
 class EnvBase(abc.ABC):
     @abc.abstractmethod
@@ -15,7 +17,7 @@ class EnvBase(abc.ABC):
         raise NotImplementedError
 
 
-class TrainAgent(abc.ABC):
+class Agent(abc.ABC):
     """
     An Agent interacts with the environment and accumulates experience.
     """
@@ -64,6 +66,33 @@ class TrainAgent(abc.ABC):
     @abc.abstractmethod
     def act_eval(self, obs):
         raise NotImplementedError
+
+    def obs_to_pathways(self, obs, device):
+        visual_batch = []
+        discrete_batch = []
+        for channels in zip(*obs.values()):
+            visual_channels = [
+                channel_tensor.to(device).float()
+                for channel_tensor in channels
+                if (isinstance(channel_tensor, torch.Tensor) and (channel_tensor.dim() == 3))
+            ]
+            visual_tensor = torch.cat(visual_channels) if visual_channels else None
+
+            discrete_channels = [
+                channel_tensor.to(device).float()
+                for channel_tensor in channels
+                if (isinstance(channel_tensor, torch.Tensor) and (channel_tensor.dim() == 1))
+            ]
+            discrete_tensor = torch.cat(discrete_channels) if discrete_channels else None
+
+            if visual_tensor is not None:
+                visual_batch.append(visual_tensor)
+            if discrete_tensor is not None:
+                discrete_batch.append(discrete_tensor)
+        return {
+            'visual': torch.stack(visual_batch) if visual_batch else torch.tensor([]),
+            'discrete': torch.stack(discrete_batch) if discrete_batch else torch.tensor([])
+        }
 
     def observe(self, obs, rewards, terminals, infos):
         self.exp_cache.write_env(obs, rewards, terminals, infos)

@@ -2,7 +2,58 @@ from collections import deque
 
 import gym
 import numpy as np
+from cv2 import cv2
 from gym import spaces
+
+cv2.ocl.setUseOpenCL(False)
+
+
+class WarpFrame(gym.ObservationWrapper):
+    def __init__(self, env):
+        """Warp frames to 84x84 as done in the Nature paper and later work."""
+        gym.ObservationWrapper.__init__(self, env)
+        self.height = 84
+        self.width = 84
+        self.observation_space = spaces.Box(low=0, high=255, shape=(1, self.height, self.width), dtype=np.uint8)
+
+    def observation(self, frame):
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
+        return frame[None, :, :]
+
+
+class Divide255(gym.ObservationWrapper):
+    def __init__(self, env):
+        """Warp frames to 84x84 as done in the Nature paper and later work."""
+        gym.ObservationWrapper.__init__(self, env)
+        self.height = 84
+        self.width = 84
+        self.observation_space = spaces.Box(low=0., high=1., shape=(1, self.height, self.width), dtype=np.float32)
+
+    def observation(self, frame):
+        frame = frame.astype(np.float32)
+        frame *= (1. / 255.)
+        return frame
+
+
+class ZScoreEnv(gym.ObservationWrapper):
+    def __init__(self, env):
+        gym.ObservationWrapper.__init__(self, env)
+        self.state_mean = 0
+        self.state_std = 0
+        self.alpha = 0.9999
+        self.num_steps = 0
+
+    def observation(self, frame):
+        self.num_steps += 1
+        frame = frame.astype(np.float32)
+        self.state_mean = self.state_mean * self.alpha + frame.mean() * (1 - self.alpha)
+        self.state_std = self.state_std * self.alpha + frame.std() * (1 - self.alpha)
+
+        unbiased_mean = self.state_mean / (1 - pow(self.alpha, self.num_steps))
+        unbiased_std = self.state_std / (1 - pow(self.alpha, self.num_steps))
+
+        return (frame - unbiased_mean) / (unbiased_std + 1e-8)
 
 
 class FrameStack(gym.Wrapper):
@@ -27,27 +78,6 @@ class FrameStack(gym.Wrapper):
     def _get_ob(self):
         assert len(self.frames) == self.k
         return np.concatenate(self.frames)
-
-
-class NormalizedEnv(gym.ObservationWrapper):
-    def __init__(self, env=None):
-        gym.ObservationWrapper.__init__(self, env)
-        self.state_mean = 0
-        self.state_std = 0
-        self.alpha = 0.9999
-        self.num_steps = 0
-
-    def observation(self, observation):
-        self.num_steps += 1
-        self.state_mean = self.state_mean * self.alpha + \
-            observation.mean() * (1 - self.alpha)
-        self.state_std = self.state_std * self.alpha + \
-            observation.std() * (1 - self.alpha)
-
-        unbiased_mean = self.state_mean / (1 - pow(self.alpha, self.num_steps))
-        unbiased_std = self.state_std / (1 - pow(self.alpha, self.num_steps))
-
-        return (observation - unbiased_mean) / (unbiased_std + 1e-8)
 
 
 class NoopResetEnv(gym.Wrapper):

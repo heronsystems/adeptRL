@@ -1,24 +1,21 @@
-import cv2
 import gym
-import numpy as np
 import torch
-from cv2.cv2 import resize
-from gym import spaces
 
-from ._wrappers import NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv, NormalizedEnv, FrameStack
+from ._wrappers import (
+    NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv, FrameStack, WarpFrame, Divide255,
+    ZScoreEnv
+)
 
-cv2.ocl.setUseOpenCL(False)
 
-
-def make_atari_env(env_id, env_conf, skip_rate, max_ep_length, seed, frame_stack=False):
+def make_atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed):
     def _f():
-        env = atari_env(env_id, env_conf, skip_rate, max_ep_length, frame_stack)
+        env = atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack)
         env.seed(seed)
         return env
     return _f
 
 
-def atari_env(env_id, env_conf, skip_rate, max_ep_length, frame_stack=False):
+def atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack):
     env = gym.make(env_id)
     if 'NoFrameskip' in env_id:
         assert 'NoFrameskip' in env.spec.id
@@ -31,33 +28,15 @@ def atari_env(env_id, env_conf, skip_rate, max_ep_length, frame_stack=False):
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
     env._max_episode_steps = max_ep_length
-    env = AtariRescale(env, env_conf)
-    env = NormalizedEnv(env)
-    if frame_stack:
+    env = WarpFrame(env)
+    if do_zscore_norm:
+        env = ZScoreEnv(env)
+    else:
+        env = Divide255(env)
+    if do_frame_stack:
         env = FrameStack(env, 4)
     env = DictTensorObs(env)
     return env
-
-
-def process_frame(frame, conf):
-    frame = frame[conf["crop1"]:conf["crop2"] + 160, :160]
-    frame = frame.mean(2)
-    frame = frame.astype(np.float32)
-    frame *= (1.0 / 255.0)
-    frame = resize(frame, (80, conf["dimension2"]))
-    frame = resize(frame, (80, 80))
-    frame = np.reshape(frame, [1, 80, 80])
-    return frame
-
-
-class AtariRescale(gym.ObservationWrapper):
-    def __init__(self, env, env_conf):
-        gym.ObservationWrapper.__init__(self, env)
-        self.observation_space = spaces.Box(0.0, 1.0, [1, 80, 80], dtype=np.float32)
-        self.conf = env_conf
-
-    def observation(self, observation):
-        return process_frame(observation, self.conf)
 
 
 class DictTensorObs(gym.ObservationWrapper):

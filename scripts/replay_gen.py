@@ -7,7 +7,7 @@ from absl import flags
 from adept.containers import ReplayGenerator
 from adept.environments import SubProcEnv, Engines
 from adept.environments.sc2 import make_sc2_env
-from adept.utils.script_helpers import make_agent, make_network, agent_output_shape
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
 from adept.utils.util import dotdict
 from adept.utils.logging import print_ascii_logo
 
@@ -29,7 +29,7 @@ def main(args):
     env = SubProcEnv([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir)], Engines.SC2)
 
     # construct network
-    network_head_shapes = agent_output_shape(env.action_space, env.engine, train_args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args)
     network = make_network(
         env.observation_space,
         network_head_shapes,

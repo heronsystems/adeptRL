@@ -5,7 +5,7 @@ import torch
 from absl import flags
 
 from adept.containers import Local
-from adept.utils.script_helpers import make_agent, make_network, agent_output_shape, make_env
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, make_env
 from adept.utils.util import dotdict
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, ModelSaver
 from tensorboardX import SummaryWriter
@@ -42,7 +42,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = agent_output_shape(env.action_space, env.engine, args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, args)
     network = make_network(env.observation_space, network_head_shapes, args)
     network.load_state_dict(torch.load(network_file))
 

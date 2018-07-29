@@ -4,7 +4,7 @@ import torch
 from absl import flags
 
 from adept.containers import Local
-from adept.utils.script_helpers import make_agent, make_network, make_env, agent_output_shape, count_parameters
+from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, ModelSaver
 from tensorboardX import SummaryWriter
 
@@ -16,7 +16,7 @@ FLAGS(['local.py'])
 def main(args):
     # construct logging objects
     print_ascii_logo()
-    log_id = make_log_id(args.mode_name, args.agent, args.network)
+    log_id = make_log_id(args.mode_name, args.agent, args.visual_pathway + args.network_body)
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     os.makedirs(log_id_dir)
@@ -32,7 +32,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = agent_output_shape(env.action_space, env.engine, args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
     logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
@@ -83,8 +83,17 @@ if __name__ == '__main__':
     parser = add_base_args(parser)
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
     parser.add_argument(
-        '-net', '--network', default='FourConvLSTM',
-        help='name of preset network (default: FourConvLSTM)'
+        '--visual-pathway', default='FourConv80x80',
+        help='name of preset network (default: FourConv80x80)'
+    )
+    parser.add_argument(
+        '--discrete-pathway', default='DiscreteIdentity',
+    )
+    parser.add_argument(
+        '--network-body', default='LSTM',
+    )
+    parser.add_argument(
+        '--metalearning', type=parse_bool, nargs='?', const=True, default=False,
     )
     parser.add_argument(
         '--agent', default='ActorCritic',

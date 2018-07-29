@@ -1,22 +1,41 @@
-from .cnn import FourConvCNN
-from .lstm import ResNetLSTM, FourConvLSTM
-from .attention import AttentionCNN, AttentionLSTM
+from adept.networks.bodies import LinearBody, LSTMBody, Mnih2013LSTM
+from adept.networks.discrete.networks import DiscreteIdentity
+from adept.networks.vision.networks import (
+    FourConv,
+    ResNet18,
+    Nature,
+    ResNet18V2,
+    ResNet34,
+    ResNet34V2,
+    ResNet50,
+    ResNet50V2,
+    ResNet101V2,
+    ResNet101,
+    ResNet152V2,
+    ResNet152,
+    FourConvSpatialAttention
+)
 
-NETWORKS = {
-    'FourConvCNN': FourConvCNN,
-    'AttentionCNN': AttentionCNN,
-    'FourConvLSTM': FourConvLSTM,
-    'AttentionLSTM': AttentionLSTM,
-    'ResNetLSTM': ResNetLSTM
+VISION_NETWORKS = {
+    'FourConv': FourConv,
+    'FourConvSpatialAttention': FourConvSpatialAttention,
+    'Nature': Nature,
+    'ResNet18': ResNet18,
+    'ResNet18V2': ResNet18V2,
+    'ResNet34': ResNet34,
+    'ResNet34V2': ResNet34V2,
+    'ResNet50': ResNet50,
+    'ResNet50V2': ResNet50V2,
+    'ResNet101': ResNet101,
+    'ResNet101V2': ResNet101V2,
+    'ResNet152': ResNet152,
+    'ResNet152V2': ResNet152V2
 }
-NETWORK_ARGS = {
-    'FourConvCNN': lambda args: (args.normalize,),
-    'AttentionCNN': lambda args: (args.nb_head, args.normalize),
-    'FourConvLSTM': lambda args: (args.normalize,),
-    'AttentionLSTM': lambda args: (args.nb_head, args.normalize,),
-    'ResNetLSTM': lambda args: (args.normalize,),
+DISCRETE_NETWORKS = {
+    'Identity': DiscreteIdentity
 }
-FRAME_STACK_NETWORKS = {
-    'FourConvCNN',
-    'AttentionCNN'
+NETWORK_BODIES = {
+    'Linear': LinearBody,
+    'LSTM': LSTMBody,
+    'Mnih2013LSTM': Mnih2013LSTM
 }

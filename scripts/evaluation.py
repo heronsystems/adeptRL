@@ -9,7 +9,7 @@ from absl import flags
 
 from adept.containers import Evaluation
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.script_helpers import make_agent, make_network, make_env, agent_output_shape
+from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes
 from adept.utils.util import dotdict
 
 # hack to use argparse for SC2
@@ -42,7 +42,7 @@ def main(args):
     env = make_env(train_args, train_args.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    network_head_shapes = agent_output_shape(env.action_space, env.engine, train_args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args)
     network = make_network(env.observation_space, network_head_shapes, train_args)
 
     results = []
