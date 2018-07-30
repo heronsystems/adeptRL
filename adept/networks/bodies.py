@@ -73,6 +73,35 @@ class LinearBody(NetworkBody):
         return {}
 
 
+class Mnih2013Linear(NetworkBody):
+    def __init__(self, nb_input_channel, _, normalize):
+        super().__init__()
+        self._nb_output_channel = 256
+        bias = not normalize
+
+        self.linear = Linear(nb_input_channel, self._nb_output_channel, bias=bias)
+        if normalize:
+            self.bn_linear = BatchNorm1d(self._nb_output_channel)
+        else:
+            self.bn_linear = Identity()
+
+    @classmethod
+    def from_args(cls, nb_input_channel, nb_out_channel, args):
+        return cls(nb_input_channel, nb_out_channel, args.normalize)
+
+    @property
+    def nb_output_channel(self):
+        return self._nb_output_channel
+
+    def forward(self, xs, internals):
+        xs = F.relu(self.bn_linear(self.linear(xs)))
+
+        return xs, {}
+
+    def new_internals(self, device):
+        return {}
+
+
 class Mnih2013LSTM(NetworkBody):
     def __init__(self, nb_input_channel, nb_out_channel, normalize):
         super().__init__()
@@ -80,11 +109,11 @@ class Mnih2013LSTM(NetworkBody):
         self.linear = Linear(2592, self._nb_output_channel)
 
         if normalize:
+            self.lstm = LSTMCellLayerNorm(self._nb_output_channel, self._nb_output_channel)  # hack for experiment
             self.bn_linear = BatchNorm1d(self._nb_output_channel)
-            self.lstm = LSTMCellLayerNorm(nb_input_channel, self._nb_output_channel)
         else:
             self.bn_linear = Identity()
-            self.lstm = LSTMCell(nb_input_channel, self._nb_output_channel)
+            self.lstm = LSTMCell(self._nb_output_channel, self._nb_output_channel)
             self.lstm.bias_ih.data.fill_(0)
             self.lstm.bias_hh.data.fill_(0)
 

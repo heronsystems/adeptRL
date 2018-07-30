@@ -6,7 +6,6 @@ from torch.nn import functional as F
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
 from .._base import Agent, EnvBase
-from .._helpers import obs_to_device
 
 
 class ActorCriticVtrace(Agent, EnvBase):
@@ -55,6 +54,36 @@ class ActorCriticVtrace(Agent, EnvBase):
             raise ValueError('Unrecognized action space {}'.format(action_space))
         return head_dict
 
+    def seq_obs_to_pathways(self, obs, device):
+        """
+            Converts a dict of sequential observations to a list(of seq len) of dicts
+        """
+        pathway_dict = self.obs_to_pathways(obs, device, visual_dim=4, discrete_dim=2)
+        visual = pathway_dict['visual']
+        discrete = pathway_dict['discrete']
+        # visual or discrete can be empty tensor
+        if visual.shape[0] > 0:
+            # visual and discrete
+            if discrete.shape[0] > 0:
+                seq = [{
+                    'visual': visual[i],
+                    'discrete': discrete[i]
+                } for i in range(visual.shape[0])]
+            # visual only
+            else:
+                seq = [{
+                    'visual': visual[i],
+                    'discrete': discrete
+                } for i in range(visual.shape[0])]
+        # only discrete
+        else:
+            seq = [{
+                'visual': visual,
+                'discrete': discrete[i]
+            } for i in range(discrete.shape[0])]
+
+        return seq
+
     def act(self, obs):
         """
             This is the method called on each worker so it does not require grads and must
@@ -62,23 +91,32 @@ class ActorCriticVtrace(Agent, EnvBase):
             Additionally, no gradients are needed here
         """
         with torch.no_grad():
-            results, internals = self.network(obs_to_device(obs, self.device), self.internals)
+            results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
             actions, log_prob = self.process_logits(logits, obs)
+            compressed_actions, compressed_log_probs = self.compress_actions_log_probs(actions, log_prob)
 
             self.exp_cache.write_forward(
-                log_prob_of_action=log_prob,
-                sampled_action=actions
+                log_prob_of_action=compressed_log_probs,
+                sampled_action=compressed_actions
             )
             self.internals = internals
             return actions
 
+    def compress_actions_log_probs(self, actions, log_probs):
+        """
+            Used to convert actions & log_probs into something that can be sent across MPI
+            Must be overriden for envs with complex action spaces
+            Must return an int, array, or tensor
+        """
+        return actions, log_probs
+
     def act_eval(self, obs):
         self.network.eval()
         with torch.no_grad():
-            results, internals = self.network(obs_to_device(obs, self.device), self.internals)
+            results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
@@ -91,8 +129,8 @@ class ActorCriticVtrace(Agent, EnvBase):
             This is the method to recompute the forward pass on the host, it must return log_probs, values and entropies
             Obs, sampled_actions, terminal_masks here are [seq, batch], internals must be reset if terminal
         """
-        obs_on_device = obs_to_device(obs, self.device)
-        next_obs_on_device = obs_to_device(next_obs, self.device)
+        obs_on_device = self.seq_obs_to_pathways(obs, self.device)
+        next_obs_on_device = self.obs_to_pathways(next_obs, self.device)
 
         values = []
         log_probs_of_action = []
@@ -206,6 +244,9 @@ class ActorCriticVtrace(Agent, EnvBase):
         """
         importance = torch.exp(log_diff_behavior_vs_current)
         clamped_importance_value = importance.clamp(max=minimum_importance_value)
+        # if multiple actions take the average, (dim 3 is seq, batch, # actions)
+        if clamped_importance_value.dim() == 3:
+            clamped_importance_value = clamped_importance_value.mean(-1)
 
         # create nstep vtrace return
         # first create d_tV of function 1 in the paper
@@ -230,5 +271,12 @@ class ActorCriticVtrace(Agent, EnvBase):
         clamped_importance_pg = importance.clamp(max=minimum_importance_policy)
 
         v_s_tp1 = torch.cat((v_s[1:], estimated_value.unsqueeze(0)), 0)
-        advantage = clamped_importance_pg * (rewards + discount_terminal_mask * v_s_tp1 - values)
-        return v_s, advantage, importance
+        advantage = rewards + discount_terminal_mask * v_s_tp1 - values
+
+        # if multiple actions broadcast the advantage to be weighted by the differen actions importance
+        # (dim 3 is seq, batch, # actions)
+        if clamped_importance_pg.dim() == 3:
+            advantage = advantage.unsqueeze(-1)
+
+        weighted_advantage = clamped_importance_pg * advantage
+        return v_s, weighted_advantage, importance

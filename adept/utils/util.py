@@ -14,6 +14,18 @@ def listd_to_dlist(list_of_dicts):
     return new_dict
 
 
+def dlist_to_listd(dict_of_lists):
+    keys = dict_of_lists.keys()
+    list_len = len(dict_of_lists[next(iter(keys))])
+    new_list = []
+    for i in range(list_len):
+        temp_d = {}
+        for k in keys:
+            temp_d[k] = dict_of_lists[k][i]
+        new_list.append(temp_d)
+    return new_list
+
+
 def parse_bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True

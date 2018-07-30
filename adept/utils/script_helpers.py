@@ -1,13 +1,14 @@
 import os
 
 from gym import spaces
+
 from adept.agents import AGENTS, AGENT_ARGS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
+from adept.environments import reward_normalizer_by_env_id
+from adept.environments.atari import make_atari_env
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
-from adept.utils.util import parse_bool, json_to_dict
-from adept.environments.atari import make_atari_env
-from adept.environments import reward_normalizer_by_env_id
+from adept.utils.util import parse_bool
 
 try:
     from adept.environments.sc2 import make_sc2_env, SC2AgentOverrides
@@ -46,8 +47,16 @@ def atari_from_args(args, seed, subprocess=True):
     return envs
 
 
-def make_network(observation_space, network_head_shapes, args):
-    # split args into args.visual_pathway, args.discrete_pathway, args.network_body, args.metalearning
+def make_network(
+        observation_space,
+        network_head_shapes,
+        args,
+        vision_networks=VISION_NETWORKS,
+        discrete_networks=DISCRETE_NETWORKS,
+        network_bodies=NETWORK_BODIES,
+        embedding_size=512
+):
+    # split args into args.vision_network, args.discrete_network, args.network_body, args.metalearning
     # TODO support different resolutions
     nb_discrete_channel = 0
     nb_visual_channel = 0
@@ -57,7 +66,7 @@ def make_network(observation_space, network_head_shapes, args):
             if isinstance(space, spaces.Box):
                 nb_visual_channel += space.shape[0]
             elif isinstance(space, spaces.Discrete):
-                nb_discrete_channel += space.shape[0]
+                nb_discrete_channel += space.n
             else:
                 raise NotImplementedError('This observation space is not currently supported: {}'.format(space))
     elif isinstance(observation_space, spaces.Box):
@@ -67,19 +76,19 @@ def make_network(observation_space, network_head_shapes, args):
 
     pathways_by_name = {}
     if nb_visual_channel > 0:
-        pathways_by_name['visual'] = VISION_NETWORKS[args.visual_pathway].from_args(nb_visual_channel, args)
+        pathways_by_name['visual'] = vision_networks[args.vision_network].from_args(nb_visual_channel, args)
     if nb_discrete_channel > 0:
         if args.metalearning:
             nb_metalearning_channel = None
-            pathways_by_name['discrete'] = DISCRETE_NETWORKS[args.discrete_pathway].from_args(
+            pathways_by_name['discrete'] = discrete_networks[args.discrete_network].from_args(
                 nb_discrete_channel + nb_metalearning_channel,
                 args
             )
         else:
-            pathways_by_name['discrete'] = DISCRETE_NETWORKS[args.discrete_pathway].from_args(nb_discrete_channel, args)
+            pathways_by_name['discrete'] = discrete_networks[args.discrete_network].from_args(nb_discrete_channel, args)
 
     trunk = NetworkTrunk(pathways_by_name)
-    body = NETWORK_BODIES[args.network_body].from_args(trunk.nb_output_channel, 512, args)  # TODO don't hardcode
+    body = network_bodies[args.network_body].from_args(trunk.nb_output_channel, embedding_size, args)
     head = NetworkHead(body.nb_output_channel, network_head_shapes)
     network = ModularNetwork(trunk, body, head)
     return network

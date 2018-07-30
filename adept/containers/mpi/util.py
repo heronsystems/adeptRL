@@ -42,7 +42,7 @@ class ArrayFlattener:
 
 
 class VariableRecieverSingle:
-    def __init__(self, comm, variable_buffer, max_fail=5, root=0, warning_time=0.1):
+    def __init__(self, comm, variable_buffer, max_fail=5, root=0, warning_time=0.1, waiting_recv_warning=5):
         self.mpi_comm = comm
         self.variable_buffer = variable_buffer
         self.root = root
@@ -50,6 +50,7 @@ class VariableRecieverSingle:
         self.max_fail = max_fail
         self.curr_fail = 0
         self.warning_time = warning_time
+        self.waiting_recv_warning = waiting_recv_warning
 
     def recieve(self):
         wait = False
@@ -85,7 +86,7 @@ class VariableRecieverSingle:
             self.comms = self.mpi_comm.Ibcast(v, root=self.root)
             has_data = self.comms.Test()
             if not has_data:
-                if number_of_recvs >= 5:
+                if number_of_recvs >= self.waiting_recv_warning:
                     print('WARNING {}: Worker had {} variable updates waiting. Worker is slow.'.format(
                         self.mpi_comm.Get_rank(),
                         number_of_recvs

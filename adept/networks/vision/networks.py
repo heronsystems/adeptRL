@@ -211,13 +211,56 @@ class FourConvSpatialAttention(InputNetwork):
         return x
 
 
+class FourConvLarger(InputNetwork):
+    def __init__(self, nb_in_channel, normalize):
+        super().__init__()
+        bias = not normalize
+        self._nb_output_channel = 3200
+        self.conv1 = Conv2d(nb_in_channel, 32, 7, stride=2, padding=1, bias=bias)
+        self.conv2 = Conv2d(32, 64, 3, stride=2, padding=1, bias=bias)
+        self.conv3 = Conv2d(64, 64, 3, stride=2, padding=1, bias=bias)
+        self.conv4 = Conv2d(64, 128, 3, stride=2, padding=1, bias=bias)
+
+        if normalize:
+            self.bn1 = BatchNorm2d(32)
+            self.bn2 = BatchNorm2d(64)
+            self.bn3 = BatchNorm2d(64)
+            self.bn4 = BatchNorm2d(128)
+        else:
+            self.bn1 = Identity()
+            self.bn2 = Identity()
+            self.bn3 = Identity()
+            self.bn4 = Identity()
+
+        relu_gain = init.calculate_gain('relu')
+        self.conv1.weight.data.mul_(relu_gain)
+        self.conv2.weight.data.mul_(relu_gain)
+        self.conv3.weight.data.mul_(relu_gain)
+        self.conv4.weight.data.mul_(relu_gain)
+
+    @classmethod
+    def from_args(cls, nb_in_channel, args):
+        return cls(nb_in_channel, args.normalize)
+
+    @property
+    def nb_output_channel(self):
+        return self._nb_output_channel
+
+    def forward(self, xs):
+        xs = F.relu(self.bn1(self.conv1(xs)))
+        xs = F.relu(self.bn2(self.conv2(xs)))
+        xs = F.relu(self.bn3(self.conv3(xs)))
+        xs = F.relu(self.bn4(self.conv4(xs)))
+
+        xs = xs.view(xs.size(0), -1)
+
+        return xs
+
 class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
     def __init__(self, nb_in_channel, normalize):
         super().__init__()
-        self._nb_output_channel = 512
         bias = not normalize
         self.conv1 = Conv2d(nb_in_channel, 64, 7, stride=2, padding=1, bias=bias)  # 40x40
-        self._nb_output_channel = self.resnet.nb_output_channel
         relu_gain = init.calculate_gain('relu')
         self.conv1.weight.data.mul_(relu_gain)
 
@@ -237,7 +280,7 @@ class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
 
     @property
     def nb_output_channel(self):
-        return self._nb_output_channel
+        return self.resnet.nb_output_channel
 
     def forward(self, xs):
         xs = F.relu(self.bn1(self.conv1(xs)))

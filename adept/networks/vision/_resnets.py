@@ -13,7 +13,7 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(nb_input_channel, nb_output_channel, stride)
         self.bn1 = nn.BatchNorm2d(nb_output_channel)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU()
         self.conv2 = conv3x3(nb_output_channel, nb_output_channel)
         self.bn2 = nn.BatchNorm2d(nb_output_channel)
         self.downsample = downsample
@@ -43,7 +43,7 @@ class BasicBlockV2(nn.Module):
 
     def __init__(self, nb_input_channel, nb_output_channel, stride=1, downsample=None):
         super(BasicBlockV2, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU()
 
         self.bn1 = nn.BatchNorm2d(nb_input_channel)
         self.conv1 = conv3x3(nb_input_channel, nb_output_channel, stride)
@@ -78,7 +78,7 @@ class Bottleneck(nn.Module):
 
     def __init__(self, nb_in_channel, nb_out_channel, stride=1, downsample=None):
         super(Bottleneck, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU()
 
         self.conv1 = nn.Conv2d(nb_in_channel, nb_out_channel, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(nb_out_channel)
@@ -118,7 +118,7 @@ class BottleneckV2(nn.Module):
 
     def __init__(self, nb_in_channel, nb_out_channel, stride=1, downsample=None):
         super(BottleneckV2, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU()
 
         self.bn1 = nn.BatchNorm2d(nb_in_channel)
         self.conv1 = nn.Conv2d(nb_in_channel, nb_out_channel, kernel_size=1, bias=False)

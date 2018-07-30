@@ -7,7 +7,7 @@ from collections import OrderedDict
 
 
 class MPIHelper:
-    def __init__(self, send_names_shapes, recv_shapes, host_rank, max_recv_skip, send_warning_time=0.1, recv_warning_time=0.1):
+    def __init__(self, send_names_shapes, recv_shapes, host_rank, max_recv_skip, send_warning_time=0.1, recv_warning_time=0.1, waiting_recv_warning=5):
         self.send_names_shapes = send_names_shapes
         self.recv_shapes = recv_shapes
         self.host_rank = host_rank
@@ -18,6 +18,7 @@ class MPIHelper:
         self.mpi_send_ack = None
         self.send_warning_time = send_warning_time
         self.recv_warning_time = recv_warning_time
+        self.waiting_recv_warning = waiting_recv_warning
 
         # talk to host and send sizes and names
         assert isinstance(send_names_shapes, OrderedDict)
@@ -30,7 +31,7 @@ class MPIHelper:
         self.send_buffer = np.empty(self.send_flattener.total_size, np.float32)
         self.variable_flattener = ArrayFlattener(recv_shapes)
         self.variable_receiver = VariableRecieverSingle(self.mpi_comm, np.empty(self.variable_flattener.total_size, np.float32),
-                                                        max_recv_skip, host_rank, warning_time=recv_warning_time)
+                                                        max_recv_skip, host_rank, warning_time=recv_warning_time, waiting_recv_warning=waiting_recv_warning)
         self.stop_command = self.mpi_comm.irecv(8, source=0, tag=MpiMessages.STOP)
 
     def send(self, list_of_tensors, timestep=0):

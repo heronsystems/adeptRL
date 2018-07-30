@@ -51,13 +51,13 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
     def summary_frequency(self):
         return self._summary_frequency
 
-    def _batch_add_thread(self, listen_source, worker_timestep, max_items_in_queue):
+    def _batch_add_thread(self, listen_source, worker_wait_time, worker_timestep, max_items_in_queue):
         """
             A thread that listens to a mpi worker and
             appends to the shared self.recieved_rollouts list
         """
         # iterative wait time to make sure the host doesn't get behind and not be able to recover
-        wait_time = 0.1
+        worker_wait_time.fill(0.0)
         # setup rollout buffers
         rollout_buffer = np.empty(self.rollout_flattener.total_size, np.float32)
         # timestep is a np array so the value is correctly shared
@@ -66,10 +66,16 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         # thread loop as long as master says we're not done
         while not self._threads_should_be_done:
             # possible wait if host is slow
-            while len(self.received_rollouts) > max_items_in_queue:
-                print('Thread', listen_source, 'waiting {} because host is slow. {} items in the queue'.format(wait_time, len(self.received_rollouts)))
-                time.sleep(wait_time)
-                wait_time += 0.01
+            while len(self.received_rollouts) > max_items_in_queue and not self._threads_should_be_done:
+                # random wait time to ensure that threads can uniformly add when max_queue size is reached
+                how_long_to_wait = float(np.random.uniform(0.1, 1))
+                time.sleep(how_long_to_wait)
+                worker_wait_time += how_long_to_wait
+
+            # break after possible waiting
+            if self._threads_should_be_done:
+                break
+
             # setup listener for rollout, Recv is blocking but okay on thread
             self.comm.Recv(rollout_buffer, source=listen_source, tag=MpiMessages.SEND)
 
@@ -105,7 +111,7 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         # final save
         self.saver.save_state_dicts(self.network, int(self._threaded_global_step()), optimizer=self.optimizer)
 
-    def run(self, num_rollouts_in_batch, max_items_in_queue, max_steps=float('inf'), dynamic=False):
+    def run(self, num_rollouts_in_batch, max_items_in_queue, max_steps=float('inf'), dynamic=False, min_dynamic_batch=0):
         from threading import Thread
         size = self.comm.Get_size()
 
@@ -115,8 +121,10 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         # shared done flag and steps
         self._threads_should_be_done = False
         self._thread_steps = [np.ones((1)) for i in range(1, size)]
+        self._thread_wait_times = [np.zeros((1)) for i in range(1, size)]
         # start batch adding threads
-        threads = [Thread(target=self._batch_add_thread, args=(i, self._thread_steps[i - 1], max_items_in_queue, )) for i in range(1, size)]
+        threads = [Thread(target=self._batch_add_thread, args=(i, self._thread_wait_times[i-1],
+                          self._thread_steps[i - 1], max_items_in_queue, )) for i in range(1, size)]
         for t in threads:
             t.start()
 
@@ -135,7 +143,7 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
             if len_receieved_rollouts > 0:
                 # dynamic requires at least one rollout
                 if dynamic:
-                    do_batch = True
+                    do_batch = len_receieved_rollouts >= min_dynamic_batch
                     # limit batch size to max of num_rollouts_in_batch
                     batch_slice = min((len_receieved_rollouts, num_rollouts_in_batch))
                 else:
@@ -174,9 +182,12 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
                             print('Train Per Second', self.sent_parameters_count / (time.time() - start_time))
                             print('Avg Queue Length', number_of_rollouts_waiting / self.sent_parameters_count)
                             print('Current Queue Length', len(self.received_rollouts))
+                            print('Thread wait times', ['{:.2f}'.format(x[0]) for x in self._thread_wait_times])
                             print('=' * 40)
                     except Exception as e:
+                        import traceback
                         print('Host error: {}'.format(e))
+                        print(traceback.format_exc())
                         print('Trying to stop gracefully')
                         break
 
@@ -242,7 +253,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
             summary_writer,
             use_local_buffers=False,
             max_parameter_skip=10,
-            send_warning_time=0.1,
+            send_warning_time=float('inf'),
             recv_warning_time=0.1
     ):
         super().__init__()
@@ -337,7 +348,8 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
                 v = next_obs[k]
                 shapes['next_obs-' + k] = (len(v), ) + v[0].shape
             parameter_shapes = self.get_parameter_shapes()
-            self.mpi_helper = MPIHelper(shapes, parameter_shapes, 0, self.max_parameter_skip, self.send_warning_time, self.recv_warning_time)
+            self.mpi_helper = MPIHelper(shapes, parameter_shapes, 0, self.max_parameter_skip, self.send_warning_time, self.recv_warning_time,
+                                        float('inf'))  # workers wait on send which waits on queue len so no warnings for # of recv updates are needed
 
         # TODO: mpi_helper send should accept list of lists of tensors
         # then don't have to torch stack

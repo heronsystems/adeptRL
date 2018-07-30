@@ -5,7 +5,6 @@ from torch.nn import functional as F
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
 from ._base import Agent, EnvBase
-from ._helpers import obs_to_device
 
 
 class ActorCritic(Agent, EnvBase):

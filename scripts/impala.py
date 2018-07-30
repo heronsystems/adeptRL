@@ -3,7 +3,7 @@ from mpi4py import MPI as mpi
 import torch
 from absl import flags
 from adept.containers import ImpalaHost, ImpalaWorker
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes
+from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
 from tensorboardX import SummaryWriter
 from datetime import datetime
@@ -27,7 +27,7 @@ def main(args):
         timestamp = None
     timestamp = comm.bcast(timestamp, root=0)
 
-    log_id = make_log_id_from_timestamp(args.mode_name, args.agent, args.network, timestamp)
+    log_id = make_log_id_from_timestamp(args.mode_name, args.agent, args.vision_network + args.network_body, timestamp)
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     # host needs to make dir so other procs can access
@@ -43,7 +43,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
 
     # sync network params
@@ -97,6 +97,7 @@ def main(args):
         summary_writer = SummaryWriter(os.path.join(log_id_dir, str(rank)))
         log_args(logger, args)
         write_args_file(log_id_dir, args)
+        logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
         # no need for the env anymore
         env.close()
@@ -118,14 +119,16 @@ def main(args):
             profiler = Profiler()
             profiler.start()
             if args.max_dynamic_batch > 0:
-                container.run(args.max_dynamic_batch, args.max_queue_length, args.max_train_steps, dynamic=True)
+                container.run(args.max_dynamic_batch, args.max_queue_length, args.max_train_steps, dynamic=True,
+                              min_dynamic_batch=args.min_dynamic_batch)
             else:
                 container.run(args.num_rollouts_in_batch, args.max_queue_length, args.max_train_steps)
             profiler.stop()
             print(profiler.output_text(unicode=True, color=True))
         else:
             if args.max_dynamic_batch > 0:
-                container.run(args.max_dynamic_batch, args.max_queue_length, args.max_train_steps, dynamic=True)
+                container.run(args.max_dynamic_batch, args.max_queue_length, args.max_train_steps, dynamic=True,
+                              min_dynamic_batch=args.min_dynamic_batch)
             else:
                 container.run(args.num_rollouts_in_batch, args.max_queue_length, args.max_train_steps)
 
@@ -138,8 +141,17 @@ if __name__ == '__main__':
     parser = add_base_args(parser)
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
     parser.add_argument(
-        '-net', '--network', default='FourConvLSTM',
-        help='name of preset network (default: FourConvLSTM)'
+        '--vision-network', default='Nature',
+        help='name of preset network (default: Nature)'
+    )
+    parser.add_argument(
+        '--discrete-network', default='Identity',
+    )
+    parser.add_argument(
+        '--network-body', default='LSTM',
+    )
+    parser.add_argument(
+        '--metalearning', type=parse_bool, nargs='?', const=True, default=False,
     )
     parser.add_argument(
         '--agent', default='ActorCriticVtrace',
@@ -166,6 +178,10 @@ if __name__ == '__main__':
         '--max-dynamic-batch', type=int, nargs='?', const=True, default=0,
         help='When > 0 uses dynamic batching (disables cudnn and --num-rollouts-in-batch). '
         + 'Limits the maximum rollouts in the batch to limit GPU memory usage. (default: 0 (False))'
+    )
+    parser.add_argument(
+        '--min-dynamic-batch', type=int, nargs='?', const=True, default=0,
+        help='Guarantees a minimum number of rollouts in the batch when using dynamic batching. (default: 0)'
     )
     parser.add_argument(
         '--host-training-info-interval', type=int, nargs='?', const=True, default=100,

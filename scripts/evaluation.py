@@ -39,10 +39,10 @@ def main(args):
     train_args.nb_env = args.nb_env
 
     # construct env
-    env = make_env(train_args, train_args.seed)
+    env = make_env(train_args, args.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
     network = make_network(env.observation_space, network_head_shapes, train_args)
 
     results = []
@@ -62,19 +62,15 @@ def main(args):
             agent = make_agent(network, device, env.engine, train_args)
 
             # container
-            env = make_env(train_args, train_args.seed)  # need to remake envs b/c some games can overfit on seed
-            try:
-                container = Evaluation(agent, env, device, args.nb_env)
+            container = Evaluation(agent, env, device, args.nb_env)
 
-                # Run the container
-                mean_reward, std_dev = container.run(args.nb_env)
+            # Run the container
+            mean_reward, std_dev = container.run(args.nb_env)
 
-                if mean_reward >= best_mean:
-                    best_mean = mean_reward
-                    best_std_dev = std_dev
-                    selected_model = os.path.split(network_file)[-1]
-            finally:
-                env.close()
+            if mean_reward >= best_mean:
+                best_mean = mean_reward
+                best_std_dev = std_dev
+                selected_model = os.path.split(network_file)[-1]
 
         result = Result(epoch_id, best_mean, best_std_dev)
         selected_model = SelectedModel(epoch_id, selected_model)
@@ -106,6 +102,7 @@ if __name__ == '__main__':
         '--nb-env', type=int, default=30,
         help='number of environments to run in parallel (default: 30)'
     )
+    parser.add_argument('-s', '--seed', type=int, default=32)
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)')
     args = parser.parse_args()
     main(args)

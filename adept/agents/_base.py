@@ -67,21 +67,21 @@ class Agent(abc.ABC):
     def act_eval(self, obs):
         raise NotImplementedError
 
-    def obs_to_pathways(self, obs, device):
+    def obs_to_pathways(self, obs, device, visual_dim=3, discrete_dim=1):
         visual_batch = []
         discrete_batch = []
         for channels in zip(*obs.values()):
             visual_channels = [
                 channel_tensor.to(device).float()
                 for channel_tensor in channels
-                if (isinstance(channel_tensor, torch.Tensor) and (channel_tensor.dim() == 3))
+                if (isinstance(channel_tensor, torch.Tensor) and (channel_tensor.dim() == visual_dim))
             ]
             visual_tensor = torch.cat(visual_channels) if visual_channels else None
 
             discrete_channels = [
                 channel_tensor.to(device).float()
                 for channel_tensor in channels
-                if (isinstance(channel_tensor, torch.Tensor) and (channel_tensor.dim() == 1))
+                if (isinstance(channel_tensor, torch.Tensor) and (channel_tensor.dim() == discrete_dim))
             ]
             discrete_tensor = torch.cat(discrete_channels) if discrete_channels else None
 

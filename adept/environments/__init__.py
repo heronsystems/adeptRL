@@ -31,6 +31,15 @@ def reward_normalizer_by_env_id(env_id):
         return norm_by_id[env_id]
 
 
+ATARI_6_ENVS = [
+    'BeamRiderNoFrameskip-v4',
+    'BreakoutNoFrameskip-v4',
+    'QbertNoFrameskip-v4',
+    'SeaquestNoFrameskip-v4',
+    'SpaceInvadersNoFrameskip-v4',
+    'PongNoFrameskip-v4',
+]
+
 ATARI_ENVS = [
     # 'AirRaidNoFrameskip-v4',
     # 'AlienNoFrameskip-v4',

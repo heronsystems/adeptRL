@@ -16,9 +16,14 @@ def worker(remote, parent_remote, env_fn_wrapper):
     if isinstance(env.observation_space, spaces.Box):
         shared_memory = {'obs': torch.FloatTensor(*env.observation_space.shape)}
     elif isinstance(env.observation_space, spaces.Dict):
-        shared_memory = {
-            k: torch.FloatTensor(*space.shape).share_memory_() for k, space in env.observation_space.spaces.items()
-        }
+        shared_memory = {}
+        for k, space in env.observation_space.spaces.items():
+            if isinstance(space, spaces.Box):
+                shared_memory[k] = torch.FloatTensor(*space.shape).share_memory_()
+            elif isinstance(space, spaces.Discrete):
+                shared_memory[k] = torch.FloatTensor(space.n).share_memory_()
+            else:
+                raise NotImplementedError()
     else:
         raise NotImplementedError()
 
@@ -54,6 +59,8 @@ def handle_ob(ob, shared_memory):
     for k, v in ob.items():
         if isinstance(v, torch.Tensor):
             shared_memory[k].copy_(v)
+        elif isinstance(v, np.ndarray):
+            shared_memory[k].copy_(torch.from_numpy(v))
         else:
             non_shared[k] = v
     return non_shared
