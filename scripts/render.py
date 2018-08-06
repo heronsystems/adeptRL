@@ -23,7 +23,7 @@ def main(args):
     env = atari_from_args(train_args, train_args.seed, subprocess=False)
 
     # construct network
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
     network = make_network(
         env.observation_space,
         network_head_shapes,
