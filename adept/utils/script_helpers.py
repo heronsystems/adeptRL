@@ -166,6 +166,10 @@ def add_base_args(parser):
         '-sf', '--summary-frequency', default=10, metavar='FREQ',
         help='write tensorboard summaries every FREQ seconds'
     )
+    parser.add_argument(
+        '-t', '--tag', default='',
+        help='identify your experiment with a tag that gets prepended to experiment log directory'
+    )
 
     """
     Env Arguments

@@ -27,7 +27,7 @@ def main(args):
         timestamp = None
     timestamp = comm.bcast(timestamp, root=0)
 
-    log_id = make_log_id_from_timestamp(args.mode_name, args.agent, args.vision_network + args.network_body, timestamp)
+    log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body, timestamp)
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     # host needs to make dir so other procs can access
@@ -141,14 +141,14 @@ if __name__ == '__main__':
     parser = add_base_args(parser)
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
     parser.add_argument(
-        '--vision-network', default='Nature',
+        '-vn', '--vision-network', default='Nature',
         help='name of preset network (default: Nature)'
     )
     parser.add_argument(
-        '--discrete-network', default='Identity',
+        '-dn', '--discrete-network', default='Identity',
     )
     parser.add_argument(
-        '--network-body', default='LSTM',
+        '-nb', '--network-body', default='LSTM',
     )
     parser.add_argument(
         '--metalearning', type=parse_bool, nargs='?', const=True, default=False,

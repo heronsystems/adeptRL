@@ -256,6 +256,7 @@ class FourConvLarger(InputNetwork):
 
         return xs
 
+
 class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
     def __init__(self, nb_in_channel, normalize):
         super().__init__()

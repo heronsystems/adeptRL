@@ -16,7 +16,7 @@ FLAGS(['local.py'])
 def main(args):
     # construct logging objects
     print_ascii_logo()
-    log_id = make_log_id(args.mode_name, args.agent, args.vision_network + args.network_body)
+    log_id = make_log_id(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body)
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     os.makedirs(log_id_dir)
@@ -83,14 +83,14 @@ if __name__ == '__main__':
     parser = add_base_args(parser)
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
     parser.add_argument(
-        '--vision-network', default='FourConv',
+        '-vn', '--vision-network', default='FourConv',
         help='name of preset network (default: FourConv)'
     )
     parser.add_argument(
-        '--discrete-network', default='DiscreteIdentity',
+        '-dn', '--discrete-network', default='DiscreteIdentity',
     )
     parser.add_argument(
-        '--network-body', default='LSTM',
+        '-nb', '--network-body', default='LSTM',
     )
     parser.add_argument(
         '--metalearning', type=parse_bool, nargs='?', const=True, default=False,
