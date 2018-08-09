@@ -23,18 +23,21 @@ def main(args):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body,
+                                            timestamp)
+        log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+        os.makedirs(log_id_dir)
+        saver = SimpleModelSaver(log_id_dir)
+        print_ascii_logo()
     else:
         timestamp = None
     timestamp = comm.bcast(timestamp, root=0)
 
-    log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body, timestamp)
-    log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+    if rank != 0:
+        log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body,
+                                            timestamp)
+        log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
-    # host needs to make dir so other procs can access
-    if rank == 0:
-        print_ascii_logo()
-        os.makedirs(log_id_dir)
-        saver = SimpleModelSaver(log_id_dir)
     comm.Barrier()
 
     # construct env

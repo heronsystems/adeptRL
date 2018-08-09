@@ -102,12 +102,16 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
 
     def _saver_thread(self):
         next_save_step = self.save_interval
-        while not self._threads_should_be_done:
-            current_step = self._threaded_global_step()
-            if current_step > next_save_step:
-                self.saver.save_state_dicts(self.network, int(current_step), optimizer=self.optimizer)
-                next_save_step += self.save_interval
-            time.sleep(1)
+        try:
+            while not self._threads_should_be_done:
+                current_step = self._threaded_global_step()
+                if current_step > next_save_step:
+                    self.saver.save_state_dicts(self.network, int(current_step), optimizer=self.optimizer)
+                    next_save_step += self.save_interval
+                time.sleep(1)
+        except Exception as e:
+            print('Error saving', e)
+
         # final save
         self.saver.save_state_dicts(self.network, int(self._threaded_global_step()), optimizer=self.optimizer)
 
@@ -138,21 +142,21 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         start_time = time.time()
         number_of_rollouts_waiting = 0
         while self._threaded_global_step() < max_steps:
-            len_receieved_rollouts = len(self.received_rollouts)
+            len_received_rollouts = len(self.received_rollouts)
             # rollouts waiting?
-            if len_receieved_rollouts > 0:
+            if len_received_rollouts > 0:
                 # dynamic requires at least one rollout
                 if dynamic:
-                    do_batch = len_receieved_rollouts >= min_dynamic_batch
+                    do_batch = len_received_rollouts >= min_dynamic_batch
                     # limit batch size to max of num_rollouts_in_batch
-                    batch_slice = min((len_receieved_rollouts, num_rollouts_in_batch))
+                    batch_slice = min((len_received_rollouts, num_rollouts_in_batch))
                 else:
-                    do_batch = len_receieved_rollouts >= num_rollouts_in_batch
+                    do_batch = len_received_rollouts >= num_rollouts_in_batch
                     batch_slice = num_rollouts_in_batch
 
                 if do_batch:
                     try:
-                        number_of_rollouts_waiting += len_receieved_rollouts
+                        number_of_rollouts_waiting += len_received_rollouts
 
                         # pop everything from list starting first to last
                         popped_rollouts = self.received_rollouts[0:batch_slice]
@@ -308,8 +312,8 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
             self.agent.observe(copied_obs, rewards, terminals, infos)
 
             # Perform state updates
-            terminal_rewards = self.update_buffers(rewards, terminals, infos)
-            self.log_episode_results(terminal_rewards, self.local_step_count)
+            terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
+            self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count)
             self.write_reward_summaries(terminal_rewards, self.global_step)
 
             # Learn

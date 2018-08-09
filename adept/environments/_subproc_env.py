@@ -137,6 +137,16 @@ class SubProcEnv(VecEnv):
         self.closed = True
 
 
+def dummy_handle_ob(ob):
+    new_ob = {}
+    for k, v in ob.items():
+        if isinstance(v, np.ndarray):
+            new_ob[k] = torch.from_numpy(v)
+        else:
+            new_ob[k] = v
+    return new_ob
+
+
 class DummyVecEnv(VecEnv):
     def __init__(self, env_fns, engine):
         self.envs = [fn() for fn in env_fns]
@@ -172,17 +182,17 @@ class DummyVecEnv(VecEnv):
             obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[e].step(self.actions[e])
             if self.buf_dones[e]:
                 obs = self.envs[e].reset()
-            self.buf_obs[e] = obs
+            self.buf_obs[e] = dummy_handle_ob(obs)
         return listd_to_dlist(self.buf_obs), self.buf_rews, self.buf_dones, self.buf_infos
 
     def reset(self):
         for e in range(self.num_envs):
             obs = self.envs[e].reset()
-            self.buf_obs[e] = obs
+            self.buf_obs[e] = dummy_handle_ob(obs)
         return listd_to_dlist(self.buf_obs)
 
     def close(self):
-        return
+        return [e.close() for e in self.envs]
 
     def render(self, mode='human'):
         return [e.render(mode=mode) for e in self.envs]

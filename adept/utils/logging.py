@@ -110,11 +110,11 @@ class SimpleModelSaver:
         save_dir = os.path.join(self._log_id_dir, str(step_count))
         os.makedirs(save_dir)
         torch.save(
-            network,
+            network.state_dict(),
             os.path.join(save_dir, 'model_{}.pth'.format(step_count))
         )
         if optimizer is not None:
             torch.save(
-                optimizer,
+                optimizer.state_dict(),
                 os.path.join(save_dir, 'optimizer_{}.pth'.format(step_count))
             )

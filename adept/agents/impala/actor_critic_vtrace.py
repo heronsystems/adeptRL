@@ -5,6 +5,7 @@ from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
+from adept.networks._base import ModularNetwork
 from .._base import Agent, EnvBase
 
 
@@ -129,22 +130,43 @@ class ActorCriticVtrace(Agent, EnvBase):
             This is the method to recompute the forward pass on the host, it must return log_probs, values and entropies
             Obs, sampled_actions, terminal_masks here are [seq, batch], internals must be reset if terminal
         """
-        obs_on_device = self.seq_obs_to_pathways(obs, self.device)
         next_obs_on_device = self.obs_to_pathways(next_obs, self.device)
 
         values = []
         log_probs_of_action = []
         entropies = []
-        # TODO: log_probs needs to support multiple actions as a dict
-        for seq_ind in range(terminal_masks.shape[0]):
-            obs_of_seq_ind = obs_on_device[seq_ind]
-            results, internals = self.network(obs_of_seq_ind, internals)
-            # TODO: when states are dicts use the below
-            # results, internals = self.network({k: v[seq_ind] for k, v in obs_on_device.items()}, self.internals)
 
+        seq_len, batch_size = terminal_masks.shape
+
+        # if network is modular, trunk can be sped up by combining batch & seq dim
+        def get_results_generator():
+            if isinstance(self.network, ModularNetwork):
+                pathway_dict = self.obs_to_pathways(obs, self.device, visual_dim=4, discrete_dim=2)
+                # flatten obs
+                flat_obs = {k: v.view(-1, *v.shape[2:]) for k, v in pathway_dict.items()}
+                embeddings = self.network.trunk.forward(flat_obs)
+                # add back in seq dim
+                seq_embeddings = embeddings.view(seq_len, batch_size, embeddings.shape[-1])
+
+                def get_results(seq_ind, internals):
+                    embedding = seq_embeddings[seq_ind]
+                    pre_result, internals = self.network.body.forward(embedding, internals)
+                    return self.network.head.forward(pre_result, internals)
+                return get_results
+            else:
+                obs_on_device = self.seq_obs_to_pathways(obs, self.device)
+
+                def get_results(seq_ind, internals):
+                    obs_of_seq_ind = obs_on_device[seq_ind]
+                    return self.network(obs_of_seq_ind, internals)
+                return get_results
+
+        result_fn = get_results_generator()
+        for seq_ind in range(terminal_masks.shape[0]):
+            results, internals = result_fn(seq_ind, internals)
             logits_seq = {k: v for k, v in results.items() if k != 'critic'}
             logits_seq = self.preprocess_logits(logits_seq)
-            log_probs_action_seq, entropies_seq = self.process_logits_host(logits_seq, sampled_actions[seq_ind], obs_of_seq_ind)
+            log_probs_action_seq, entropies_seq = self.process_logits_host(logits_seq, sampled_actions[seq_ind])
             # seq lists
             values.append(results['critic'].squeeze(1))
             log_probs_of_action.append(log_probs_action_seq)
@@ -179,7 +201,7 @@ class ActorCriticVtrace(Agent, EnvBase):
 
         return actions.squeeze(1).cpu().numpy(), log_probs.squeeze(1)
 
-    def process_logits_host(self, logits, actions, obs):
+    def process_logits_host(self, logits, actions):
         prob = F.softmax(logits, dim=1)
         log_probs = F.log_softmax(logits, dim=1)
         entropies = -(log_probs * prob).sum(1)

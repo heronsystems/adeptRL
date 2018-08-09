@@ -51,11 +51,13 @@ class CountsRewards(abc.ABC):
         self.episode_reward_buffer += torch.tensor(rewards).float()
         self.local_step_count += self.nb_env
         terminal_rewards = []
+        terminal_infos = []
         for ep_reward, done, info in zip(self.episode_reward_buffer, terminals, infos):
             if done and info:
                 terminal_rewards.append(ep_reward.item())
+                terminal_infos.append((info))
                 ep_reward.zero_()
-        return terminal_rewards
+        return terminal_rewards, terminal_infos
 
 
 class LogsRewards(CountsRewards, metaclass=abc.ABCMeta):
@@ -64,7 +66,7 @@ class LogsRewards(CountsRewards, metaclass=abc.ABCMeta):
     def logger(self):
         raise NotImplementedError
 
-    def log_episode_results(self, terminal_rewards, step_count, initial_step_count=0):
+    def log_episode_results(self, terminal_rewards, terminal_infos, step_count, initial_step_count=0):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
             self.logger.info(

@@ -76,8 +76,8 @@ class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
             self.agent.observe(obs, rewards, terminals, infos)
 
             # Perform state updates
-            terminal_rewards = self.update_buffers(rewards, terminals, infos)
-            self.log_episode_results(terminal_rewards, self.local_step_count, initial_count)
+            terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
+            self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count, initial_count)
             self.write_reward_summaries(terminal_rewards, self.local_step_count)
             self.update_and_save_model(terminal_rewards, self.local_step_count, self.nb_env)
 
