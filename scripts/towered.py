@@ -6,7 +6,7 @@ from tensorboardX import SummaryWriter
 
 from adept.containers import ToweredHost, ToweredWorker
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes
+from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from datetime import datetime
 
 
@@ -24,17 +24,22 @@ def main(args):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent,
+                                            args.vision_network + args.network_body,
+                                            timestamp)
+        log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+        os.makedirs(log_id_dir)
+        print_ascii_logo()
     else:
         timestamp = None
     timestamp = comm.bcast(timestamp, root=0)
 
-    log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent, args.network, timestamp)
-    log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+    if rank != 0:
+        log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent,
+                                            args.vision_network + args.network_body,
+                                            timestamp)
+        log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
-    # host needs to make dir so other procs can access
-    if rank == 0:
-        print_ascii_logo()
-        os.makedirs(log_id_dir)
     comm.Barrier()
 
     # construct env
@@ -43,7 +48,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
 
     # sync network params
@@ -88,6 +93,7 @@ def main(args):
         logger = make_logger('ToweredHost', os.path.join(log_id_dir, 'train_log_rank{}.txt'.format(rank)))
         log_args(logger, args)
         write_args_file(log_id_dir, args)
+        logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
         # no need for the env anymore
         env.close()
