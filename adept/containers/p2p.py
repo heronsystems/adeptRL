@@ -74,7 +74,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
             # Perform state updates
             terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
             self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count, initial_count)
-            self.write_reward_summaries(terminal_rewards, self.global_step)
+            self.write_reward_summaries(terminal_rewards, self.local_step_count)
 
             # Learn
             if self.exp_cache.is_ready():

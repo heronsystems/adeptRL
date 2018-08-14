@@ -70,7 +70,7 @@ def P2PBestProtocol(comm):
     size = comm.Get_size()
     if size == 2:
         return P2PRoundRobin(comm)
-    if size == 3:
+    if size >= 3:
         return P2PReversingRoundRobin(comm)
     # if size == 4:
     #     return P2PReversingSquare(comm)
