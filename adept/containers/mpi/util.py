@@ -146,27 +146,3 @@ class VariableRecieverSingle:
                 return True  # we did get something
             else:
                 number_of_recvs += 1
-
-
-class P2PCommunicationProtocol:
-    def __init__(self, comm):
-        self.size = comm.Get_size()
-        self.rank = comm.Get_rank()
-
-    @property
-    def next_dest(self):
-        if self.rank == 0:
-            return 1
-        elif self.rank == 1:
-            return 2
-        elif self.rank == 2:
-            return 0
-
-    @property
-    def next_source(self):
-        if self.rank == 0:
-            return 2
-        elif self.rank == 1:
-            return 0
-        elif self.rank == 2:
-            return 1

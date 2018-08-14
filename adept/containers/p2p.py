@@ -1,7 +1,7 @@
 from ._base import (
     HasAgent, WritesSummaries, LogsAndSummarizesRewards, MPIProc, HasEnvironment
 )
-from .mpi import MpiMessages, MPIArraySend, MPIArrayRecv, P2PCommunicationProtocol
+from .mpi import MpiMessages, MPIArraySend, MPIArrayRecv, P2PBestProtocol
 import torch
 import time
 from mpi4py import MPI as mpi
@@ -30,7 +30,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         self._mpi_send_ack = None
         self._mpi_send = MPIArraySend(mpi.COMM_WORLD, param_shapes)
         self._mpi_recv = MPIArrayRecv(mpi.COMM_WORLD, param_shapes)
-        self.communication_protocol = P2PCommunicationProtocol(mpi.COMM_WORLD)
+        self.communication_protocol = P2PBestProtocol(mpi.COMM_WORLD)
         self.global_step = 0
 
     @property
