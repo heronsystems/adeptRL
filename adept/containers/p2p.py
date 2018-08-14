@@ -112,7 +112,6 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         source = self.communication_protocol.next_source
         # the tag we are listening for is a SEND from that node
         new_params = self._mpi_recv.Recv(source, MpiMessages.SEND)
-        print('recv stuff')
         self.combine_parameters(new_params)
         # self.global_step = self.mpi_helper.send(parameters, self.local_step_count)
 
