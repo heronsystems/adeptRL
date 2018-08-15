@@ -83,6 +83,39 @@ class P2PReversingSquare(P2PCommunicationProtocol):
         return (self._dir + 1) % 3
 
 
+class SquareDirections(enum.IntEnum):
+    FORWARD = 0
+    ACROSS = 1
+    BACKWARD = 2
+
+class P2PReversingSquare(P2PCommunicationProtocol):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self._dir = -1
+
+    @property
+    def next_dest(self):
+        self._dir = self._next_dir()
+        if self._dir == SquareDirections.FORWARD:
+            return (self.rank + 1) % self.size
+        elif self._dir == SquareDirections.ACROSS:
+            return (self.rank + 2) % self.size
+        else:  # SquareDirections.BACKWARD
+            return (self.rank - 1) % self.size
+
+    @property
+    def next_source(self):
+        if self._dir == SquareDirections.FORWARD:
+            return (self.rank - 1) % self.size
+        elif self._dir == SquareDirections.ACROSS:
+            return (self.rank - 2) % self.size
+        else:  # Direction is backward so listen to the node in front of me
+            return (self.rank + 1) % self.size
+
+    def _next_dir(self):
+        return (self._dir + 1) % 3
+
+
 def P2PBestProtocol(comm):
     size = comm.Get_size()
     if size == 2:

@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 
 class ToweredHost(AppliesGrads):
-    def __init__(self, mpi_comm, num_grads_before_combine, network, make_optimizer, logger, summary_steps=100):
+    def __init__(self, mpi_comm, num_grads_to_drop, network, make_optimizer, logger, summary_steps=100):
         self._optimizer = make_optimizer(network.parameters())
 
         self.network = network
@@ -21,7 +21,7 @@ class ToweredHost(AppliesGrads):
         self.sent_parameters_count = 0
         self.recieved_grads_count = 0
         self.summary_steps = summary_steps
-        self.num_grads_before_combine = num_grads_before_combine
+        self.num_grads_to_drop = num_grads_to_drop
         self.gradient_flattener = ArrayFlattener([tuple(x.shape) for x in self.network.parameters()] + [(1)])  # +1 for timestep
         self.variable_flattener = ArrayFlattener([tuple(x.shape) for x in self.network.parameters()])
 
@@ -52,37 +52,55 @@ class ToweredHost(AppliesGrads):
         # vars to make sure python doesn't gc
         batch_acks = [None] * (size - 1)
         self.start_time = time.time()
+        workers_to_drop = set()
+        workers_in_this_batch = []
+        num_grads_to_keep = (size - 1) - self.num_grads_to_drop
         while self.global_step < max_steps:
-            status = mpi.Status()
-            mpi.Request.Waitany(reqs, status)
-            worker = status.source
+            # get batch workers
+            while len(workers_in_this_batch) < num_grads_to_keep:
+                status = mpi.Status()
+                mpi.Request.Waitany(reqs, status)
+                worker = status.source
 
-            # gradient process
-            gradients = self.gradient_flattener.unflatten(grad_buffers[worker - 1])
-            received_grads.append(gradients[:-1])
-            timesteps[worker - 1] = gradients[-1][0]  # just want a single value
-            self.global_step = sum(timesteps)
+                # grab timestep and send ack / setup new recv
+                timesteps[worker - 1] = grad_buffers[worker - 1][-1]  # just want a single value
+                self.global_step = sum(timesteps)
+                # upon recieving batch, send ack
+                batch_acks[worker - 1] = self.comm.isend(self.global_step, dest=worker, tag=MpiMessages.SEND_ACK)
+                # setup new receive
+                reqs[worker - 1] = self.comm.Irecv(grad_buffers[worker - 1], source=worker, tag=MpiMessages.SEND)
 
-            # upon recieving batch, send ack
-            batch_acks[worker - 1] = self.comm.isend(self.global_step, dest=worker, tag=MpiMessages.SEND_ACK)
+                # if worker was dropped last round
+                if worker in workers_to_drop:
+                    # remove from drop list
+                    workers_to_drop.remove(worker)
+                else:  # not dropped grads are good
+                    # gradient process
+                    gradients = self.gradient_flattener.unflatten(grad_buffers[worker - 1])
+                    received_grads.append(gradients[:-1])
+                    workers_in_this_batch.append(worker)
 
-            if len(received_grads) >= self.num_grads_before_combine:
-                combined_grads = self.combine_gradients(received_grads)
-                self.write_gradient_summaries(combined_grads, self.global_step)
-                self.apply_gradients(combined_grads)
-                new_variables_flat = self.variable_flattener.flatten(self.get_parameters_numpy(), buffer=variable_buffer)
-                self.comm.Ibcast(new_variables_flat, root=0)
-                self.sent_parameters_count += 1
-                received_grads = []
+            # any workers not in this batch are dropped next round
+            for i in range(1, size):
+                if i not in workers_in_this_batch:
+                    workers_to_drop.add(i)
 
-                if self.sent_parameters_count % self.summary_steps == 0:
-                    self.logger.info('train_frames: {} avg_train_fps: {}'.format(
-                        self.global_step,
-                        (self.global_step - initial_step_count) / (time.time() - self.start_time)
-                    ))
+            # batch ready
+            combined_grads = self.combine_gradients(received_grads)
+            self.write_gradient_summaries(combined_grads, self.global_step)
+            self.apply_gradients(combined_grads)
+            new_variables_flat = self.variable_flattener.flatten(self.get_parameters_numpy(),
+                                                                 buffer=variable_buffer)
+            self.comm.Ibcast(new_variables_flat, root=0)
+            self.sent_parameters_count += 1
+            received_grads = []
+            workers_in_this_batch = []
 
-            # setup new receive
-            reqs[worker - 1] = self.comm.Irecv(grad_buffers[worker - 1], source=worker, tag=MpiMessages.SEND)
+            if self.sent_parameters_count % self.summary_steps == 0:
+                self.logger.info('train_frames: {} avg_train_fps: {}'.format(
+                    self.global_step,
+                    (self.global_step - initial_step_count) / (time.time() - self.start_time)
+                ))
 
         # cleanup
         print('Host sending stop')

@@ -14,13 +14,13 @@ from datetime import datetime
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
+# mpi comm, rank, and size
+comm = mpi.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
 
 def main(args):
-    # mpi comm, rank, and size
-    comm = mpi.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -103,7 +103,7 @@ def main(args):
             opt = torch.optim.RMSprop(params, lr=args.learning_rate, eps=1e-5, alpha=0.99)
             return opt
 
-        container = ToweredHost(comm, size - 1, network, make_optimizer, logger)
+        container = ToweredHost(comm, args.num_grads_to_drop, network, make_optimizer, logger)
 
         # Run the container
         if args.profile:
@@ -149,6 +149,11 @@ if __name__ == '__main__':
     parser.add_argument(
         '--debug', type=parse_bool, nargs='?', const=True, default=False,
         help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
+    )
+    parser.add_argument(
+        '--num-grads-to-drop', type=int, default=0,
+        help='The number of gradient receives to drop in a round. https://arxiv.org/abs/1604.00981 recommends dropping'
+             '10% of gradients for maximum speed (default: 0)'
     )
     args = parser.parse_args()
 

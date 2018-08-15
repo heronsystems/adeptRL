@@ -136,8 +136,8 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--share-optimizer-params', type=parse_bool, nargs='?', const=True, default=False,
-        help='If true peers share their parameters and optimizer parameters [a 2x or 3x depending '
-             'on optimizer increase in bytes sent/recv] (default: False)'
+        help='If true peers share their parameters and optimizer parameters. This gives worse performance and increases'
+             'the send/recv burden of each peer by 2x or 3x depending on the optimizer. (default: False)'
     )
     args = parser.parse_args()
 

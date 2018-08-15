@@ -28,6 +28,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         self._summary_frequency = summary_frequency
         self._share_optimizer_params = share_optimizer_params
         self._mpi_comm = mpi.COMM_WORLD
+        # These have to be created after the optimizer steps once so it's state exists
         self._mpi_send = None
         self._mpi_recv = None
         self.communication_protocol = P2PBestProtocol(mpi.COMM_WORLD)
