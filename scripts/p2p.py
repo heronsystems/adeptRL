@@ -8,7 +8,6 @@ from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_a
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from datetime import datetime
 
-
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
@@ -87,7 +86,8 @@ def main(args):
     agent = make_agent(network, device, env.engine, args)
 
     # construct container
-    container = P2PWorker(agent, env, make_optimizer, args.nb_env, logger, summary_writer, args.summary_frequency)
+    container = P2PWorker(agent, env, make_optimizer, args.nb_env, logger, summary_writer, args.summary_frequency,
+                          share_optimizer_params=args.share_optimizer_params)
 
     # Run the container
     if args.profile:
@@ -133,6 +133,11 @@ if __name__ == '__main__':
     parser.add_argument(
         '--debug', type=parse_bool, nargs='?', const=True, default=False,
         help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
+    )
+    parser.add_argument(
+        '--share-optimizer-params', type=parse_bool, nargs='?', const=True, default=False,
+        help='If true peers share their parameters and optimizer parameters [a 2x or 3x depending '
+             'on optimizer increase in bytes sent/recv] (default: False)'
     )
     args = parser.parse_args()
 

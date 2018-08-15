@@ -9,14 +9,15 @@ from mpi4py import MPI as mpi
 
 class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards, MPIProc):
     def __init__(
-        self,
-        agent,
-        environment,
-        make_optimizer,
-        nb_env,
-        logger,
-        summary_writer,
-        summary_frequency
+            self,
+            agent,
+            environment,
+            make_optimizer,
+            nb_env,
+            logger,
+            summary_writer,
+            summary_frequency,
+            share_optimizer_params=False
     ):
         self._agent = agent
         self._environment = environment
@@ -25,11 +26,10 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         self._logger = logger
         self._summary_writer = summary_writer
         self._summary_frequency = summary_frequency
-        param_shapes = [tuple(x.shape) for x in self.network.parameters()]
+        self._share_optimizer_params = share_optimizer_params
         self._mpi_comm = mpi.COMM_WORLD
-        self._mpi_send_ack = None
-        self._mpi_send = MPIArraySend(mpi.COMM_WORLD, param_shapes)
-        self._mpi_recv = MPIArrayRecv(mpi.COMM_WORLD, param_shapes)
+        self._mpi_send = None
+        self._mpi_recv = None
         self.communication_protocol = P2PBestProtocol(mpi.COMM_WORLD)
         self.global_step = 0
 
@@ -103,7 +103,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         """
         parameters = self._get_parameters()
         dest = self.communication_protocol.next_dest
-        self._mpi_send.Isend(parameters, dest, MpiMessages.SEND)
+        self.mpi_send.Isend(parameters, dest, MpiMessages.SEND)
 
     def receive(self):
         """
@@ -111,20 +111,62 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         """
         source = self.communication_protocol.next_source
         # the tag we are listening for is a SEND from that node
-        new_params = self._mpi_recv.Recv(source, MpiMessages.SEND)
+        new_params = self.mpi_recv.Recv(source, MpiMessages.SEND)
         self.combine_parameters(new_params)
         # self.global_step = self.mpi_helper.send(parameters, self.local_step_count)
 
     def combine_parameters(self, parameters):
-        for p, v in zip(self.network.parameters(), parameters):
+        if self._share_optimizer_params:
+            params = parameters[0:len(parameters) // 2]
+        else:
+            params = parameters
+        for p, v in zip(self.network.parameters(), params):
             p.data.add_(torch.from_numpy(v).to(self.agent.device))
             p.data.div_(2.0)
 
+        if self._share_optimizer_params:
+            optimizer_params = parameters[len(parameters) // 2:]
+            for local_s, dist_s in zip(self._optimizer_state_list(), optimizer_params):
+                local_s.data.add_(torch.from_numpy(dist_s).to(self.agent.device))
+                local_s.data.div_(2.0)
+
     def _get_parameters(self):
-        return [p.data.cpu().numpy() for p in self.network.parameters()]
+        params = [p.data.cpu().numpy() for p in self.network.parameters()]
+        if self._share_optimizer_params:
+            params.extend([x.data.cpu().numpy() for x in self._optimizer_state_list()])
+        return params
 
     def close(self):
         pass
 
     def should_stop(self):
         return False
+
+    def mpi_shapes(self):
+        param_shapes = [tuple(x.shape) for x in self.network.parameters()]
+        if self._share_optimizer_params:
+            param_shapes.extend([tuple(x.shape) for x in self._optimizer_state_list()])
+        return param_shapes
+
+    def _optimizer_state_list(self):
+        optimizer_states = []
+        for group in self.optimizer.param_groups:
+            for p in group['params']:
+                state = self.optimizer.state[p]
+                for k in sorted(state.keys()):
+                    if k != 'step':
+                        optimizer_states.append(state[k])
+        return optimizer_states
+
+    @property
+    def mpi_send(self):
+        if self._mpi_send is None:
+            self._mpi_send = MPIArraySend(mpi.COMM_WORLD, self.mpi_shapes())
+        return self._mpi_send
+
+
+    @property
+    def mpi_recv(self):
+        if self._mpi_recv is None:
+            self._mpi_recv = MPIArrayRecv(mpi.COMM_WORLD, self.mpi_shapes())
+        return self._mpi_recv
