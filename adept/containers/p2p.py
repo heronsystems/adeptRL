@@ -32,7 +32,6 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         self._mpi_send = None
         self._mpi_recv = None
         self.communication_protocol = P2PBestProtocol(mpi.COMM_WORLD)
-        self.global_step = 0
 
     @property
     def agent(self):
@@ -63,6 +62,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         return self._optimizer
 
     def run(self, max_steps=float('inf'), initial_count=0):
+        mpi_size = self._mpi_comm.Get_size()
         next_obs = self.environment.reset()
         self.start_time = time.time()
         while not self.should_stop():
@@ -75,7 +75,8 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
             # Perform state updates
             terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
             self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count, initial_count)
-            self.write_reward_summaries(terminal_rewards, self.local_step_count)
+            self.write_reward_summaries(terminal_rewards,
+                                        self.local_step_count * mpi_size)  # an imperfect estimate of global step
 
             # Learn
             if self.exp_cache.is_ready():
@@ -114,7 +115,6 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         # the tag we are listening for is a SEND from that node
         new_params = self.mpi_recv.Recv(source, MpiMessages.SEND)
         self.combine_parameters(new_params)
-        # self.global_step = self.mpi_helper.send(parameters, self.local_step_count)
 
     def combine_parameters(self, parameters):
         if self._share_optimizer_params:
@@ -164,7 +164,6 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         if self._mpi_send is None:
             self._mpi_send = MPIArraySend(mpi.COMM_WORLD, self.mpi_shapes())
         return self._mpi_send
-
 
     @property
     def mpi_recv(self):
