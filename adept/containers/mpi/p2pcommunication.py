@@ -16,11 +16,16 @@ class P2PCommunicationProtocol:
 
 
 class P2PDeterministic(P2PCommunicationProtocol):
+    """
+    Deterministically iterates the passed in order over and over.
+    No partner switching. For partner switching see P2PDynamic
+    """
     def __init__(self, *args, order):
         super().__init__(*args)
         self.order = order
         self.order_size = len(order)
         self._current_step = -1
+
     @property
     def next_dest(self):
         self._current_step = (self._current_step + 1) % self.order_size
@@ -29,6 +34,34 @@ class P2PDeterministic(P2PCommunicationProtocol):
     @property
     def next_source(self):
         return (self.rank - self.order[self._current_step]) % self.size
+
+
+class P2PDynamic(P2PCommunicationProtocol):
+    """
+    Iterates the passed in order. But after each iteration changes the node layout
+    so that each node will have new partners.
+    All nodes must start with the same seed
+    """
+    def __init__(self, *args, order, shared_seed):
+        super().__init__(*args)
+        self.order = order
+        self._seed = shared_seed
+        self.random = np.random.RandomState(shared_seed)
+        self._current_offset = self.random.randint(0, self.size - 1)
+        self.order_size = len(order)
+        self._current_step = -1
+
+    @property
+    def next_dest(self):
+        self._current_step = (self._current_step + 1)
+        if self._current_step % self.order_size == 0:
+            self._current_offset = self.random.randint(0, self.size - 1)
+        self._current_step %= self.order_size
+        return (self.rank + self.order[self._current_step] + self._current_offset) % self.size
+
+    @property
+    def next_source(self):
+        return (self.rank - self.order[self._current_step] - self._current_offset) % self.size
 
 
 class P2PReversingRoundRobin(P2PCommunicationProtocol):
@@ -91,7 +124,7 @@ class P2PReversingSquare(P2PCommunicationProtocol):
         return (self._dir + 1) % 3
 
 
-def P2PBestProtocol(comm):
+def P2PBestProtocol(comm, shared_seed):
     size = comm.Get_size()
     if size == 2:
         return P2PDeterministic(comm, order=[1])
@@ -103,18 +136,19 @@ def P2PBestProtocol(comm):
         # 7.96[2, 3, 1]
         # 7.97[3, 2, 1]
         return P2PDeterministic(comm, order=[3, 2, 1])
+    # after 4 nodes it's normally best to get random new partners
     if size == 5:
-        return P2PDeterministic(comm, order=[3, 4, 1, 2])
+        return P2PDynamic(comm, order=[3, 4, 1, 2], shared_seed=shared_seed)
         # 82.25[3, 4, 1, 2]
         # 82.25[3, 4, 2, 1]
     if size == 6:
-        return P2PDeterministic(comm, order=[1, 4, 2, 5, 3])
+        return P2PDynamic(comm, order=[1, 4, 2, 5, 3], shared_seed=shared_seed)
     #     113.47[1, 4, 2, 5, 3]
     #     113.47[1, 4, 5, 2, 3]
     #     113.47[4, 1, 2, 5, 3]
     #     113.47[4, 1, 5, 2, 3]
     if size == 7:
-        return P2PDeterministic(comm, order=[4, 6, 2, 5, 1, 3])
+        return P2PDynamic(comm, order=[4, 6, 2, 5, 1, 3], shared_seed=shared_seed)
     #     117.69[4, 6, 2, 5, 1, 3]
     #     117.69[6, 4, 2, 5, 1, 3]
 
@@ -131,7 +165,6 @@ def propagation_model(num):
     options = options[:len(options) // 2]
 
     # there are still duplicates ie:
-
 
     # evaluate the options based on how much repetition there is
     costs = []
@@ -239,11 +272,9 @@ def mixture_model(num, ntrials, nsteps=100):
     zipped = list(zip(costs, options))
     sort_zip = sorted(zipped, key=lambda x: (x[0], len(x[1])))
     for c, o in sort_zip:
-        print(c/ntrials, o)
-
+        print(c / ntrials, o)
 
 
 if __name__ == '__main__':
     # propagation_model(3)
-    mixture_model(3, 1000)
-
+    mixture_model(8, 1000)

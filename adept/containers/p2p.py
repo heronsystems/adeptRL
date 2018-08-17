@@ -17,6 +17,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
             logger,
             summary_writer,
             summary_frequency,
+            shared_seed,
             share_optimizer_params=False
     ):
         self._agent = agent
@@ -31,7 +32,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         # These have to be created after the optimizer steps once so it's state exists
         self._mpi_send = None
         self._mpi_recv = None
-        self.communication_protocol = P2PBestProtocol(mpi.COMM_WORLD)
+        self.communication_protocol = P2PBestProtocol(mpi.COMM_WORLD, shared_seed)
 
     @property
     def agent(self):

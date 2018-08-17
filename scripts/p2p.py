@@ -41,6 +41,7 @@ def main(args):
     comm.Barrier()
 
     # construct env
+    p2pseed = args.seed  # must be shared seed for p2p communication protocol
     seed = args.seed if rank == 0 else args.seed * (args.nb_env * (rank - 1))  # unique seed per process
     env = make_env(args, seed)
 
@@ -87,7 +88,7 @@ def main(args):
 
     # construct container
     container = P2PWorker(agent, env, make_optimizer, args.nb_env, logger, summary_writer, args.summary_frequency,
-                          share_optimizer_params=args.share_optimizer_params)
+                          shared_seed=p2pseed, share_optimizer_params=args.share_optimizer_params)
 
     # Run the container
     if args.profile:
