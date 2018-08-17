@@ -152,8 +152,8 @@ def P2PBestProtocol(comm, shared_seed):
     #     117.69[4, 6, 2, 5, 1, 3]
     #     117.69[6, 4, 2, 5, 1, 3]
     if size == 8:
-        # this is actually gossip grad https://arxiv.org/pdf/1803.05880.pdf
-        return P2PDynamic(comm, order=[1, 2, 4], shared_seed=shared_seed)
+        # 23.96[2, 4, 1, 3, 5, 6, 7]
+        return P2PDynamic(comm, order=[2, 4, 1, 3, 5, 6, 7], shared_seed=shared_seed)
 
 
 from copy import deepcopy
