@@ -18,6 +18,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
             summary_writer,
             summary_frequency,
             shared_seed,
+            synchronize_step_interval=None,
             share_optimizer_params=False
     ):
         self._agent = agent
@@ -27,8 +28,12 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         self._logger = logger
         self._summary_writer = summary_writer
         self._summary_frequency = summary_frequency
+        self._synchronize_step_interval = synchronize_step_interval
+        self._send_count = 0
         self._share_optimizer_params = share_optimizer_params
         self._mpi_comm = mpi.COMM_WORLD
+        self._mpi_rank = mpi.COMM_WORLD.Get_rank()
+        self._mpi_size = mpi.COMM_WORLD.Get_size()
         # These have to be created after the optimizer steps once so it's state exists
         self._mpi_send = None
         self._mpi_recv = None
@@ -63,7 +68,6 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         return self._optimizer
 
     def run(self, max_steps=float('inf'), initial_count=0):
-        mpi_size = self._mpi_comm.Get_size()
         next_obs = self.environment.reset()
         self.start_time = time.time()
         while not self.should_stop():
@@ -77,7 +81,7 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
             terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
             self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count, initial_count)
             self.write_reward_summaries(terminal_rewards,
-                                        self.local_step_count * mpi_size)  # an imperfect estimate of global step
+                                        self.local_step_count * self._mpi_size)  # an imperfect estimate of global step
 
             # Learn
             if self.exp_cache.is_ready():
@@ -91,14 +95,19 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         self.optimizer.zero_grad()
         total_loss.backward()
         self.optimizer.step()
-        self.submit()
-        self.receive()
+        self._send_count += 1  # increment here since first step synchronization isn't needed
+        if self._synchronize_step_interval is not None and self._send_count % self._synchronize_step_interval == 0:
+            self.synchronize_parameters()
+        else:
+            self.submit()
+            self.receive()
 
         self.exp_cache.clear()
         self.agent.detach_internals()
 
         # write summaries
-        self.write_summaries(total_loss, loss_dict, metric_dict, self.local_step_count)
+        self.write_summaries(total_loss, loss_dict, metric_dict,
+                             self.local_step_count * self._mpi_size)  # an imperfect estimate of global step
 
     def submit(self):
         """
@@ -171,3 +180,26 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         if self._mpi_recv is None:
             self._mpi_recv = MPIArrayRecv(mpi.COMM_WORLD, self.mpi_shapes())
         return self._mpi_recv
+
+    def synchronize_parameters(self):
+        # use send to get a buffer
+        send_param_buffer = self.mpi_send.flattener.flatten(self._get_parameters())
+        recv_param_buffer = self.mpi_send.flattener.create_buffer()
+        self._mpi_comm.Allreduce(send_param_buffer, recv_param_buffer, op=mpi.SUM)
+        parameters = self.mpi_send.flattener.unflatten(recv_param_buffer)
+
+        # sync
+        if self._share_optimizer_params:
+            params = parameters[0:len(parameters) // 2]
+        else:
+            params = parameters
+        for p, v in zip(self.network.parameters(), params):
+            # allreduce sums the params, divide them by size to mean
+            p.data.copy_(torch.from_numpy(v).to(self.agent.device))
+            p.data.div_(self._mpi_size)
+
+        if self._share_optimizer_params:
+            optimizer_params = parameters[len(parameters) // 2:]
+            for local_s, dist_s in zip(self._optimizer_state_list(), optimizer_params):
+                local_s.data.copy_(torch.from_numpy(dist_s).to(self.agent.device))
+                local_s.data.div_(self._mpi_size)

@@ -88,7 +88,8 @@ def main(args):
 
     # construct container
     container = P2PWorker(agent, env, make_optimizer, args.nb_env, logger, summary_writer, args.summary_frequency,
-                          shared_seed=p2pseed, share_optimizer_params=args.share_optimizer_params)
+                          shared_seed=p2pseed, synchronize_step_interval=args.synchronize_step_interval,
+                          share_optimizer_params=args.share_optimizer_params)
 
     # Run the container
     if args.profile:
@@ -134,6 +135,10 @@ if __name__ == '__main__':
     parser.add_argument(
         '--debug', type=parse_bool, nargs='?', const=True, default=False,
         help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
+    )
+    parser.add_argument(
+        '--synchronize-step-interval', type=int, default=None,
+        help='Number of steps to do before all processes synchronize parameters. (default: None [disabled])'
     )
     parser.add_argument(
         '--share-optimizer-params', type=parse_bool, nargs='?', const=True, default=False,
