@@ -1,3 +1,19 @@
+"""
+Copyright (C) 2018 Heron Systems, Inc.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
 from collections import deque
 
 import gym
@@ -9,6 +25,11 @@ cv2.ocl.setUseOpenCL(False)
 
 
 class WarpFrame(gym.ObservationWrapper):
+    """
+    Modified.
+    The MIT License
+    Copyright (c) 2017 OpenAI (http://openai.com)
+    """
     def __init__(self, env):
         """Warp frames to 84x84 as done in the Nature paper and later work."""
         gym.ObservationWrapper.__init__(self, env)
@@ -57,6 +78,11 @@ class ZScoreEnv(gym.ObservationWrapper):
 
 
 class FrameStack(gym.Wrapper):
+    """
+    Modified.
+    The MIT License
+    Copyright (c) 2017 OpenAI (http://openai.com)
+    """
     def __init__(self, env, k):
         gym.Wrapper.__init__(self, env)
         self.k = k
@@ -81,6 +107,11 @@ class FrameStack(gym.Wrapper):
 
 
 class NoopResetEnv(gym.Wrapper):
+    """
+    Modified.
+    The MIT License
+    Copyright (c) 2017 OpenAI (http://openai.com)
+    """
     def __init__(self, env, noop_max=30):
         """Sample initial states by taking random number of no-ops on reset.
         No-op is assumed to be action 0.
@@ -111,6 +142,11 @@ class NoopResetEnv(gym.Wrapper):
 
 
 class FireResetEnv(gym.Wrapper):
+    """
+    Modified.
+    The MIT License
+    Copyright (c) 2017 OpenAI (http://openai.com)
+    """
     def __init__(self, env):
         """Take action on reset for environments that are fixed until firing."""
         gym.Wrapper.__init__(self, env)
@@ -132,6 +168,11 @@ class FireResetEnv(gym.Wrapper):
 
 
 class EpisodicLifeEnv(gym.Wrapper):
+    """
+    Modified.
+    The MIT License
+    Copyright (c) 2017 OpenAI (http://openai.com)
+    """
     def __init__(self, env):
         """Make end-of-life == end-of-episode, but only reset on true game over.
         Done by DeepMind for the DQN and co. since it helps value estimation.
@@ -169,6 +210,11 @@ class EpisodicLifeEnv(gym.Wrapper):
 
 
 class MaxAndSkipEnv(gym.Wrapper):
+    """
+    Modified.
+    The MIT License
+    Copyright (c) 2017 OpenAI (http://openai.com)
+    """
     def __init__(self, env, skip=4):
         """Return only every `skip`-th frame"""
         gym.Wrapper.__init__(self, env)
@@ -199,6 +245,11 @@ class MaxAndSkipEnv(gym.Wrapper):
 
 
 class LazyFrames(object):
+    """
+    Modified.
+    The MIT License
+    Copyright (c) 2017 OpenAI (http://openai.com)
+    """
     def __init__(self, frames):
         """This object ensures that common frames between the observations are only stored once.
         It exists purely to optimize memory usage which can be huge for DQN's 1M frames replay

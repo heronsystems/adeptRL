@@ -1,3 +1,19 @@
+"""
+Copyright (C) 2018 Heron Systems, Inc.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
 import os
 
 from gym import spaces
@@ -16,11 +32,11 @@ except ImportError:
     print('SC2 Environment not detected')
 
 
-def make_env(args, seed):
+def make_env(args, seed, subprocess=True):
     if args.env_id in SC2_ENVS:
         envs = sc2_from_args(args, seed)
     else:
-        envs = atari_from_args(args, seed)
+        envs = atari_from_args(args, seed, subprocess)
     return envs
 
 
@@ -56,8 +72,6 @@ def make_network(
         network_bodies=NETWORK_BODIES,
         embedding_size=512
 ):
-    # split args into args.vision_network, args.discrete_network, args.network_body, args.metalearning
-    # TODO support different resolutions
     nb_discrete_channel = 0
     nb_visual_channel = 0
 
@@ -78,14 +92,7 @@ def make_network(
     if nb_visual_channel > 0:
         pathways_by_name['visual'] = vision_networks[args.vision_network].from_args(nb_visual_channel, args)
     if nb_discrete_channel > 0:
-        if args.metalearning:
-            nb_metalearning_channel = None
-            pathways_by_name['discrete'] = discrete_networks[args.discrete_network].from_args(
-                nb_discrete_channel + nb_metalearning_channel,
-                args
-            )
-        else:
-            pathways_by_name['discrete'] = discrete_networks[args.discrete_network].from_args(nb_discrete_channel, args)
+        pathways_by_name['discrete'] = discrete_networks[args.discrete_network].from_args(nb_discrete_channel, args)
 
     trunk = NetworkTrunk(pathways_by_name)
     body = network_bodies[args.network_body].from_args(trunk.nb_output_channel, embedding_size, args)
@@ -148,7 +155,7 @@ def add_base_args(parser):
     )
     parser.add_argument(
         '--log-dir', default=os.path.join(root_dir, 'logs/'),
-        help='folder to save logs'
+        help='folder to save logs. (default: adept/logs)'
     )
     parser.add_argument(
         '-mts', '--max-train-steps', type=int, default=10e6, metavar='MTS',
@@ -156,7 +163,7 @@ def add_base_args(parser):
     )
     parser.add_argument(
         '--nb-top-model', type=int, default=3, metavar='N',
-        help='number of top models to save'
+        help='number of top models to save per epoch'
     )
     parser.add_argument(
         '--epoch-len', type=int, default=1e6, metavar='FREQ',
@@ -212,7 +219,7 @@ def add_base_args(parser):
     # Attention
     parser.add_argument(
         '--nb-head', type=int, default=1,
-        help='number of attention heads'
+        help='number of attention heads. unused if no attention in network.'
     )
 
     return parser

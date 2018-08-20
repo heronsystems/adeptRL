@@ -1,6 +1,23 @@
+#!python
+"""
+Copyright (C) 2018 Heron Systems, Inc.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
 from adept.environments import ATARI_6_ENVS
 from adept.utils.util import parse_bool
-from scripts.local import main
+from .local import main
 
 if __name__ == '__main__':
     import argparse
@@ -10,14 +27,14 @@ if __name__ == '__main__':
     parser = add_base_args(parser)
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
     parser.add_argument(
-        '--visual-pathway', default='Nature',
+        '-vn', '--vision-network', default='Nature',
         help='name of preset network (default: Nature)'
     )
     parser.add_argument(
-        '--discrete-pathway', default='DiscreteIdentity',
+        '-dp', '--discrete-pathway', default='DiscreteIdentity',
     )
     parser.add_argument(
-        '--network-body', default='Linear',
+        '-nb', '--network-body', default='Linear',
     )
     parser.add_argument(
         '--agent', default='ActorCritic',
@@ -30,7 +47,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    args.max_train_steps = 10e6
     args.mode_name = 'Local'
 
     for env_id in ATARI_6_ENVS:

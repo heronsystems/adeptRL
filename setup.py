@@ -1,21 +1,40 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 from adept.globals import VERSION
 
+# https://github.com/kennethreitz/setup.py/blob/master/setup.py
+
 setup(
-    name='adeptRL',
+    name='adept',
 
     version=VERSION,
-    description='adeptRL',
+    description='Reinforcement Learning Framework',
     url='https://github.com/heronsystems/adeptRL',
     author='heron',
     license='GNU',
-    packages=[
-        'adept',
-        'scripts',
+    python_requires='>=3.5.0',
+    packages=find_packages(),
+    scripts=[
+        'scripts/benchmark_atari.py',
+        'scripts/evaluation.py',
+        'scripts/impala.py',
+        'scripts/local.py',
+        'scripts/render.py',
+        'scripts/replay_gen.py',
+        'scripts/resume_local.py',
+        'scripts/towered.py'
     ],
-
-    entry_points={
-        'console_scripts': []
+    install_requires=[
+        'numpy>=1.14',
+        'gym[atari]>=0.10',
+        'absl-py>=0.2',
+        'tensorboardX>=1.2',
+        'cloudpickle>=0.5',
+        'opencv-python>=3.4'
+    ],
+    extras_require={
+        'mpi': ['mpi4py>=3.0'],
+        'sc2': ['pysc2>=2.0'],
+        'profiler': ['pyinstrument>=2.0']
     },
-    install_requires=[]
+    include_package_data=True
 )
