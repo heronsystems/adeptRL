@@ -141,10 +141,12 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
                 local_s.data.add_(torch.from_numpy(dist_s).to(self.agent.device))
                 local_s.data.div_(2.0)
 
-    def _get_parameters(self):
+    def _get_parameters(self, force_optimizer=False, force_buffers=False):
         params = [p.data.cpu().numpy() for p in self.network.parameters()]
-        if self._share_optimizer_params:
+        if self._share_optimizer_params or force_optimizer:
             params.extend([x.data.cpu().numpy() for x in self._optimizer_state_list()])
+        if force_buffers:
+            params.extend([x.data.cpu.numpy() for x in self.network._all_buffers()])
         return params
 
     def close(self):
@@ -153,10 +155,12 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
     def should_stop(self):
         return False
 
-    def mpi_shapes(self):
+    def mpi_shapes(self, force_optimizer=False, force_buffers=False):
         param_shapes = [tuple(x.shape) for x in self.network.parameters()]
-        if self._share_optimizer_params:
+        if self._share_optimizer_params or force_optimizer:
             param_shapes.extend([tuple(x.shape) for x in self._optimizer_state_list()])
+        if force_buffers:
+            param_shapes.extend([tuple(x.shape) for x in self.network._all_buffers()])
         return param_shapes
 
     def _optimizer_state_list(self):
