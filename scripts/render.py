@@ -51,7 +51,7 @@ def main(args):
     # create an agent (add act_eval method)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    agent = make_agent(network, device, env.engine, train_args)
+    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, train_args)
 
     # create a rendering container
     renderer = Renderer(agent, env, device)

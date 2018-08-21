@@ -14,21 +14,3 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-from .._base import InputNetwork
-
-
-class DiscreteIdentity(InputNetwork):
-    def __init__(self, nb_in_channel):
-        super().__init__()
-        self._nb_output_channel = nb_in_channel[0]
-
-    @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel)
-
-    @property
-    def nb_output_channel(self):
-        return self._nb_output_channel
-
-    def forward(self, x):
-        return x

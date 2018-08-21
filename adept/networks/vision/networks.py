@@ -38,11 +38,11 @@ class Nature(InputNetwork):
     """
     https://web.stanford.edu/class/psych209/Readings/MnihEtAlHassibis15NatureControlDeepRL.pdf
     """
-    def __init__(self, nb_in_channel, normalize):
+    def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
         self._nb_output_channel = 3136
-        self.conv1 = Conv2d(nb_in_channel, 32, 8, stride=4, padding=0, bias=bias)
+        self.conv1 = Conv2d(in_shape[0], 32, 8, stride=4, padding=0, bias=bias)
         self.conv2 = Conv2d(32, 64, 4, stride=2, padding=0, bias=bias)
         self.conv3 = Conv2d(64, 64, 3, stride=1, padding=0, bias=bias)
 
@@ -61,8 +61,8 @@ class Nature(InputNetwork):
         self.conv3.weight.data.mul_(relu_gain)
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel, args.normalize)
+    def from_args(cls, in_shape, args):
+        return cls(in_shape, args.normalize)
 
     @property
     def nb_output_channel(self):
@@ -79,11 +79,11 @@ class Nature(InputNetwork):
 
 
 class Mnih2013(InputNetwork):
-    def __init__(self, nb_in_channel, normalize):
+    def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
         self._nb_output_channel = 2592
-        self.conv1 = Conv2d(nb_in_channel, 16, 8, stride=4, padding=0, bias=bias)
+        self.conv1 = Conv2d(in_shape[0], 16, 8, stride=4, padding=0, bias=bias)
         self.conv2 = Conv2d(16, 32, 4, stride=2, padding=0, bias=bias)
 
         if normalize:
@@ -98,8 +98,8 @@ class Mnih2013(InputNetwork):
         self.conv2.weight.data.mul_(relu_gain)
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel, args.normalize)
+    def from_args(cls, in_shape, args):
+        return cls(in_shape, args.normalize)
 
     @property
     def nb_output_channel(self):
@@ -115,11 +115,11 @@ class Mnih2013(InputNetwork):
 
 
 class FourConv(InputNetwork):
-    def __init__(self, nb_in_channel, normalize):
+    def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
         self._nb_output_channel = 800
-        self.conv1 = Conv2d(nb_in_channel, 32, 7, stride=2, padding=1, bias=bias)
+        self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=bias)
         self.conv2 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
         self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
         self.conv4 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
@@ -142,8 +142,8 @@ class FourConv(InputNetwork):
         self.conv4.weight.data.mul_(relu_gain)
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel, args.normalize)
+    def from_args(cls, in_shape, args):
+        return cls(in_shape, args.normalize)
 
     @property
     def nb_output_channel(self):
@@ -164,12 +164,12 @@ class FourConvSpatialAttention(InputNetwork):
     """
     https://arxiv.org/pdf/1806.01830.pdf
     """
-    def __init__(self, nb_in_chan, nb_head, normalize):
+    def __init__(self, in_shape, nb_head, normalize):
         self._nb_output_channel = 800
         super().__init__()
         self.normalize = normalize
         bias = not normalize
-        self.conv1 = Conv2d(nb_in_chan, 32, kernel_size=3, stride=2, padding=1, bias=bias)
+        self.conv1 = Conv2d(in_shape[0], 32, kernel_size=3, stride=2, padding=1, bias=bias)
         self.conv2 = Conv2d(32, 32, kernel_size=3, stride=2, padding=1, bias=bias)
 
         self.attention = MultiHeadSelfAttention(20 * 20, 34, 34, nb_head)
@@ -196,8 +196,8 @@ class FourConvSpatialAttention(InputNetwork):
         self.conv4.weight.data.mul_(relu_gain)
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel, args.nb_head, args.normalize)
+    def from_args(cls, in_shape, args):
+        return cls(in_shape, args.nb_head, args.normalize)
 
     @property
     def nb_output_channel(self):
@@ -228,11 +228,11 @@ class FourConvSpatialAttention(InputNetwork):
 
 
 class FourConvLarger(InputNetwork):
-    def __init__(self, nb_in_channel, normalize):
+    def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
         self._nb_output_channel = 3200
-        self.conv1 = Conv2d(nb_in_channel, 32, 7, stride=2, padding=1, bias=bias)
+        self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=bias)
         self.conv2 = Conv2d(32, 64, 3, stride=2, padding=1, bias=bias)
         self.conv3 = Conv2d(64, 64, 3, stride=2, padding=1, bias=bias)
         self.conv4 = Conv2d(64, 128, 3, stride=2, padding=1, bias=bias)
@@ -255,8 +255,8 @@ class FourConvLarger(InputNetwork):
         self.conv4.weight.data.mul_(relu_gain)
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel, args.normalize)
+    def from_args(cls, in_shape, args):
+        return cls(in_shape, args.normalize)
 
     @property
     def nb_output_channel(self):
@@ -274,10 +274,10 @@ class FourConvLarger(InputNetwork):
 
 
 class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
-    def __init__(self, nb_in_channel, normalize):
+    def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
-        self.conv1 = Conv2d(nb_in_channel, 64, 7, stride=2, padding=1, bias=bias)  # 40x40
+        self.conv1 = Conv2d(in_shape[0], 64, 7, stride=2, padding=1, bias=bias)  # 40x40
         relu_gain = init.calculate_gain('relu')
         self.conv1.weight.data.mul_(relu_gain)
 
@@ -292,8 +292,8 @@ class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel, args.normalize)
+    def from_args(cls, in_shape, args):
+        return cls(in_shape, args.normalize)
 
     @property
     def nb_output_channel(self):
@@ -307,8 +307,8 @@ class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
 
 
 class ResNet18(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet18()
 
     @property
@@ -317,8 +317,8 @@ class ResNet18(BaseResNet):
 
 
 class ResNet18V2(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet18v2()
 
     @property
@@ -327,8 +327,8 @@ class ResNet18V2(BaseResNet):
 
 
 class ResNet34(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet34()
 
     @property
@@ -337,8 +337,8 @@ class ResNet34(BaseResNet):
 
 
 class ResNet34V2(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet34v2()
 
     @property
@@ -347,8 +347,8 @@ class ResNet34V2(BaseResNet):
 
 
 class ResNet50(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet50v2()
 
     @property
@@ -357,8 +357,8 @@ class ResNet50(BaseResNet):
 
 
 class ResNet50V2(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet50v2()
 
     @property
@@ -367,8 +367,8 @@ class ResNet50V2(BaseResNet):
 
 
 class ResNet101(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet101()
 
     @property
@@ -377,8 +377,8 @@ class ResNet101(BaseResNet):
 
 
 class ResNet101V2(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet101v2()
 
     @property
@@ -387,8 +387,8 @@ class ResNet101V2(BaseResNet):
 
 
 class ResNet152(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet152()
 
     @property
@@ -397,8 +397,8 @@ class ResNet152(BaseResNet):
 
 
 class ResNet152V2(BaseResNet):
-    def __init__(self, nb_in_channel, normalize):
-        super().__init__(nb_in_channel, normalize)
+    def __init__(self, in_shape, normalize):
+        super().__init__(in_shape, normalize)
         self._resnet = resnet152v2()
 
     @property

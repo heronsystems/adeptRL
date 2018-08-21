@@ -15,11 +15,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 from collections import OrderedDict
+from functools import reduce
+from itertools import chain
 
 import gym
 import numpy as np
 import torch
-from gym import spaces
 from pysc2.env import environment
 from pysc2.env.sc2_env import SC2Env
 from pysc2.lib import features
@@ -29,24 +30,25 @@ from pysc2.lib.features import parse_agent_interface_format, SCREEN_FEATURES, MI
 from pysc2.lib.static_data import UNIT_TYPES
 
 from adept.agents import EnvBase
+from adept.environments._base import BaseEnvironment, Spaces, Space
+from adept.preprocess.observation import ObsPreprocessor
+from adept.preprocess.ops import BaseOp, CastToFloat, FlattenSpace
 
 
 def make_sc2_env(env_id, seed, replay_dir=None):
     def _f():
-        env = sc2_env(env_id, seed, replay_dir)
+        env = sc2_feature_env(env_id, seed, replay_dir)
         return env
     return _f
 
 
-agent_interface_format = parse_agent_interface_format(
-    feature_screen=80,
-    feature_minimap=80,
-    action_space='FEATURES'
-)
-
-
-def sc2_env(env_id, seed, replay_dir):
-    env = SC2GymEnv(
+def sc2_feature_env(env_id, seed, replay_dir):
+    agent_interface_format = parse_agent_interface_format(
+        feature_screen=84,
+        feature_minimap=84,
+        action_space='FEATURES'
+    )
+    env = SC2Env(
         map_name=env_id,
         step_mul=8,
         game_steps_per_episode=0,
@@ -56,160 +58,224 @@ def sc2_env(env_id, seed, replay_dir):
         save_replay_episodes=1 if replay_dir is not None else 0,
         replay_dir=replay_dir
     )
-    env = FilterObsKeys(env, ['feature_screen', 'feature_minimap', 'control_groups', 'available_actions'])
-    env = FilterAndScaleScreenChannels(env)
+    env = AdeptSC2Env(env)
     return env
 
 
-class SC2GymEnv(SC2Env, gym.Env):
-    action_space = spaces.Dict({
-        'func_id': spaces.Discrete(524),
-        'screen_x': spaces.Discrete(80),
-        'screen_y': spaces.Discrete(80),
-        'minimap_x': spaces.Discrete(80),
-        'minimap_y': spaces.Discrete(80),
-        'screen2_x': spaces.Discrete(80),
-        'screen2_y': spaces.Discrete(80),
-        'queued': spaces.Discrete(2),
-        'control_group_act': spaces.Discrete(4),
-        'control_group_id': spaces.Discrete(10),
-        'select_point_act': spaces.Discrete(4),
-        'select_add': spaces.Discrete(2),
-        'select_unit_act': spaces.Discrete(4),
-        'select_unit_id': spaces.Discrete(500),
-        'select_worker': spaces.Discrete(4),
-        'unload_id': spaces.Discrete(500),
-        'build_queue_id': spaces.Discrete(10)
-    })
-    observation_space = spaces.Dict({
-        'float_state': spaces.Box(low=0, high=1, shape=(10, 80, 80), dtype=np.float32),
-        'binary_state': spaces.Box(low=0, high=1, shape=(256, 80, 80), dtype=np.uint8)
-    })
+class AdeptSC2Env(BaseEnvironment):
+    def __init__(self, env):
+        self.sc2_env = env
+        obs_entries_by_name = {
+            # 'single_select': Space((1, 7), 0., 1., np.float32),
+            # 'multi_select': Space(),
+            # 'build_queue': Space(),
+            # 'cargo': Space(),
+            # 'cargo_slots_available': Space((1,), None, None, None),
+            'vision': Space((24, 84, 84), None, None, None),
+            # 'player': Space((11,), None, None, None),
+            'control_groups': Space((10, 2), None, None, None),
+            'available_actions': Space((None,), None, None, None)
+        }
+        act_entries_by_name = {
+            'func_id': Space((524,), 0., 1., np.float32),
+            'screen_x': Space((80,), 0., 1., np.float32),
+            'screen_y': Space((80,), 0., 1., np.float32),
+            'minimap_x': Space((80,), 0., 1., np.float32),
+            'minimap_y': Space((80,), 0., 1., np.float32),
+            'screen2_x': Space((80,), 0., 1., np.float32),
+            'screen2_y': Space((80,), 0., 1., np.float32),
+            'queued': Space((2,), 0., 1., np.float32),
+            'control_group_act': Space((4,), 0., 1., np.float32),
+            'control_group_id': Space((10,), 0., 1., np.float32),
+            'select_point_act': Space((4,), 0., 1., np.float32),
+            'select_add': Space((2,), 0., 1., np.float32),
+            'select_unit_act': Space((4,), 0., 1., np.float32),
+            'select_unit_id': Space((500,), 0., 1., np.float32),
+            'select_worker': Space((4,), 0., 1., np.float32),
+            'unload_id': Space((500,), 0., 1., np.float32),
+            'build_queue_id': Space((10,), 0., 1., np.float32),
+        }
+        # remove_feat_op = SC2RemoveFeatures({'player_id'})
+        self._cpu_preprocessor = ObsPreprocessor(
+            [FlattenSpace({'control_groups'})],
+            Spaces(obs_entries_by_name)
+        )
 
-    def __init__(self, **kwargs):
-        super(SC2GymEnv, self).__init__(**kwargs)
+        self._gpu_preprocessor = SC2RemoveAvailableActions(
+            [CastToFloat(), SC2ScaleChannels(24)],
+            self._cpu_preprocessor.observation_space
+        )
+        self._observation_space = self._gpu_preprocessor.observation_space
+        self._action_space = Spaces(act_entries_by_name)
+
+    @property
+    def observation_space(self):
+        return self._observation_space
+
+    @property
+    def action_space(self):
+        return self._action_space
+
+    @property
+    def cpu_preprocessor(self):
+        return self._cpu_preprocessor
+
+    @property
+    def gpu_preprocessor(self):
+        return self._gpu_preprocessor
 
     def step(self, action):
         """
         :param action_by_name: Dict{.}[headname: action/arg]
         :return:
         """
-        timesteps = super(SC2GymEnv, self).step([action])
+        timesteps = self.sc2_env.step([action])
         assert len(timesteps) == 1
         # pysc2 returns a tuple of timesteps, with one timestep inside
         # get first timestep
         pysc2_step = timesteps[0]
         reward = float(pysc2_step.reward)
         done = info = pysc2_step.step_type == environment.StepType.LAST
-        return pysc2_step.observation, reward, done, info
+        return self.cpu_preprocessor(self._wrap_observation(pysc2_step.observation)), reward, done, info
 
     def reset(self):
-        timesteps = super(SC2GymEnv, self).reset()
+        timesteps = self.sc2_env.reset()
         assert len(timesteps) == 1
         # pysc2 returns a tuple of timesteps, with one timestep inside
         # get first timestep
         pysc2_step = timesteps[0]
-        return pysc2_step.observation
+        return self.cpu_preprocessor(self._wrap_observation(pysc2_step.observation))
 
-    def render(self, mode='human'):
-        raise NotImplementedError
+    def close(self):
+        self.sc2_env.close()
 
-
-class FilterObsKeys(gym.ObservationWrapper):
-    def __init__(self, env, filter_fields):
-        gym.Wrapper.__init__(self, env)
-        self.filter_fields = filter_fields
-
-    def observation(self, observation):
-        new_obs = {}
-        for filter in self.filter_fields:
-            new_obs[filter] = observation[filter]
-        return new_obs
-
-
-class FilterAndScaleScreenChannels(gym.ObservationWrapper):
-    def __init__(self, env):
-        super().__init__(env)
-
-    def observation(self, observation):
-        feature_screen = observation['feature_screen']
-        feature_minimap = observation['feature_minimap']
-        control_groups = observation['control_groups']
-        available_actions = observation['available_actions']
-        scalar_state, binary_state = self._process_features(feature_screen, feature_minimap)
-        scalar_state = scalar_state.astype(np.float32)
-        binary_state = binary_state.astype(np.uint8)
-        obs = OrderedDict(
-            float_state=torch.from_numpy(scalar_state),
-            binary_state=torch.from_numpy(binary_state),
-            available_actions=frozenset(available_actions),
-            control_groups=control_groups
-        )
+    def _wrap_observation(self, observation):
+        obs = OrderedDict()
+        obs['vision'] = torch.cat([
+            torch.from_numpy(observation['feature_screen']),
+            torch.from_numpy(observation['feature_minimap'])
+        ])
+        obs['control_groups'] = torch.from_numpy(observation['control_groups'])
+        obs['available_actions'] = frozenset(observation['available_actions'])
         return obs
 
-    def _process_features(self, screen, minimap):
-        screen_scalar, screen_binary = self._process_screen(screen)
-        minimap_scalar, minimap_binary = self._process_minimap(minimap)
-        return np.concatenate([screen_scalar, minimap_scalar]), np.concatenate([screen_binary, minimap_binary])
 
-    def _process_screen(self, feature_screen):
-        """
-        Split categorical features into their own channels.
-        :param feature_screen:
-        :return:
-        """
-        scalar_features = []
-        binary_features = []
-        for feat, channel in zip(SCREEN_FEATURES, feature_screen):
+class SC2RemoveFeatures(BaseOp):
+    def __init__(self, feats_to_remove, feats=SCREEN_FEATURES + MINIMAP_FEATURES):
+        super(SC2RemoveFeatures, self).__init__({'vision'})
+
+        self.idxs = []
+        self.features = []
+
+        for i, feat in enumerate(feats):
+            if feat.name not in feats_to_remove:
+                self.idxs.append(i)
+                self.features.append(feat)
+
+    def update_space(self, old_space):
+        new_shape = (len(self.idxs),) + old_space.shape[1:]
+        return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
+
+    def update_obs(self, obs):
+        if obs.dim() == 3:
+            return obs[self.idxs]
+        elif obs.dim() == 4:
+            return obs.index_select(1, torch.LongTensor(self.idxs, device=obs.device))
+        else:
+            raise ValueError('Cannot remove SC2 features from a {}-dimensional tensor'.format(obs.dim()))
+
+
+class SC2OneHot(BaseOp):
+    def __init__(self, feats=SCREEN_FEATURES + MINIMAP_FEATURES):
+        super(SC2OneHot, self).__init__({'vision'})
+
+        self.features = []
+        self._ranges_by_feature_idx = {}
+        self._scalar_idxs = []
+
+        for i, feat in enumerate(feats):
             if feat.type == features.FeatureType.SCALAR:
-                scalar_features.append(self._scale(channel, feat.scale))
+                self._scalar_idxs.append(i)
+                self.features.append(feat)
             if feat.type == features.FeatureType.CATEGORICAL:
-                if feat.name == 'player_id':
-                    # not a useful feature, only care about 1v1
-                    continue
-                elif feat.name == 'unit_type':
-                    for unit_type in UNIT_TYPES:
-                        binary_features.append(channel == unit_type)
+                if feat.name == 'unit_type':
+                    self._ranges_by_feature_idx[i] = UNIT_TYPES
                 elif feat.name == 'visibility':
-                    length = 3  # hack to get around bug
-                    for i in range(length):
-                        binary_features.append(channel == i)
+                    self._ranges_by_feature_idx[i] = list(range(3))
                 elif feat.name == 'effects':
-                    length = 12  # hack to get around bug
-                    for i in range(length):
-                        binary_features.append(channel == (i + 1))
+                    self._ranges_by_feature_idx[i] = list(range(1, 13))
                 elif feat.scale == 2:
-                    binary_features.append(channel == 1)
+                    self._ranges_by_feature_idx[i] = [1]
                 else:
-                    for i in range(feat.scale):
-                        binary_features.append(channel == i)
-        return np.array(scalar_features), np.array(binary_features)
+                    self._ranges_by_feature_idx[i] = list(range(feat.scale))
 
-    def _process_minimap(self, minimap_screen):
-        """
-        Split categorical features into their own channels.
-        :param minimap:
-        :return:
-        """
-        scalar_features = []
-        binary_features = []
-        for feat, channel in zip(MINIMAP_FEATURES, minimap_screen):
-            if feat.type == features.FeatureType.SCALAR:
-                scalar_features.append(self._scale(channel, feat.scale))
-            if feat.type == features.FeatureType.CATEGORICAL:
-                if feat.name == 'player_id':
-                    continue
-                elif feat.name == 'visibility':
-                    # hack to get around bug
-                    for i in range(3):
-                        binary_features.append(channel == i)
-                else:
-                    for i in range(feat.scale):
-                        binary_features.append(channel == i)
-        return np.array(scalar_features), np.array(binary_features)
+    def update_space(self, old_space):
+        new_shape = (len(self._scalar_idxs) + len(reduce(lambda prev, cur: prev + cur, self._ranges_by_feature_idx.values())),) + old_space.shape[1:]
+        return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
 
-    def _scale(self, nd_array, max_val):
-        return nd_array / max_val
+    def update_obs(self, obs):
+        # warning, this is really slow
+        if obs.dim() == 3:
+            one_hot_channels = []
+            for i, rngs in self._ranges_by_feature_idx.items():
+                for rng in rngs:
+                    one_hot_channels.append(obs[i] == rng)
+            obs = obs[self._scalar_idxs]
+            one_hot_channels = torch.stack(one_hot_channels)
+            result = torch.cat([obs, one_hot_channels.to(one_hot_channels.device, dtype=torch.int32)])
+            return result
+        elif obs.dim() == 4:
+            # TODO
+            raise NotImplementedError
+        else:
+            raise ValueError('Cannot convert {}-dimensional tensor to one-hot'.format(obs.dim()))
+
+
+class SC2ScaleChannels(BaseOp):
+    def __init__(self, nb_channel, feats=SCREEN_FEATURES + MINIMAP_FEATURES, mode='all'):
+        """
+
+        :param nb_channel:
+        :param feats:
+        :param mode: 'all' or 'scalar' to decide which type of features to scale
+        """
+        super(SC2ScaleChannels, self).__init__({'vision'})
+        scales = torch.ones(nb_channel)
+        for i, feat in enumerate(feats):
+            if mode == 'all':
+                scales[i] = feat.scale
+            elif mode == 'scalar':
+                if feat.type == features.FeatureType.SCALAR:
+                    scales[i] = feat.scale
+        self.scales = 1. / torch.tensor(scales).float()
+
+    def update_space(self, old_space):
+        return old_space
+
+    def update_obs(self, obs):
+        if self.scales.device != obs.device:
+            self.scales = self.scales.to(obs.device)
+
+        if obs.dim() == 3:
+            obs *= self.scales.view(-1, 1, 1)
+            return obs
+        elif obs.dim() == 4:
+            obs *= self.scales.view(1, -1, 1, 1)
+            return obs
+        else:
+            raise ValueError('Unsupported dimensionality ' + str(obs.dim()))
+
+
+class SC2RemoveAvailableActions(ObsPreprocessor):
+    def __init__(self, ops, observation_space):
+        super().__init__(ops, observation_space)
+        ebn = self.observation_space.entries_by_name
+        ebn = {k: v for k, v in ebn.items() if k != 'available_actions'}
+        self.observation_space = Spaces(ebn)
+
+    def __call__(self, obs, device=None):
+        result = super().__call__(obs, device)
+        return {k: v for k, v in result.items() if k != 'available_actions'}
 
 
 def lookup_headnames_by_id(func_id):
@@ -306,6 +372,6 @@ if __name__ == '__main__':
     FLAGS = flags.FLAGS
     FLAGS(['sc2.py'])
 
-    env = sc2_env('MoveToBeacon', 1)
+    env = sc2_feature_env('MoveToBeacon', 1, None)
     env.reset()
     print()

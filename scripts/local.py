@@ -57,7 +57,7 @@ def main(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(network, device, env.engine, args)
+    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
 
     # Construct the Container
     def make_optimizer(params):
@@ -104,7 +104,7 @@ if __name__ == '__main__':
         help='name of preset network (default: FourConv)'
     )
     parser.add_argument(
-        '-dn', '--discrete-network', default='DiscreteIdentity',
+        '-dn', '--discrete-network', default='Identity',
     )
     parser.add_argument(
         '-nb', '--network-body', default='LSTM',

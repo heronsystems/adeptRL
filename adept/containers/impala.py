@@ -400,7 +400,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         # add next obs, sorted
         for k in sorted(next_obs.keys()):
             v = next_obs[k]
-            sends.append(torch.stack(v))
+            sends.append(v)
 
         self.submit(sends)
         self.receive()

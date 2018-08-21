@@ -89,7 +89,7 @@ def main(args):
         cudnn = False
 
     torch.backends.cudnn.benchmark = cudnn
-    agent = make_agent(network, device, env.engine, args)
+    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
 
     # workers
     if rank != 0:

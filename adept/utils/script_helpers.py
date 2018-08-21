@@ -16,8 +16,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
 
-from gym import spaces
-
 from adept.agents import AGENTS, AGENT_ARGS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
 from adept.environments import reward_normalizer_by_env_id
@@ -64,35 +62,29 @@ def atari_from_args(args, seed, subprocess=True):
 
 
 def make_network(
-        observation_space,
-        network_head_shapes,
-        args,
-        vision_networks=VISION_NETWORKS,
-        discrete_networks=DISCRETE_NETWORKS,
-        network_bodies=NETWORK_BODIES,
-        embedding_size=512
+    observation_space,
+    network_head_shapes,
+    args,
+    chw_networks=VISION_NETWORKS,
+    c_networks=DISCRETE_NETWORKS,
+    network_bodies=NETWORK_BODIES,
+    embedding_size=512
 ):
-    nb_discrete_channel = 0
-    nb_visual_channel = 0
-
-    if isinstance(observation_space, spaces.Dict):
-        for space in observation_space.spaces.values():
-            if isinstance(space, spaces.Box):
-                nb_visual_channel += space.shape[0]
-            elif isinstance(space, spaces.Discrete):
-                nb_discrete_channel += space.n
-            else:
-                raise NotImplementedError('This observation space is not currently supported: {}'.format(space))
-    elif isinstance(observation_space, spaces.Box):
-        nb_visual_channel += observation_space.shape[0]
-    else:
-        raise NotImplementedError('This observation space is not currently supported: {}'.format(observation_space))
-
     pathways_by_name = {}
-    if nb_visual_channel > 0:
-        pathways_by_name['visual'] = vision_networks[args.vision_network].from_args(nb_visual_channel, args)
-    if nb_discrete_channel > 0:
-        pathways_by_name['discrete'] = discrete_networks[args.discrete_network].from_args(nb_discrete_channel, args)
+    nbr = observation_space.names_by_rank
+    ebn = observation_space.entries_by_name
+    for rank, names in nbr.items():
+        for name in names:
+            if rank == 1:
+                pathways_by_name[name] = c_networks[args.discrete_network].from_args(ebn[name].shape, args)
+            elif rank == 2:
+                raise NotImplementedError('Rank 2 inputs not implemented')
+            elif rank == 3:
+                pathways_by_name[name] = chw_networks[args.vision_network].from_args(ebn[name].shape, args)
+            elif rank == 4:
+                raise NotImplementedError('Rank 4 inputs not implemented')
+            else:
+                raise NotImplementedError('Rank {} inputs not implemented'.format(rank))
 
     trunk = NetworkTrunk(pathways_by_name)
     body = network_bodies[args.network_body].from_args(trunk.nb_output_channel, embedding_size, args)
@@ -113,10 +105,10 @@ def get_agent_class(agent_name, engine):
     return agent_class
 
 
-def make_agent(network, device, engine, args):
+def make_agent(network, device, engine, gpu_preprocessor, args):
     agent_class = get_agent_class(args.agent, engine)
     reward_normalizer = reward_normalizer_by_env_id(args.env_id)
-    return agent_class(network, device, reward_normalizer, *AGENT_ARGS[args.agent](args))
+    return agent_class(network, device, reward_normalizer, gpu_preprocessor, *AGENT_ARGS[args.agent](args))
 
 
 def get_head_shapes(action_space, engine, agent_name):

@@ -76,7 +76,7 @@ def main(args):
             network.load_state_dict(torch.load(network_file))
 
             # construct agent
-            agent = make_agent(network, device, env.engine, train_args)
+            agent = make_agent(network, device, env.engine, env.gpu_preprocessor, train_args)
 
             # container
             container = Evaluation(agent, env, device, args.nb_env)

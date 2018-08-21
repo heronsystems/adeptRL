@@ -14,119 +14,16 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-from collections import OrderedDict
 
-from abc import ABC, abstractmethod
+import pickle
+
+import cloudpickle
 import numpy as np
 import torch
-import pickle
-import cloudpickle
-from gym import spaces
 from torch import multiprocessing as mp
 
+from adept.environments._base import BaseEnvironment
 from adept.utils.util import listd_to_dlist
-
-
-class VecEnv(ABC):
-    """
-    MIT License
-    Copyright (c) 2017 OpenAI (http://openai.com)
-    """
-    def __init__(self, num_envs, observation_space, action_space):
-        self.num_envs = num_envs
-        self.observation_space = observation_space
-        self.action_space = action_space
-
-    @abstractmethod
-    def reset(self):
-        """
-        Reset all the environments and return an array of
-        observations, or a tuple of observation arrays.
-
-        If step_async is still doing work, that work will
-        be cancelled and step_wait() should not be called
-        until step_async() is invoked again.
-        """
-        pass
-
-    @abstractmethod
-    def step_async(self, actions):
-        """
-        Tell all the environments to start taking a step
-        with the given actions.
-        Call step_wait() to get the results of the step.
-
-        You should not call this if a step_async run is
-        already pending.
-        """
-        pass
-
-    @abstractmethod
-    def step_wait(self):
-        """
-        Wait for the step taken with step_async().
-
-        Returns (obs, rews, dones, infos):
-         - obs: an array of observations, or a tuple of
-                arrays of observations.
-         - rews: an array of rewards
-         - dones: an array of "episode done" booleans
-         - infos: a sequence of info objects
-        """
-        pass
-
-    @abstractmethod
-    def close(self):
-        """
-        Clean up the environments' resources.
-        """
-        pass
-
-    def step(self, actions):
-        self.step_async(actions)
-        return self.step_wait()
-
-    def render(self, mode='human'):
-        print('Render not defined for %s' % self)
-
-    @property
-    def unwrapped(self):
-        if isinstance(self, VecEnvWrapper):
-            return self.venv.unwrapped
-        else:
-            return self
-
-
-class VecEnvWrapper(VecEnv):
-    """
-    MIT License
-    Copyright (c) 2017 OpenAI (http://openai.com)
-    """
-    def __init__(self, venv, observation_space=None, action_space=None):
-        self.venv = venv
-        VecEnv.__init__(
-            self,
-            num_envs=venv.num_envs,
-            observation_space=observation_space or venv.observation_space,
-            action_space=action_space or venv.action_space
-        )
-
-    def step_async(self, actions):
-        self.venv.step_async(actions)
-
-    @abstractmethod
-    def reset(self):
-        pass
-
-    @abstractmethod
-    def step_wait(self):
-        pass
-
-    def close(self):
-        return self.venv.close()
-
-    def render(self):
-        self.venv.render()
 
 
 class CloudpickleWrapper(object):
@@ -154,19 +51,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()
     env = env_fn_wrapper.x()
 
-    if isinstance(env.observation_space, spaces.Box):
-        shared_memory = {'obs': torch.FloatTensor(*env.observation_space.shape)}
-    elif isinstance(env.observation_space, spaces.Dict):
-        shared_memory = {}
-        for k, space in env.observation_space.spaces.items():
-            if isinstance(space, spaces.Box):
-                shared_memory[k] = torch.FloatTensor(*space.shape).share_memory_()
-            elif isinstance(space, spaces.Discrete):
-                shared_memory[k] = torch.FloatTensor(space.n).share_memory_()
-            else:
-                raise NotImplementedError()
-    else:
-        raise NotImplementedError()
+    ebn = env.cpu_preprocessor.observation_space.entries_by_name
+    shared_memory = {name: torch.FloatTensor(*entry.shape) for name, entry in ebn.items() if None not in entry.shape}
 
     while True:
         cmd, data = remote.recv()
@@ -189,6 +75,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
             break
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
+        elif cmd == 'get_processors':
+            remote.send((env.cpu_preprocessor, env.gpu_preprocessor))
         elif cmd == 'get_shared_memory':
             remote.send(shared_memory)
         else:
@@ -200,23 +88,18 @@ def handle_ob(ob, shared_memory):
     for k, v in ob.items():
         if isinstance(v, torch.Tensor):
             shared_memory[k].copy_(v)
-        elif isinstance(v, np.ndarray):
-            shared_memory[k].copy_(torch.from_numpy(v))
         else:
             non_shared[k] = v
     return non_shared
 
 
-class SubProcEnv(VecEnv):
+class SubProcEnv(BaseEnvironment):
     """
     Modified.
     MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
     def __init__(self, env_fns, engine):
-        """
-        envs: list of gym environments to run in subprocesses
-        """
         # TODO: sharing cuda tensors requires spawn or forkserver but these do not work with mpi
         # mp.set_start_method('spawn')
         self.engine = engine
@@ -235,7 +118,9 @@ class SubProcEnv(VecEnv):
             remote.close()
 
         self.remotes[0].send(('get_spaces', None))
-        observation_space, action_space = self.remotes[0].recv()
+        self._observation_space, self._action_space = self.remotes[0].recv()
+        self.remotes[0].send(('get_processors', None))
+        self._cpu_preprocessor, self._gpu_preprocessor = self.remotes[0].recv()
 
         shared_memories = []
         for remote in self.remotes:
@@ -243,7 +128,25 @@ class SubProcEnv(VecEnv):
             shared_memories.append(remote.recv())
         self.shared_memories = listd_to_dlist(shared_memories)
 
-        VecEnv.__init__(self, len(env_fns), observation_space, action_space)
+    @property
+    def observation_space(self):
+        return self._observation_space
+
+    @property
+    def action_space(self):
+        return self._action_space
+
+    @property
+    def cpu_preprocessor(self):
+        return self._cpu_preprocessor
+
+    @property
+    def gpu_preprocessor(self):
+        return self._gpu_preprocessor
+
+    def step(self, actions):
+        self.step_async(actions)
+        return self.step_wait()
 
     def step_async(self, actions):
         for remote, action in zip(self.remotes, actions):
@@ -255,14 +158,16 @@ class SubProcEnv(VecEnv):
         self.waiting = False
         obs, rews, dones, infos = zip(*results)
         obs = listd_to_dlist(obs)
-        obs = {**obs, **self.shared_memories}
+        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
+        obs = {**obs, **shared_mems}
         return obs, rews, dones, infos
 
     def reset(self):
         for remote in self.remotes:
             remote.send(('reset', None))
         obs = listd_to_dlist([remote.recv() for remote in self.remotes])
-        obs = {**obs, **self.shared_memories}
+        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
+        obs = {**obs, **shared_mems}
         return obs
 
     def reset_task(self):
@@ -293,7 +198,7 @@ def dummy_handle_ob(ob):
     return new_ob
 
 
-class DummyVecEnv(VecEnv):
+class DummyVecEnv(BaseEnvironment):
     """
     Modified.
     MIT License
@@ -303,33 +208,32 @@ class DummyVecEnv(VecEnv):
         self.envs = [fn() for fn in env_fns]
         env = self.envs[0]
         self.engine = engine
-        VecEnv.__init__(self, len(env_fns), env.observation_space, env.action_space)
-        shapes, dtypes = {}, {}
-        self.keys = []
-        obs_space = env.observation_space
+        self._observation_space, self._action_space = env.observation_space, env.action_space
 
-        if isinstance(obs_space, spaces.Dict):
-            assert isinstance(obs_space.spaces, OrderedDict)
-            subspaces = obs_space.spaces
-        else:
-            subspaces = {None: obs_space}
-
-        for key, box in subspaces.items():
-            shapes[key] = box.shape
-            dtypes[key] = box.dtype
-            self.keys.append(key)
-
-        self.buf_obs = [None for _ in range(self.num_envs)]
-        self.buf_dones = [None for _ in range(self.num_envs)]
-        self.buf_rews = [None for _ in range(self.num_envs)]
-        self.buf_infos = [None for _ in range(self.num_envs)]
+        self.nb_env = len(env_fns)
+        self.buf_obs = [None for _ in range(self.nb_env)]
+        self.buf_dones = [None for _ in range(self.nb_env)]
+        self.buf_rews = [None for _ in range(self.nb_env)]
+        self.buf_infos = [None for _ in range(self.nb_env)]
         self.actions = None
+
+    @property
+    def observation_space(self):
+        return self._observation_space
+
+    @property
+    def action_space(self):
+        return self._action_space
+
+    def step(self, actions):
+        self.step_async(actions)
+        return self.step_wait()
 
     def step_async(self, actions):
         self.actions = actions
 
     def step_wait(self):
-        for e in range(self.num_envs):
+        for e in range(self.nb_env):
             obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[e].step(self.actions[e])
             if self.buf_dones[e]:
                 obs = self.envs[e].reset()
@@ -337,7 +241,7 @@ class DummyVecEnv(VecEnv):
         return listd_to_dlist(self.buf_obs), self.buf_rews, self.buf_dones, self.buf_infos
 
     def reset(self):
-        for e in range(self.num_envs):
+        for e in range(self.nb_env):
             obs = self.envs[e].reset()
             self.buf_obs[e] = dummy_handle_ob(obs)
         return listd_to_dlist(self.buf_obs)

@@ -95,7 +95,7 @@ def main(args):
         os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         torch.backends.cudnn.benchmark = True
-        agent = make_agent(network, device, env.engine, args)
+        agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
 
         # construct container
         container = ToweredWorker(agent, env, args.nb_env, logger, summary_writer, args.summary_frequency)

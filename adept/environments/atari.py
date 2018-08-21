@@ -18,48 +18,103 @@ import gym
 import torch
 from gym import spaces
 
+from adept.preprocess.ops import CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack
+from adept.preprocess.observation import ObsPreprocessor
 from ._wrappers import (
-    NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv, FrameStack, WarpFrame, Divide255,
-    ZScoreEnv
+    NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv
 )
+from ._base import BaseEnvironment, Spaces
 
 
 def make_atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed):
     def _f():
-        env = atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack)
-        env.seed(seed)
+        env = atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed)
         return env
     return _f
 
 
-def atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack):
+def atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed):
     env = gym.make(env_id)
-    if isinstance(env.observation_space, spaces.Box) and len(env.observation_space.shape) == 3:
-        if 'NoFrameskip' in env_id:
-            assert 'NoFrameskip' in env.spec.id
-            env._max_episode_steps = max_ep_length * skip_rate
-            env = NoopResetEnv(env, noop_max=30)
-            env = MaxAndSkipEnv(env, skip=skip_rate)
-        else:
-            env._max_episode_steps = max_ep_length
-        if hasattr(env.unwrapped, 'ale'):
-            env = EpisodicLifeEnv(env)
-            if 'FIRE' in env.unwrapped.get_action_meanings():
-                env = FireResetEnv(env)
-        env = WarpFrame(env)
-        if do_zscore_norm:
-            env = ZScoreEnv(env)
-        else:
-            env = Divide255(env)
-        if do_frame_stack:
-            env = FrameStack(env, 4)
-    env = DictTensorObs(env)
+    if 'NoFrameskip' in env_id:
+        assert 'NoFrameskip' in env.spec.id
+        env._max_episode_steps = max_ep_length * skip_rate
+        env = NoopResetEnv(env, noop_max=30)
+        env = MaxAndSkipEnv(env, skip=skip_rate)
+    else:
+        env._max_episode_steps = max_ep_length
+    if hasattr(env.unwrapped, 'ale'):
+        env = EpisodicLifeEnv(env)
+        if 'FIRE' in env.unwrapped.get_action_meanings():
+            env = FireResetEnv(env)
+    env.seed(seed)
+    env = AdeptGymEnv(env, do_frame_stack)
     return env
 
 
-class DictTensorObs(gym.ObservationWrapper):
-    def __init__(self, env):
-        gym.ObservationWrapper.__init__(self, env)
+class AdeptGymEnv(BaseEnvironment):
+    def __init__(self, env, do_frame_stack):
+        self.gym_env = env
+        cpu_ops = [GrayScaleAndMoveChannel(), ResizeTo84x84()]
+        if do_frame_stack:
+            cpu_ops.append(FrameStack(4))
+        self._cpu_preprocessor = ObsPreprocessor(cpu_ops, Spaces.from_gym(env.observation_space))
+        self._gpu_preprocessor = ObsPreprocessor(
+            [CastToFloat(), Divide255()],
+            self._cpu_preprocessor.observation_space
+        )
+        self._observation_space = self._gpu_preprocessor.observation_space
+        self._action_space = Spaces.from_gym(env.action_space)
+        self._gym_obs_space = env.observation_space
 
-    def observation(self, observation):
-        return {'obs': torch.from_numpy(observation)}
+    @property
+    def observation_space(self):
+        return self._observation_space
+
+    @property
+    def action_space(self):
+        return self._action_space
+
+    @property
+    def cpu_preprocessor(self):
+        return self._cpu_preprocessor
+
+    @property
+    def gpu_preprocessor(self):
+        return self._gpu_preprocessor
+
+    def step(self, action):
+        obs, reward, done, info = self.gym_env.step(action)
+        return self._wrap_observation(obs), reward, done, info
+
+    def reset(self, **kwargs):
+        obs = self.gym_env.reset(**kwargs)
+        return self._wrap_observation(obs)
+
+    def close(self):
+        self.gym_env.close()
+
+    def __getattr__(self, item):
+        return self.gym_env.__dict__[item]
+
+    def _wrap_observation(self, observation):
+        space = self._gym_obs_space
+        if isinstance(space, spaces.Box):
+            return self.cpu_preprocessor({'Box': torch.from_numpy(observation)})
+        elif isinstance(space, spaces.Discrete):
+            # one hot encode discrete inputs
+            longs = torch.from_numpy(observation)
+            if longs.dim() > 2:
+                raise ValueError('observation is not discrete, too many dims: ' + str(longs.dim()))
+            elif len(longs.dim()) == 1:
+                longs = longs.unsqueeze(1)
+            one_hot = torch.zeros(observation.size(0), space.n)
+            one_hot.scatter_(1, longs, 1)
+            return self.cpu_preprocessor({'Discrete': one_hot})
+        elif isinstance(space, spaces.MultiBinary):
+            return self.cpu_preprocessor({'MultiBinary': torch.from_numpy(observation)})
+        elif isinstance(space, spaces.Dict):
+            return self.cpu_preprocessor({name: torch.from_numpy(obs) for name, obs in observation.items()})
+        elif isinstance(space, spaces.Tuple):
+            return self.cpu_preprocessor({idx: torch.from_numpy(obs) for idx, obs in enumerate(observation)})
+        else:
+            raise NotImplementedError

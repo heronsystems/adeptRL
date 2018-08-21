@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import torch
-from gym import spaces
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
@@ -24,8 +23,9 @@ from ._base import Agent, EnvBase
 
 
 class ActorCritic(Agent, EnvBase):
-    def __init__(self, network, device, reward_normalizer, nb_env, nb_rollout, discount, gae, tau):
+    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout, discount, gae, tau):
         self.discount, self.gae, self.tau = discount, gae, tau
+        self.gpu_preprocessor = gpu_preprocessor
 
         self._network = network.to(device)
         self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['values', 'log_probs', 'entropies'])
@@ -55,19 +55,14 @@ class ActorCritic(Agent, EnvBase):
 
     @staticmethod
     def output_shape(action_space):
-        if isinstance(action_space, spaces.Discrete):
-            head_dict = {'critic': 1, 'actor': action_space.n}
-        elif isinstance(action_space, spaces.Dict):
-            # TODO support nested dicts
-            # currently only works for dicts of Discrete action_spaces's
-            head_dict = {**{'critic': 1}, **{k: a_space.n for k, a_space in action_space.spaces.items()}}
-        else:
-            raise ValueError('Unrecognized action space {}'.format(action_space))
+        ebn = action_space.entries_by_name
+        actor_outputs = {name: entry.shape[0] for name, entry in ebn.items()}
+        head_dict = {'critic': 1, **actor_outputs}
         return head_dict
 
     def act(self, obs):
         self.network.train()
-        results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
+        results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
         values = results['critic'].squeeze(1)
         logits = {k: v for k, v in results.items() if k != 'critic'}
 
@@ -85,7 +80,7 @@ class ActorCritic(Agent, EnvBase):
     def act_eval(self, obs):
         self.network.eval()
         with torch.no_grad():
-            results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
+            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
@@ -94,7 +89,7 @@ class ActorCritic(Agent, EnvBase):
         return actions
 
     def preprocess_logits(self, logits):
-        return logits['actor']
+        return logits['Discrete']
 
     def process_logits(self, logits, obs, deterministic):
         prob = F.softmax(logits, dim=1)
@@ -111,7 +106,7 @@ class ActorCritic(Agent, EnvBase):
     def compute_loss(self, rollouts, next_obs):
         # estimate value of next state
         with torch.no_grad():
-            next_obs_on_device = self.obs_to_pathways(next_obs, self.device)
+            next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
             results, _ = self.network(next_obs_on_device, self.internals)
             last_values = results['critic'].squeeze(1).data
 

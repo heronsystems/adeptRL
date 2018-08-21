@@ -16,19 +16,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 # Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py for reference
 import torch
-from gym import spaces
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
-from adept.utils.util import listd_to_dlist
+from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
 from .._base import Agent, EnvBase
 
 
 class ActorCriticVtrace(Agent, EnvBase):
-    def __init__(self, network, device, reward_normalizer, nb_env, nb_rollout, discount,
+    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout, discount,
                  minimum_importance_value=1.0, minimum_importance_policy=1.0, entropy_weight=0.01):
         self.discount = discount
+        self.gpu_preprocessor = gpu_preprocessor
         self.minimum_importance_value = minimum_importance_value
         self.minimum_importance_policy = minimum_importance_policy
         self.entropy_weight = entropy_weight
@@ -61,45 +61,17 @@ class ActorCriticVtrace(Agent, EnvBase):
 
     @staticmethod
     def output_shape(action_space):
-        if isinstance(action_space, spaces.Discrete):
-            head_dict = {'critic': 1, 'actor': action_space.n}
-        elif isinstance(action_space, spaces.Dict):
-            # TODO support nested dicts
-            # currently only works for dicts of Discrete action_spaces's
-            head_dict = {**{'critic': 1}, **{k: a_space.n for k, a_space in action_space.spaces.items()}}
-        else:
-            raise ValueError('Unrecognized action space {}'.format(action_space))
+        ebn = action_space.entries_by_name
+        actor_outputs = {name: entry.shape[0] for name, entry in ebn.items()}
+        head_dict = {'critic': 1, **actor_outputs}
         return head_dict
 
     def seq_obs_to_pathways(self, obs, device):
         """
             Converts a dict of sequential observations to a list(of seq len) of dicts
         """
-        pathway_dict = self.obs_to_pathways(obs, device, visual_dim=4, discrete_dim=2)
-        visual = pathway_dict['visual']
-        discrete = pathway_dict['discrete']
-        # visual or discrete can be empty tensor
-        if visual.shape[0] > 0:
-            # visual and discrete
-            if discrete.shape[0] > 0:
-                seq = [{
-                    'visual': visual[i],
-                    'discrete': discrete[i]
-                } for i in range(visual.shape[0])]
-            # visual only
-            else:
-                seq = [{
-                    'visual': visual[i],
-                    'discrete': discrete
-                } for i in range(visual.shape[0])]
-        # only discrete
-        else:
-            seq = [{
-                'visual': visual,
-                'discrete': discrete[i]
-            } for i in range(discrete.shape[0])]
-
-        return seq
+        pathway_dict = self.gpu_preprocessor(obs, device)
+        return dlist_to_listd(pathway_dict)
 
     def act(self, obs):
         """
@@ -108,7 +80,7 @@ class ActorCriticVtrace(Agent, EnvBase):
             Additionally, no gradients are needed here
         """
         with torch.no_grad():
-            results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
+            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
@@ -133,7 +105,7 @@ class ActorCriticVtrace(Agent, EnvBase):
     def act_eval(self, obs):
         self.network.eval()
         with torch.no_grad():
-            results, internals = self.network(self.obs_to_pathways(obs, self.device), self.internals)
+            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
@@ -146,7 +118,7 @@ class ActorCriticVtrace(Agent, EnvBase):
             This is the method to recompute the forward pass on the host, it must return log_probs, values and entropies
             Obs, sampled_actions, terminal_masks here are [seq, batch], internals must be reset if terminal
         """
-        next_obs_on_device = self.obs_to_pathways(next_obs, self.device)
+        next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
 
         values = []
         log_probs_of_action = []
@@ -157,7 +129,7 @@ class ActorCriticVtrace(Agent, EnvBase):
         # if network is modular, trunk can be sped up by combining batch & seq dim
         def get_results_generator():
             if isinstance(self.network, ModularNetwork):
-                pathway_dict = self.obs_to_pathways(obs, self.device, visual_dim=4, discrete_dim=2)
+                pathway_dict = self.gpu_preprocessor(obs, self.device)
                 # flatten obs
                 flat_obs = {k: v.view(-1, *v.shape[2:]) for k, v in pathway_dict.items()}
                 embeddings = self.network.trunk.forward(flat_obs)
@@ -204,7 +176,7 @@ class ActorCriticVtrace(Agent, EnvBase):
         return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
 
     def preprocess_logits(self, logits):
-        return logits['actor']
+        return logits['Discrete']
 
     def process_logits(self, logits, obs, deterministic=False):
         prob = F.softmax(logits, dim=1)

@@ -14,96 +14,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-from collections import deque
 
 import gym
 import numpy as np
-from cv2 import cv2
-from gym import spaces
-
-cv2.ocl.setUseOpenCL(False)
-
-
-class WarpFrame(gym.ObservationWrapper):
-    """
-    Modified.
-    The MIT License
-    Copyright (c) 2017 OpenAI (http://openai.com)
-    """
-    def __init__(self, env):
-        """Warp frames to 84x84 as done in the Nature paper and later work."""
-        gym.ObservationWrapper.__init__(self, env)
-        self.height = 84
-        self.width = 84
-        self.observation_space = spaces.Box(low=0, high=255, shape=(1, self.height, self.width), dtype=np.uint8)
-
-    def observation(self, frame):
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
-        return frame[None, :, :]
-
-
-class Divide255(gym.ObservationWrapper):
-    def __init__(self, env):
-        """Warp frames to 84x84 as done in the Nature paper and later work."""
-        gym.ObservationWrapper.__init__(self, env)
-        self.height = 84
-        self.width = 84
-        self.observation_space = spaces.Box(low=0., high=1., shape=(1, self.height, self.width), dtype=np.float32)
-
-    def observation(self, frame):
-        frame = frame.astype(np.float32)
-        frame *= (1. / 255.)
-        return frame
-
-
-class ZScoreEnv(gym.ObservationWrapper):
-    def __init__(self, env):
-        gym.ObservationWrapper.__init__(self, env)
-        self.state_mean = 0
-        self.state_std = 0
-        self.alpha = 0.9999
-        self.num_steps = 0
-
-    def observation(self, frame):
-        self.num_steps += 1
-        frame = frame.astype(np.float32)
-        self.state_mean = self.state_mean * self.alpha + frame.mean() * (1 - self.alpha)
-        self.state_std = self.state_std * self.alpha + frame.std() * (1 - self.alpha)
-
-        unbiased_mean = self.state_mean / (1 - pow(self.alpha, self.num_steps))
-        unbiased_std = self.state_std / (1 - pow(self.alpha, self.num_steps))
-
-        return (frame - unbiased_mean) / (unbiased_std + 1e-8)
-
-
-class FrameStack(gym.Wrapper):
-    """
-    Modified.
-    The MIT License
-    Copyright (c) 2017 OpenAI (http://openai.com)
-    """
-    def __init__(self, env, k):
-        gym.Wrapper.__init__(self, env)
-        self.k = k
-        self.frames = deque([], maxlen=k)
-        shp = env.observation_space.shape
-        self.observation_space = spaces.Box(low=0, high=255, shape=(shp[0] * k, shp[1], shp[2]), dtype=np.uint8)
-
-    def reset(self):
-        ob = self.env.reset()
-        for _ in range(self.k):
-            self.frames.append(ob)
-        return self._get_ob()
-
-    def step(self, action):
-        ob, reward, done, info = self.env.step(action)
-        self.frames.append(ob)
-        return self._get_ob(), reward, done, info
-
-    def _get_ob(self):
-        assert len(self.frames) == self.k
-        return np.concatenate(self.frames)
 
 
 class NoopResetEnv(gym.Wrapper):
@@ -242,39 +155,3 @@ class MaxAndSkipEnv(gym.Wrapper):
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
-
-
-class LazyFrames(object):
-    """
-    Modified.
-    The MIT License
-    Copyright (c) 2017 OpenAI (http://openai.com)
-    """
-    def __init__(self, frames):
-        """This object ensures that common frames between the observations are only stored once.
-        It exists purely to optimize memory usage which can be huge for DQN's 1M frames replay
-        buffers.
-
-        This object should only be converted to numpy array before being passed to the model.
-
-        You'd not believe how complex the previous solution was."""
-        self._frames = frames
-        self._out = None
-
-    def _force(self):
-        if self._out is None:
-            self._out = np.concatenate(self._frames, axis=0)
-            self._frames = None
-        return self._out
-
-    def __array__(self, dtype=None):
-        out = self._force()
-        if dtype is not None:
-            out = out.astype(dtype)
-        return out
-
-    def __len__(self):
-        return len(self._force())
-
-    def __getitem__(self, i):
-        return self._force()[i]
