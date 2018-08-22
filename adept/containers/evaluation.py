@@ -86,7 +86,7 @@ class Evaluation(EvalBase, CountsRewards):
             next_obs, rewards, terminals, infos = self.environment.step(actions)
 
             self.agent.reset_internals(terminals)
-            episode_rewards = self.update_buffers(rewards, terminals, infos)
+            episode_rewards, _ = self.update_buffers(rewards, terminals, infos)
             for reward in episode_rewards:
                 self._episode_count += 1
                 results.append(reward)

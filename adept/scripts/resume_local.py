@@ -38,11 +38,12 @@ def main(args):
     network_file = args.network_file
     optimizer_file = args.optimizer_file
     args_file_path = args.args_file
+    mts = args.max_train_steps
     with open(args.args_file, 'r') as args_file:
         args = dotdict(json.load(args_file))
 
     print_ascii_logo()
-    log_id = make_log_id(args.tag, args.mode_name, args.agent, args.network)
+    log_id = make_log_id(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body)
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     os.makedirs(log_id_dir)
@@ -59,7 +60,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
     network.load_state_dict(torch.load(network_file))
 
@@ -76,9 +77,19 @@ def main(args):
             opt.load_state_dict(torch.load(optimizer_file))
         return opt
 
-    container = Local(agent, env, device, make_optimizer, args.epoch_len, args.nb_env, logger, summary_writer, saver)
+    container = Local(
+        agent,
+        env,
+        make_optimizer,
+        args.epoch_len,
+        args.nb_env,
+        logger,
+        summary_writer,
+        args.summary_frequency,
+        saver
+    )
     try:
-        container.run(args.max_train_steps + initial_count, initial_count)
+        container.run(mts + initial_count, initial_count)
     finally:
         env.close()
 
@@ -98,6 +109,10 @@ if __name__ == '__main__':
     parser.add_argument(
         '--optimizer-file', default=None,
         help='path to args file (.../logs/<env-id>/<log-id>/<epoch>/optimizer.pth)'
+    )
+    parser.add_argument(
+        '-mts', '--max-train-steps', type=int, default=10e6, metavar='MTS',
+        help='number of steps to train for (default: 10e6)'
     )
     args = parser.parse_args()
     args.mode_name = 'Local'

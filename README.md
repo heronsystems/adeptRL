@@ -23,19 +23,18 @@ Execution Modes
 
 Environments
 * OpenAI Gym
-* StarCraft 2 (alpha)
+* StarCraft 2 (alpha, impala mode does not work with SC2 yet)
 
 We designed this library to be flexible and extensible. Plugging in novel research ideas should be doable.
 
 ## Major Dependencies
 * gym
-* PyTorch 0.4.x (excluding 0.4.1 due to the [unbind bug](https://github.com/pytorch/pytorch/pull/9995))
+* PyTorch 0.4.x (excluding 0.4.1 due to an [unbind bug](https://github.com/pytorch/pytorch/pull/9995))
 * Python 3.5+
 
 ## Installation
 * Follow instructions for [PyTorch](https://pytorch.org/)  
 * (Optional) Follow instructions for [StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
-* More optional dependencies in requirements.txt
 
 ```
 # Remove mpi, sc2, profiler if you don't plan on using these features:
@@ -43,30 +42,36 @@ pip install adept[mpi,sc2,profiler]
 ```
 
 ## Performance
-TODO
+* Used to win a [Doom competition](http://vizdoom.cs.put.edu.pl/competition-cig-2018/competition-results) (Ben Bell / Marv2in)
+* ~2500 training frames per second single-GPU performance on a Dell XPS 15" laptop (Geforce 1050Ti)
+* Will post Atari/SC2 baseline scores here at some point
 
 ## Examples
 If you write your own scripts, you can provide your own agents or networks, but we have some presets you can run out of the box.
-If you pip installed, these scripts are on your classpath and can be run with the commands below.
-If you cloned the repo, put a python in front of each command.
+Logs go to `/tmp/adept_logs/` by default.
+The log directory contains the tensorboard file, saved models, and other metadata.
 
 ```
 # Local Mode (A2C)
 # We recommend 4GB+ GPU memory, 8GB+ RAM, 4+ Cores
-local.py --env-id BeamRiderNoFrameskip-v4 --agent ActorCritic --vision-network FourConv --network-body LSTM
+python -m adept.scripts.local --env-id BeamRiderNoFrameskip-v4
 
-# Towered Mode (A3C Variant)
-# We recommend 2x+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-towered.py --env-id BeamRiderNoFrameskip-v4 --agent ActorCritic --vision-network FourConv --network-body LSTM
+# Towered Mode (A3C Variant, requires mpi4py)
+# We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
+python -m adept.scripts.towered --env-id BeamRiderNoFrameskip-v4
 
 # IMPALA (requires mpi4py and is resource intensive)
-# We recommend 2x+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-mpirun -np 3 -H localhost:3 python -m mpi4py `which impala.py` -n 8
+# We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
+mpiexec -n 3 python -m adept.scripts.impala --env-id BeamRiderNoFrameskip-v4
+
+# StarCraft 2 (IMPALA not supported yet)
+# Warning: much more resource intensive than Atari
+python -m adept.scripts.local --env-id CollectMineralShards
 
 # To see a full list of options:
-local.py -h
-towered.py -h
-impala.py -h
+python -m adept.scripts.local -h
+python -m adept.scripts.towered -h
+python -m adept.scripts.impala -h
 ```
 
 ## API Reference
@@ -77,7 +82,8 @@ Currently only ActorCritic is supported. Other agents, such as DQN or ACER may b
 ### Containers
 Containers hold all of the application state. Each subprocess gets a container in Towered and IMPALA modes.
 ### Environments
-Environments work using the OpenAI Gym wrappers.
+Environments run in subprocesses and send their observation, rewards, terminals, and infos to the host process.
+They work pretty much the same way as OpenAI's code.
 ### Experience Caches
 An Experience Cache is a Rollout or Experience Replay that is written to after stepping and read before learning.
 ### Modules
@@ -90,5 +96,5 @@ The Body network operates on the flattened embedding and would typically be an L
 The Head depends on the Environment and Agent and is created accordingly.
 
 ## Acknowledgements
-We borrow pieces of OpenAI's (gym)[https://github.com/openai/gym] and (baselines)[https://github.com/openai/baselines] code.
+We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and [baselines](https://github.com/openai/baselines) code.
 We indicate where this is done.

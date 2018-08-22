@@ -117,7 +117,6 @@ def get_head_shapes(action_space, engine, agent_name):
 
 
 def add_base_args(parser):
-    root_dir = os.path.abspath(os.pardir)
     """
     Common Arguments
     """
@@ -146,8 +145,8 @@ def add_base_args(parser):
         help='environment to train on (default: PongNoFrameskip-v4)'
     )
     parser.add_argument(
-        '--log-dir', default=os.path.join(root_dir, 'logs/'),
-        help='folder to save logs. (default: adept/logs)'
+        '--log-dir', default='/tmp/adept_logs/',
+        help='folder to save logs. (default: /tmp/adept_logs)'
     )
     parser.add_argument(
         '-mts', '--max-train-steps', type=int, default=10e6, metavar='MTS',

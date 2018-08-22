@@ -13,16 +13,6 @@ setup(
     license='GNU',
     python_requires='>=3.5.0',
     packages=find_packages(),
-    scripts=[
-        'scripts/benchmark_atari.py',
-        'scripts/evaluation.py',
-        'scripts/impala.py',
-        'scripts/local.py',
-        'scripts/render.py',
-        'scripts/replay_gen.py',
-        'scripts/resume_local.py',
-        'scripts/towered.py'
-    ],
     install_requires=[
         'numpy>=1.14',
         'gym[atari]>=0.10',
