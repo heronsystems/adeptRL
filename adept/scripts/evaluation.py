@@ -68,7 +68,7 @@ def main(args):
         network_path = os.path.join(args.log_id_dir, str(epoch_id), 'model*.pth')
         network_files = glob(network_path)
 
-        best_mean = 0.
+        best_mean = -float('inf')
         best_std_dev = 0.
         selected_model = None
         for network_file in network_files:
