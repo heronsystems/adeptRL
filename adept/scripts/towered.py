@@ -22,22 +22,22 @@ from mpi4py import MPI as mpi
 from tensorboardX import SummaryWriter
 
 from adept.containers import ToweredHost, ToweredWorker
-from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file
+from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
+    SimpleModelSaver
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from datetime import datetime
-
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
+# mpi comm, rank, and size
+comm = mpi.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
 
 def main(args):
-    # mpi comm, rank, and size
-    comm = mpi.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -46,6 +46,7 @@ def main(args):
                                             timestamp)
         log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
         os.makedirs(log_id_dir)
+        saver = SimpleModelSaver(log_id_dir)
         print_ascii_logo()
     else:
         timestamp = None
@@ -92,7 +93,12 @@ def main(args):
         summary_writer = SummaryWriter(os.path.join(log_id_dir, 'rank{}'.format(rank)))
 
         # construct agent
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
+        # distribute evenly across gpus
+        if isinstance(args.gpu_id, list):
+            gpu_id = args.gpu_id[(rank - 1) % len(args.gpu_id)]
+        else:
+            gpu_id = args.gpu_id
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         torch.backends.cudnn.benchmark = True
         agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
@@ -120,7 +126,7 @@ def main(args):
             opt = torch.optim.RMSprop(params, lr=args.learning_rate, eps=1e-5, alpha=0.99)
             return opt
 
-        container = ToweredHost(comm, size - 1, network, make_optimizer, logger)
+        container = ToweredHost(comm, args.num_grads_to_drop, network, make_optimizer, saver, args.epoch_len, logger)
 
         # Run the container
         if args.profile:
@@ -143,8 +149,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='AdeptRL Towered Mode')
     parser = add_base_args(parser)
-    # TODO accept multiple gpu ids
-    parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
+    parser.add_argument('--gpu-id', type=int, nargs='+', default=0, help='Which GPU(s) to use for training (default: 0)')
     parser.add_argument(
         '-vn', '--vision-network', default='Nature',
         help='name of preset network (default: Nature)'
@@ -166,6 +171,11 @@ if __name__ == '__main__':
     parser.add_argument(
         '--debug', type=parse_bool, nargs='?', const=True, default=False,
         help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
+    )
+    parser.add_argument(
+        '--num-grads-to-drop', type=int, default=0,
+        help='The number of gradient receives to drop in a round. https://arxiv.org/abs/1604.00981 recommends dropping'
+             '10% of gradients for maximum speed (default: 0)'
     )
     args = parser.parse_args()
 

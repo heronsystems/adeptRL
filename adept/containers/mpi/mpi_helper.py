@@ -51,13 +51,13 @@ class MPIHelper:
         self.stop_command = self.mpi_comm.irecv(8, source=0, tag=MpiMessages.STOP)
 
     def send(self, list_of_tensors, timestep=0):
+        host_info = None
         # wait for ack of last send
-        global_step = 0
         # pull the tensors before waiting
         sends = [x.detach().cpu().numpy() for x in list_of_tensors] + [np.asarray(timestep)]
         if self.mpi_send_ack is not None:
             st = time.time()
-            global_step = self.mpi_send_ack.wait()
+            host_info = self.mpi_send_ack.wait()  # commonly a tuple with (global_step, others...)
             et = time.time()
             if et - st > self.send_warning_time:
                 print('{} had to wait {} seconds for host to accept send'.format(self.mpi_rank, et-st))
@@ -68,7 +68,7 @@ class MPIHelper:
 
         # add a ack recieve to the queue
         self.mpi_send_ack = self.mpi_comm.irecv(source=self.host_rank, tag=MpiMessages.SEND_ACK)
-        return global_step
+        return host_info
 
     def receive_parameters(self):
         ret = self.variable_receiver.recieve()

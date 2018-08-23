@@ -26,19 +26,24 @@ from collections import OrderedDict
 
 
 class ToweredHost(AppliesGrads):
-    def __init__(self, mpi_comm, num_grads_before_combine, network, make_optimizer, logger, summary_steps=100):
+    def __init__(self, mpi_comm, num_grads_to_drop, network, make_optimizer, saver, save_interval, logger,
+                 summary_steps=100):
         self._optimizer = make_optimizer(network.parameters())
 
         self.network = network
         self.logger = logger
+        self.saver = saver
+        self.save_interval = save_interval
+        self._next_save_step = save_interval
         self.global_step = 0
         self.start_time = None
         self.comm = mpi_comm
         self.sent_parameters_count = 0
         self.recieved_grads_count = 0
         self.summary_steps = summary_steps
-        self.num_grads_before_combine = num_grads_before_combine
-        self.gradient_flattener = ArrayFlattener([tuple(x.shape) for x in self.network.parameters()] + [(1)])  # +1 for timestep
+        self.num_grads_to_drop = num_grads_to_drop
+        self.gradient_flattener = ArrayFlattener(
+            [tuple(x.shape) for x in self.network.parameters()] + [(1)])  # +1 for timestep
         self.variable_flattener = ArrayFlattener([tuple(x.shape) for x in self.network.parameters()])
 
         # workers will send name and shapes of gradients just check the order is the same
@@ -58,7 +63,8 @@ class ToweredHost(AppliesGrads):
 
         # setup gradient buffers
         size = self.comm.Get_size()
-        grad_buffers = [np.empty(self.gradient_flattener.total_size, np.float32) for i in range(self.comm.Get_size() - 1)]
+        grad_buffers = [np.empty(self.gradient_flattener.total_size, np.float32) for i in
+                        range(self.comm.Get_size() - 1)]
         received_grads = []
         timesteps = [0] * (self.comm.Get_size() - 1)
         reqs = []
@@ -68,43 +74,91 @@ class ToweredHost(AppliesGrads):
         # vars to make sure python doesn't gc
         batch_acks = [None] * (size - 1)
         self.start_time = time.time()
+        workers_to_drop = set()
+        workers_in_this_batch = []
+        num_grads_to_keep = (size - 1) - self.num_grads_to_drop
+
+        # vars for the next step to save/req buffers at
+        save_step = -1
+        send_request_for_buffers_step = -1
         while self.global_step < max_steps:
-            status = mpi.Status()
-            mpi.Request.Waitany(reqs, status)
-            worker = status.source
+            # if pytorch model has buffers, all workers need to send to host, and host has to wait for all
+            send_request_for_buffers = False
+            # if should save, send out a request for pytorch buffers if they exist
+            if self.should_save():
+                save_step = self.sent_parameters_count + 1
+                has_buffers = len(list(self.network._all_buffers())) > 0
+                if has_buffers:
+                    send_request_for_buffers = True
+                    # this has to happen on the next step, since workers will recieve the request the next time they check for ack
+                    send_request_for_buffers_step = self.sent_parameters_count + 1
 
-            # gradient process
-            gradients = self.gradient_flattener.unflatten(grad_buffers[worker - 1])
-            received_grads.append(gradients[:-1])
-            timesteps[worker - 1] = gradients[-1][0]  # just want a single value
-            self.global_step = sum(timesteps)
+            # get batch workers
+            while len(workers_in_this_batch) < num_grads_to_keep:
+                status = mpi.Status()
+                mpi.Request.Waitany(reqs, status)
+                worker = status.source
 
-            # upon recieving batch, send ack
-            batch_acks[worker - 1] = self.comm.isend(self.global_step, dest=worker, tag=MpiMessages.SEND_ACK)
+                # grab timestep and send ack / setup new recv
+                timesteps[worker - 1] = grad_buffers[worker - 1][-1]  # just want a single value
+                self.global_step = sum(timesteps)
+                # upon recieving batch, send ack
+                batch_acks[worker - 1] = self.comm.isend((self.global_step, send_request_for_buffers), dest=worker,
+                                                         tag=MpiMessages.SEND_ACK)
+                # setup new receive
+                reqs[worker - 1] = self.comm.Irecv(grad_buffers[worker - 1], source=worker, tag=MpiMessages.SEND)
 
-            if len(received_grads) >= self.num_grads_before_combine:
-                combined_grads = self.combine_gradients(received_grads)
-                self.write_gradient_summaries(combined_grads, self.global_step)
-                self.apply_gradients(combined_grads)
-                new_variables_flat = self.variable_flattener.flatten(self.get_parameters_numpy(), buffer=variable_buffer)
-                self.comm.Ibcast(new_variables_flat, root=0)
-                self.sent_parameters_count += 1
-                received_grads = []
+                # if worker was dropped last round
+                if worker in workers_to_drop:
+                    # remove from drop list
+                    workers_to_drop.remove(worker)
+                else:  # not dropped grads are good
+                    # gradient process
+                    gradients = self.gradient_flattener.unflatten(grad_buffers[worker - 1])
+                    received_grads.append(gradients[:-1])
+                    workers_in_this_batch.append(worker)
 
-                if self.sent_parameters_count % self.summary_steps == 0:
-                    self.logger.info('train_frames: {} avg_train_fps: {}'.format(
-                        self.global_step,
-                        (self.global_step - initial_step_count) / (time.time() - self.start_time)
-                    ))
+            # any workers not in this batch are dropped next round
+            for i in range(1, size):
+                if i not in workers_in_this_batch:
+                    workers_to_drop.add(i)
 
-            # setup new receive
-            reqs[worker - 1] = self.comm.Irecv(grad_buffers[worker - 1], source=worker, tag=MpiMessages.SEND)
+            # if request for buffers was sent last step, workers will wait on Reduce to host
+            if send_request_for_buffers_step == self.sent_parameters_count:
+                # TODO: this is probably faster if all buffers are flattened
+                for x in self.network._all_buffers():
+                    cpux = x.numpy()  # technically, this shares the numpy buffer so the copy below isn't needed
+                    self.comm.Reduce(np.zeros_like(cpux), cpux, op=mpi.SUM, root=0)
+                    # average workers buffers
+                    x.copy_(torch.from_numpy(cpux)).div_(size - 1)
+
+            # batch ready
+            combined_grads = self.combine_gradients(received_grads)
+            self.write_gradient_summaries(combined_grads, self.global_step)
+            self.apply_gradients(combined_grads)
+            new_variables_flat = self.variable_flattener.flatten(self.get_parameters_numpy(),
+                                                                 buffer=variable_buffer)
+            self.comm.Ibcast(new_variables_flat, root=0)
+
+            # this has to be before incrementing the sent param count
+            if save_step == self.sent_parameters_count:
+                self.saver.save_state_dicts(self.network, int(self.global_step), optimizer=self.optimizer)
+
+            self.sent_parameters_count += 1
+            received_grads = []
+            workers_in_this_batch = []
+
+            if self.sent_parameters_count % self.summary_steps == 0:
+                self.logger.info('train_frames: {} avg_train_fps: {}'.format(
+                    self.global_step,
+                    (self.global_step - initial_step_count) / (time.time() - self.start_time)
+                ))
 
         # cleanup
         print('Host sending stop')
         for i in range(1, size):
             self.comm.isend(True, dest=i, tag=MpiMessages.STOP)
-        print('Host waiting on recieving stops')
+        print('Host waiting on receiving stops')
         stops = [self.comm.irecv(source=i, tag=MpiMessages.STOPPED) for i in range(1, size)]
         threads_stoped = 0
         wait = [0] * (size - 1)
@@ -155,19 +209,25 @@ class ToweredHost(AppliesGrads):
 
         self.optimizer.step()
 
+    def should_save(self):
+        if self.global_step > self._next_save_step:
+            self._next_save_step += self.save_interval
+            return True
+        return False
+
 
 class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards, MPIProc):
     def __init__(
-        self,
-        agent,
-        environment,
-        nb_env,
-        logger,
-        summary_writer,
-        summary_frequency,
-        max_parameter_skip=0,
-        gradient_warning_time=0.1,
-        variable_warning_time=0.1
+            self,
+            agent,
+            environment,
+            nb_env,
+            logger,
+            summary_writer,
+            summary_frequency,
+            max_parameter_skip=0,
+            gradient_warning_time=0.1,
+            variable_warning_time=0.1
     ):
         self._agent = agent
         self._environment = environment
@@ -180,6 +240,7 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
         for i, x in enumerate(self.network.parameters()):
             send_shapes[str(i)] = tuple(x.shape)
         recv_shapes = [tuple(x.shape) for x in self.network.parameters()]
+        self._mpi_comm = mpi.COMM_WORLD
         self.mpi_helper = MPIHelper(
             send_shapes, recv_shapes, 0, max_parameter_skip, gradient_warning_time, variable_warning_time
         )
@@ -249,7 +310,16 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
             Submits gradients to a MPI host
         """
         gradients = self._get_gradients()
-        self.global_step = self.mpi_helper.send(gradients, self.local_step_count)
+        host_info = self.mpi_helper.send(gradients, self.local_step_count)
+        if host_info is not None:
+            self.global_step, should_send_buffers = host_info
+        else:
+            self.global_step, should_send_buffers = 0, False
+        # host decides when it wants pytorch buffers, if true reduce buffers to host
+        if should_send_buffers:
+            for x in self.network._all_buffers():
+                cpux = x.cpu().numpy()
+                self._mpi_comm.Reduce(cpux, None, op=mpi.SUM, root=0)
 
     def receive(self):
         """

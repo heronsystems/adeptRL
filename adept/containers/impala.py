@@ -412,7 +412,8 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         """
             Submits rollout to a MPI host
         """
-        self.global_step = self.mpi_helper.send(rollout, self.local_step_count)
+        host_info = self.mpi_helper.send(rollout, self.local_step_count)
+        self.global_step = host_info if host_info is not None else 0
 
     def receive(self):
         """
