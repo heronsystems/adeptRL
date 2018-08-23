@@ -46,7 +46,7 @@ def main(args):
     env = SubProcEnv([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir)], Engines.SC2)
 
     # construct network
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args)
+    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
     network = make_network(
         env.observation_space,
         network_head_shapes,
