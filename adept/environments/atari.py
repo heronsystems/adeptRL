@@ -94,7 +94,7 @@ class AdeptGymEnv(BaseEnvironment):
         self.gym_env.close()
 
     def __getattr__(self, item):
-        return self.gym_env.__dict__[item]
+        return getattr(self.gym_env, item)
 
     def _wrap_observation(self, observation):
         space = self._gym_obs_space
