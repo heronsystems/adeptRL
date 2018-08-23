@@ -132,8 +132,8 @@ def add_base_args(parser):
         help='discount factor for rewards (default: 0.99)'
     )
     parser.add_argument(
-        '-s', '--seed', type=int, default=1, metavar='S',
-        help='random seed (default: 1)'
+        '-s', '--seed', type=int, default=0, metavar='S',
+        help='random seed (default: 0)'
     )
     parser.add_argument(
         '-n', '--nb-env', type=int, default=32, metavar='N',
