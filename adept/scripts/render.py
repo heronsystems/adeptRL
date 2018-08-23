@@ -34,10 +34,12 @@ def main(args):
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
     train_args.nb_env = 1
-    train_args.seed = 2
 
     # construct env
-    env = atari_from_args(train_args, train_args.seed, subprocess=False)
+    def env_fn(seed):
+        return atari_from_args(train_args, seed, subprocess=False)
+    env = env_fn(args.seed)
+    env.close()
 
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
@@ -54,7 +56,7 @@ def main(args):
     agent = make_agent(network, device, env.engine, env.gpu_preprocessor, train_args)
 
     # create a rendering container
-    renderer = Renderer(agent, env, device)
+    renderer = Renderer(agent, env_fn, device, args.seed)
     try:
         renderer.run()
     finally:
@@ -72,6 +74,13 @@ if __name__ == '__main__':
     parser.add_argument(
         '--args-file',
         help='path to args file (.../logs/<env-id>/<log-id>/args.json)'
+    )
+    parser.add_argument(
+        '-s', '--seed', type=int, default=32, metavar='S',
+        help='random seed (default: 32)'
+    )
+    parser.add_argument(
+        '--render'
     )
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)')
     args = parser.parse_args()

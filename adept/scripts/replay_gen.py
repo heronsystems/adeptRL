@@ -22,9 +22,9 @@ import torch
 from absl import flags
 
 from adept.containers import ReplayGenerator
-from adept.environments import SubProcEnv, Engines
+from adept.environments import DummyVecEnv, Engines
 from adept.environments.sc2 import make_sc2_env
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
 from adept.utils.util import dotdict
 from adept.utils.logging import print_ascii_logo
 
@@ -43,7 +43,10 @@ def main(args):
 
     # construct env
     replay_dir = os.path.split(args.network_file)[0]
-    env = SubProcEnv([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir)], Engines.SC2)
+    def env_fn(seed):
+        return DummyVecEnv([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir, render=args.render)], Engines.SC2)
+    env = env_fn(args.seed)
+    env.close()
 
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
@@ -62,7 +65,7 @@ def main(args):
 
     # create a rendering container
     # TODO: could terminate after a configurable number of replays instead of running indefinitely
-    renderer = ReplayGenerator(agent, env, device)
+    renderer = ReplayGenerator(agent, env_fn, device, args.seed)
     try:
         renderer.run()
     finally:
@@ -80,6 +83,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--args-file',
         help='path to args file (.../logs/<env-id>/<log-id>/args.json)'
+    )
+    parser.add_argument(
+        '-s', '--seed', type=int, default=32, metavar='S',
+        help='random seed (default: 32)'
+    )
+    parser.add_argument(
+        '-r', '--render', type=parse_bool, nargs='?', const=True, default=False,
+        help='render the environment during eval. (default: False)'
     )
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
     args = parser.parse_args()

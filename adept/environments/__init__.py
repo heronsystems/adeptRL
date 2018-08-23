@@ -20,7 +20,7 @@ from ._subproc_env import SubProcEnv, DummyVecEnv
 
 
 class Engines(IntEnum):
-    ATARI = 0
+    GYM = 0
     DOOM = 1
     SC2 = 2
 

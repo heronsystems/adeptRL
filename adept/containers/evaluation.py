@@ -15,15 +15,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import abc
+
+from adept.environments import Engines
 from ._base import HasAgent, CountsRewards
 import numpy as np
 import time
 
 
 class EvalBase(HasAgent, abc.ABC):
-    def __init__(self, agent, env, device):
+    def __init__(self, agent, env_fn, device, seed):
         self._agent = agent
-        self._environment = env
+        self._environment = env_fn(seed)
         self._device = device
 
     @property
@@ -33,6 +35,10 @@ class EvalBase(HasAgent, abc.ABC):
     @property
     def environment(self):
         return self._environment
+
+    @environment.setter
+    def environment(self, new_env):
+        self._environment = new_env
 
     @property
     def device(self):
@@ -68,26 +74,35 @@ class Renderer(EvalBase):
 
 
 class Evaluation(EvalBase, CountsRewards):
-    def __init__(self, agent, env, device, nb_env):
-        super().__init__(agent, env, device)
-        self._nb_env = nb_env
+    def __init__(self, agent, env_fn, device, seed, render):
+        super().__init__(agent, env_fn, device, seed)
         self._episode_count = 0
+        self.seed = seed
+        self.env_fn = env_fn
+        self.render = render
 
     @property
     def nb_env(self):
-        return self._nb_env
+        return 1
 
     def run(self, nb_episode):
         next_obs = self.environment.reset()
         results = []
         while len(results) < nb_episode:
             obs = next_obs
+            if self.render and self.environment.engine == Engines.GYM:
+                self.environment.render()
             actions = self.agent.act_eval(obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
 
             self.agent.reset_internals(terminals)
             episode_rewards, _ = self.update_buffers(rewards, terminals, infos)
             for reward in episode_rewards:
+                # remake and reseed env when episode finishes
+                self.environment.close()
+                self.seed += 1
+                self.environment = self.env_fn(self.seed)
+                next_obs = self.environment.reset()
                 self._episode_count += 1
                 results.append(reward)
                 if len(results) == nb_episode:

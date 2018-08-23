@@ -26,7 +26,7 @@ from absl import flags
 
 from adept.containers import Evaluation
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes
+from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, parse_bool
 from adept.utils.util import dotdict
 
 # hack to use argparse for SC2
@@ -53,10 +53,13 @@ def main(args):
 
     with open(os.path.join(args.log_id_dir, 'args.json'), 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.nb_env = args.nb_env
+    train_args.nb_env = 1
 
     # construct env
-    env = make_env(train_args, args.seed)
+    def env_fn(seed):
+        return make_env(train_args, seed, subprocess=False, render=args.render)
+    env = env_fn(args.seed)
+    env.close()
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
@@ -79,10 +82,10 @@ def main(args):
             agent = make_agent(network, device, env.engine, env.gpu_preprocessor, train_args)
 
             # container
-            container = Evaluation(agent, env, device, args.nb_env)
+            container = Evaluation(agent, env_fn, device, args.seed, args.render)
 
             # Run the container
-            mean_reward, std_dev = container.run(args.nb_env)
+            mean_reward, std_dev = container.run(args.nb_episode)
 
             if mean_reward >= best_mean:
                 best_mean = mean_reward
@@ -116,10 +119,17 @@ if __name__ == '__main__':
         help='path to args file (.../logs/<env-id>/<log-id>)'
     )
     parser.add_argument(
-        '--nb-env', type=int, default=30,
-        help='number of environments to run in parallel (default: 30)'
+        '--nb-episode', type=int, default=30,
+        help='number of episodes to evaluate on. (default: 30)'
     )
-    parser.add_argument('-s', '--seed', type=int, default=32)
+    parser.add_argument(
+        '-s', '--seed', type=int, default=32, metavar='S',
+        help='random seed (default: 32)'
+    )
+    parser.add_argument(
+        '-r', '--render', type=parse_bool, nargs='?', const=True, default=False,
+        help='render the environment during eval. (default: False)'
+    )
     parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)')
     args = parser.parse_args()
     main(args)

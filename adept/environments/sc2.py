@@ -35,14 +35,14 @@ from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import BaseOp, CastToFloat, FlattenSpace
 
 
-def make_sc2_env(env_id, seed, replay_dir=None):
+def make_sc2_env(env_id, seed, replay_dir=None, render=False):
     def _f():
-        env = sc2_feature_env(env_id, seed, replay_dir)
+        env = sc2_feature_env(env_id, seed, replay_dir, render)
         return env
     return _f
 
 
-def sc2_feature_env(env_id, seed, replay_dir):
+def sc2_feature_env(env_id, seed, replay_dir, render):
     agent_interface_format = parse_agent_interface_format(
         feature_screen=84,
         feature_minimap=84,
@@ -56,7 +56,8 @@ def sc2_feature_env(env_id, seed, replay_dir):
         agent_interface_format=agent_interface_format,
         random_seed=seed,
         save_replay_episodes=1 if replay_dir is not None else 0,
-        replay_dir=replay_dir
+        replay_dir=replay_dir,
+        visualize=render
     )
     env = AdeptSC2Env(env)
     return env

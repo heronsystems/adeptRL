@@ -249,7 +249,13 @@ class DummyVecEnv(BaseEnvironment):
                 ob = self.envs[e].reset()
             obs.append(ob)
         obs = listd_to_dlist(obs)
-        self.buf_obs = {k: torch.stack(v) for k, v in dummy_handle_ob(obs).items()}
+        new_obs = {}
+        for k, v in dummy_handle_ob(obs).items():
+            if self._is_tensor_key(k):
+                new_obs[k] = torch.stack(v)
+            else:
+                new_obs[k] = v
+        self.buf_obs = new_obs
 
         return self.buf_obs, self.buf_rews, self.buf_dones, self.buf_infos
 
@@ -259,7 +265,13 @@ class DummyVecEnv(BaseEnvironment):
             ob = self.envs[e].reset()
             obs.append(ob)
         obs = listd_to_dlist(obs)
-        self.buf_obs = {k: torch.stack(v) for k, v in dummy_handle_ob(obs).items()}
+        new_obs = {}
+        for k, v in dummy_handle_ob(obs).items():
+            if self._is_tensor_key(k):
+                new_obs[k] = torch.stack(v)
+            else:
+                new_obs[k] = v
+        self.buf_obs = new_obs
         return self.buf_obs
 
     def close(self):
@@ -267,3 +279,7 @@ class DummyVecEnv(BaseEnvironment):
 
     def render(self, mode='human'):
         return [e.render(mode=mode) for e in self.envs]
+
+    def _is_tensor_key(self, key):
+        ebn = self.cpu_preprocessor.observation_space.entries_by_name
+        return None not in ebn[key].shape

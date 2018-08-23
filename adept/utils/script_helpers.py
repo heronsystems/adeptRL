@@ -30,16 +30,19 @@ except ImportError:
     print('SC2 Environment not detected')
 
 
-def make_env(args, seed, subprocess=True):
+def make_env(args, seed, subprocess=True, render=False):
     if args.env_id in SC2_ENVS:
-        envs = sc2_from_args(args, seed)
+        envs = sc2_from_args(args, seed, subprocess, render)
     else:
         envs = atari_from_args(args, seed, subprocess)
     return envs
 
 
-def sc2_from_args(args, seed):
-    return SubProcEnv([make_sc2_env(args.env_id, seed + i) for i in range(args.nb_env)], Engines.SC2)
+def sc2_from_args(args, seed, subprocess=True, render=False):
+    if subprocess:
+        return SubProcEnv([make_sc2_env(args.env_id, seed + i) for i in range(args.nb_env)], Engines.SC2)
+    else:
+        return DummyVecEnv([make_sc2_env(args.env_id, seed + i, render=render) for i in range(args.nb_env)], Engines.SC2)
 
 
 def atari_from_args(args, seed, subprocess=True):
@@ -56,7 +59,7 @@ def atari_from_args(args, seed, subprocess=True):
                 do_frame_stack,
                 seed + i
             ) for i in range(args.nb_env)
-        ], Engines.ATARI
+        ], Engines.GYM
     )
     return envs
 
