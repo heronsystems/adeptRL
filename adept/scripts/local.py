@@ -19,8 +19,9 @@ import os
 
 import torch
 from absl import flags
+from copy import deepcopy
 
-from adept.containers import Local
+from adept.containers import Local, EvaluationThread
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, ModelSaver
 from tensorboardX import SummaryWriter
@@ -76,6 +77,30 @@ def main(args):
         saver
     )
 
+    # if running an eval thread create eval env, agent, & logger
+    if args.nb_eval_env > 0:
+        # replace args num envs & seed
+        eval_args = deepcopy(args)
+        eval_args.seed = args.seed + args.nb_env
+
+        # env and agent
+        eval_args.nb_env = args.nb_eval_env
+        eval_env = make_env(args, eval_args.seed)
+        eval_agent = make_agent(network, device, eval_env.engine, eval_env.gpu_preprocessor, eval_args)
+
+        # logger
+        eval_logger = make_logger('LocalEval', os.path.join(log_id_dir, 'eval_log.txt'))
+
+        evaluation_container = EvaluationThread(
+            eval_agent,
+            eval_env,
+            args.nb_eval_env,
+            eval_logger,
+            summary_writer,
+            args.eval_step_rate
+        )
+        evaluation_container.start()
+
     # Run the container
     if args.profile:
         try:
@@ -91,6 +116,9 @@ def main(args):
         container.run(args.max_train_steps)
     env.close()
 
+    if args.nb_eval_env > 0:
+        evaluation_container.stop()
+        eval_env.close()
 
 if __name__ == '__main__':
     import argparse
@@ -112,6 +140,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--agent', default='ActorCritic',
         help='name of preset agent (default: ActorCritic)'
+    )
+    parser.add_argument(
+        '--nb-eval-env', default=2, type=int,
+        help='Number of eval environments to run [in a separate thread] each with a different seed. (default: 2)'
+    )
+    parser.add_argument(
+        '--eval-step-rate', default=100, type=int,
+        help='Number of eval steps allowed to run per second decreasing this amount can improve training speed. (default: 100)'
     )
     parser.add_argument(
         '--profile', type=parse_bool, nargs='?', const=True, default=False,

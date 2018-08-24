@@ -80,6 +80,10 @@ class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
     def saver(self):
         return self._saver
 
+    @property
+    def summary_name(self):
+        return 'reward/train'
+
     def run(self, max_steps=float('inf'), initial_count=0):
         self.local_step_count = initial_count
         next_obs = self.environment.reset()

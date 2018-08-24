@@ -101,10 +101,14 @@ class LogsAndSummarizesRewards(LogsRewards, metaclass=abc.ABCMeta):
     def summary_writer(self):
         raise NotImplementedError
 
+    @property
+    def summary_name(self):
+        return 'reward'
+
     def write_reward_summaries(self, terminal_rewards, step_count):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
-            self.summary_writer.add_scalar('reward', ep_reward, step_count)
+            self.summary_writer.add_scalar(self.summary_name, ep_reward, step_count)
         return terminal_rewards
 
 
