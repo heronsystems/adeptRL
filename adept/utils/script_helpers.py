@@ -46,7 +46,7 @@ def sc2_from_args(args, seed, subprocess=True, render=False):
 
 
 def atari_from_args(args, seed, subprocess=True):
-    do_frame_stack = args.network_body == 'Linear'
+    do_frame_stack = 'Linear' in args.network_body
 
     env_wrapper_class = SubProcEnv if subprocess else DummyVecEnv
     envs = env_wrapper_class(

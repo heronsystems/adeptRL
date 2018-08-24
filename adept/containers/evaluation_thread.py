@@ -21,13 +21,16 @@ from time import time, sleep
 
 
 class EvaluationThread(HasAgent, LogsAndSummarizesRewards):
-    def __init__(self, agent, env, nb_env, logger, summary_writer, step_rate_limit):
+    def __init__(self, training_network, agent, env, nb_env, logger, summary_writer, step_rate_limit,
+                 override_step_count_fn=None):
+        self._training_network = training_network
         self._agent = agent
         self._environment = env
         self._nb_env = nb_env
         self._logger = logger
         self._summary_writer = summary_writer
         self._step_rate_limit = step_rate_limit
+        self._override_step_count_fn = override_step_count_fn
         self._thread = Thread(target=self._run)
         self._should_stop = False
 
@@ -42,7 +45,8 @@ class EvaluationThread(HasAgent, LogsAndSummarizesRewards):
         next_obs = self.environment.reset()
         self.start_time = time()
         while not self._should_stop:
-            sleep(1 / self._step_rate_limit)
+            if self._step_rate_limit > 0:
+                sleep(1 / self._step_rate_limit)
             obs = next_obs
             actions = self.agent.act_eval(obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
@@ -52,6 +56,9 @@ class EvaluationThread(HasAgent, LogsAndSummarizesRewards):
             terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
             self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count)
             self.write_reward_summaries(terminal_rewards, self.local_step_count)
+
+            if np.any(terminals) and np.any(infos):
+                self.network.load_state_dict(self._training_network.state_dict())
 
     def log_episode_results(self, terminal_rewards, terminal_infos, step_count, initial_step_count=0):
         if terminal_rewards:
@@ -92,3 +99,14 @@ class EvaluationThread(HasAgent, LogsAndSummarizesRewards):
     @property
     def summary_name(self):
         return 'reward/eval'
+
+    @property
+    def local_step_count(self):
+        if self._override_step_count_fn is not None:
+            return self._override_step_count_fn()
+        else:
+            return self._local_step_count
+
+    @local_step_count.setter
+    def local_step_count(self, step_count):
+        self._local_step_count = step_count
