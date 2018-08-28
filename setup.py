@@ -3,13 +3,21 @@ from adept.globals import VERSION
 
 # https://github.com/kennethreitz/setup.py/blob/master/setup.py
 
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+
 setup(
     name='adept',
 
     version=VERSION,
-    description='Reinforcement Learning Framework',
-    url='https://github.com/heronsystems/adeptRL',
     author='heron',
+    author_email='adept@heronsystems.com',
+    description='Reinforcement Learning Framework',
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url='https://github.com/heronsystems/adeptRL',
     license='GNU',
     python_requires='>=3.5.0',
     packages=find_packages(),
