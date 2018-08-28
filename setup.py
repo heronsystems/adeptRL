@@ -9,7 +9,7 @@ with open("README.md", "r") as fh:
 
 
 setup(
-    name='adept',
+    name='adeptRL',
 
     version=VERSION,
     author='heron',

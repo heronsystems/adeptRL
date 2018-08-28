@@ -38,7 +38,7 @@ We designed this library to be flexible and extensible. Plugging in novel resear
 
 ```
 # Remove mpi, sc2, profiler if you don't plan on using these features:
-pip install adept[mpi,sc2,profiler]
+pip install adeptRL[mpi,sc2,profiler]
 ```
 
 ## Performance
