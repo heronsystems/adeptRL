@@ -9,3 +9,4 @@ trained_models/
 *egg-info
 dist/
 archive/
+build/
