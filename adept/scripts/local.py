@@ -19,10 +19,11 @@ import os
 
 import torch
 from absl import flags
+from copy import deepcopy
 
-from adept.containers import Local
+from adept.containers import Local, EvaluationThread
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
-from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, ModelSaver
+from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
 from tensorboardX import SummaryWriter
 
 # hack to use argparse for SC2
@@ -39,7 +40,7 @@ def main(args):
     os.makedirs(log_id_dir)
     logger = make_logger('Local', os.path.join(log_id_dir, 'train_log.txt'))
     summary_writer = SummaryWriter(log_id_dir)
-    saver = ModelSaver(args.nb_top_model, log_id_dir)
+    saver = SimpleModelSaver(log_id_dir)
 
     log_args(logger, args)
     write_args_file(log_id_dir, args)
@@ -76,6 +77,34 @@ def main(args):
         saver
     )
 
+    # if running an eval thread create eval env, agent, & logger
+    if args.nb_eval_env > 0:
+        # replace args num envs & seed
+        eval_args = deepcopy(args)
+        eval_args.seed = args.seed + args.nb_env
+
+        # env and agent
+        eval_args.nb_env = args.nb_eval_env
+        eval_env = make_env(eval_args, eval_args.seed)
+        eval_net = make_network(eval_env.observation_space, network_head_shapes, eval_args)
+        eval_agent = make_agent(eval_net, device, eval_env.engine, eval_env.gpu_preprocessor, eval_args)
+        eval_net.load_state_dict(network.state_dict())
+
+        # logger
+        eval_logger = make_logger('LocalEval', os.path.join(log_id_dir, 'eval_log.txt'))
+
+        evaluation_container = EvaluationThread(
+            network,
+            eval_agent,
+            eval_env,
+            args.nb_eval_env,
+            eval_logger,
+            summary_writer,
+            args.eval_step_rate,
+            override_step_count_fn=lambda: container.local_step_count  # wire local containers step count into eval
+        )
+        evaluation_container.start()
+
     # Run the container
     if args.profile:
         try:
@@ -90,6 +119,10 @@ def main(args):
     else:
         container.run(args.max_train_steps)
     env.close()
+
+    if args.nb_eval_env > 0:
+        evaluation_container.stop()
+        eval_env.close()
 
 
 if __name__ == '__main__':
@@ -112,6 +145,15 @@ if __name__ == '__main__':
     parser.add_argument(
         '--agent', default='ActorCritic',
         help='name of preset agent (default: ActorCritic)'
+    )
+    parser.add_argument(
+        '--nb-eval-env', default=1, type=int,
+        help='Number of eval environments to run [in a separate thread] each with a different seed. '
+             'Creates a copy of the network. Disable by setting to 0. (default: 1)'
+    )
+    parser.add_argument(
+        '--eval-step-rate', default=0, type=int,
+        help='Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 to disable (default: 0)'
     )
     parser.add_argument(
         '--profile', type=parse_bool, nargs='?', const=True, default=False,

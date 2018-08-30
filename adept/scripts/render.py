@@ -48,7 +48,7 @@ def main(args):
         network_head_shapes,
         train_args
     )
-    network.load_state_dict(torch.load(args.network_file))
+    network.load_state_dict(torch.load(args.network_file, map_location=lambda storage, loc: storage))
 
     # create an agent (add act_eval method)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)

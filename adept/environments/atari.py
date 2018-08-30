@@ -24,6 +24,7 @@ from ._wrappers import (
     NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv
 )
 from ._base import BaseEnvironment, Spaces
+import numpy as np
 
 
 def make_atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed):

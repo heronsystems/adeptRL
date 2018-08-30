@@ -76,7 +76,7 @@ def main(args):
         selected_model = None
         for network_file in network_files:
             # load new network
-            network.load_state_dict(torch.load(network_file))
+            network.load_state_dict(torch.load(network_file, map_location=lambda storage, loc: storage))
 
             # construct agent
             agent = make_agent(network, device, env.engine, env.gpu_preprocessor, train_args)

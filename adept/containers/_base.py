@@ -101,10 +101,14 @@ class LogsAndSummarizesRewards(LogsRewards, metaclass=abc.ABCMeta):
     def summary_writer(self):
         raise NotImplementedError
 
+    @property
+    def summary_name(self):
+        return 'reward'
+
     def write_reward_summaries(self, terminal_rewards, step_count):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
-            self.summary_writer.add_scalar('reward', ep_reward, step_count)
+            self.summary_writer.add_scalar(self.summary_name, ep_reward, step_count)
         return terminal_rewards
 
 
@@ -157,6 +161,9 @@ class WritesSummaries(abc.ABC):
 
 
 class SavesModels(abc.ABC):
+    def __init__(self):
+        self.__next_save_step = 0
+
     @property
     @abc.abstractmethod
     def epoch_len(self):
@@ -177,24 +184,14 @@ class SavesModels(abc.ABC):
     def saver(self):
         raise NotImplementedError
 
-    def update_and_save_model(self, terminal_rewards, step_count, delta_step_count):
+    def possible_save_model(self, step_count):
         """
-        :param terminal_rewards: list of episode rewards for all the envs that hit a terminal state
         :param step_count: current step count to check if epoch has been crossed
-        :param delta_step_count: number of steps taken since last update
         :return:
         """
-        # update buffer if new high score achieved
-        if terminal_rewards:
-            ep_reward = np.mean(terminal_rewards)
-            self.saver.append_if_better(ep_reward, self.network, self.optimizer)
-
-        # save models if we cross save freq threshold
-        for i in range(delta_step_count):
-            step_number = step_count + (i + 1)
-            if step_number % self.epoch_len == 0:
-                self.saver.write_state_dicts(step_number)
-        return terminal_rewards
+        if step_count >= self.__next_save_step:
+            self.saver.save_state_dicts(self.network, int(step_count), optimizer=self.optimizer)
+            self.__next_save_step += self.epoch_len
 
 
 class HasAgent(abc.ABC):
