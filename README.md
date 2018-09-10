@@ -44,16 +44,14 @@ pip install adeptRL[mpi,sc2,profiler]
 ## Performance
 * Used to win a [Doom competition](http://vizdoom.cs.put.edu.pl/competition-cig-2018/competition-results) (Ben Bell / Marv2in)
 * ~2500 training frames per second single-GPU performance on a Dell XPS 15" laptop (Geforce 1050Ti)  
-+-----------------------------+-----------------------+---------------------+
 |                             | ResNet18V2LSTM (ours) | IMPALA deep (paper) |
-+-----------------------------+-----------------------+---------------------+
+|-----------------------------|-----------------------|---------------------|
 | BeamRiderNoFrameskip-v4     |             17058.533 |            32463.47 |
 | BreakoutNoFrameskip-v4      |               546.467 |              787.34 |
 | PongNoFrameskip-v4          |                    21 |               20.98 |
 | QbertNoFrameskip-v4         |                4497.5 |           351200.12 |
 | SeaquestNoFrameskip-v4      |                  8732 |              1753.2 |
 | SpaceInvadersNoFrameskip-v4 |              1159.667 |            43595.78 |
-+-----------------------------+-----------------------+---------------------+
 * 30-episode average calculated every 1M training frames up to 50M training frames, then taking best
 
 ## Examples
