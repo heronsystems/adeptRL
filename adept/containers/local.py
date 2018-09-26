@@ -106,15 +106,17 @@ class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
                 self.learn(next_obs)
 
     def learn(self, next_obs):
-        loss_dict, metric_dict = self.agent.compute_loss(self.exp_cache.read(), next_obs)
-        total_loss = torch.sum(torch.stack(tuple(loss for loss in loss_dict.values())))
+        while not self.agent.epoch_complete:
+            loss_dict, metric_dict = self.agent.compute_loss(self.exp_cache.read(), next_obs)
+            total_loss = torch.sum(torch.stack(tuple(loss for loss in loss_dict.values())))
 
-        self.optimizer.zero_grad()
-        total_loss.backward()
-        self.optimizer.step()
+            self.optimizer.zero_grad()
+            total_loss.backward()
+            self.optimizer.step()
 
+            self.agent.detach_internals()
         self.exp_cache.clear()
-        self.agent.detach_internals()
 
         # write summaries
         self.write_summaries(total_loss, loss_dict, metric_dict, self.local_step_count)
+        self.agent.epoch_complete = False

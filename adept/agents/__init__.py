@@ -15,16 +15,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 from .actor_critic import ActorCritic
+from .actor_critic_ppo import ActorCriticPPO
 from .impala import ActorCriticVtrace
 from ._base import EnvBase
 
 AGENTS = {
     'ActorCritic': ActorCritic,
-    'ActorCriticVtrace': ActorCriticVtrace
+    'ActorCriticPPO': ActorCriticPPO,
+    'ActorCriticVtrace': ActorCriticVtrace,
 }
 AGENT_ARGS = {
     'ActorCritic': lambda args: (
         args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau
+    ),
+    'ActorCriticPPO': lambda args: (
+        args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau, args.ppo_nb_epoch
     ),
     'ActorCriticVtrace': lambda args: (args.nb_env, args.exp_length, args.discount),
 }

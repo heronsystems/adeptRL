@@ -201,6 +201,10 @@ def add_base_args(parser):
         '--exp-length', '--nb-rollout', type=int, default=20,
         help='number of rollouts or size of experience replay'
     )
+    parser.add_argument(
+        '--ppo-nb-epoch', type=int, default=10,
+        help='number of times to learn on a rollout (default: 10)'
+    )
 
     """
     Network Arguments
