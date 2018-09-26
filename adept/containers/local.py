@@ -20,6 +20,16 @@ from time import time
 from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, LogsAndSummarizesRewards
 
 
+class LocalGradientHandler:
+    def __init__(self, optimizer):
+        self.optimizer = optimizer
+
+    def update(self, loss):
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+
 class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards, SavesModels):
     def __init__(
         self,
@@ -106,17 +116,9 @@ class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
                 self.learn(next_obs)
 
     def learn(self, next_obs):
-        while not self.agent.epoch_complete:
-            loss_dict, metric_dict = self.agent.compute_loss(self.exp_cache.read(), next_obs)
-            total_loss = torch.sum(torch.stack(tuple(loss for loss in loss_dict.values())))
-
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
-
-            self.agent.detach_internals()
+        loss_dict, metric_dict = self.agent.compute_loss(self.exp_cache.read(), next_obs, LocalGradientHandler(self.optimizer))
+        total_loss = torch.sum(torch.stack(tuple(loss for loss in loss_dict.values())))
         self.exp_cache.clear()
 
         # write summaries
         self.write_summaries(total_loss, loss_dict, metric_dict, self.local_step_count)
-        self.agent.epoch_complete = False

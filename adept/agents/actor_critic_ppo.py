@@ -28,13 +28,10 @@ class ActorCriticPPO(Agent, EnvBase):
         self.gpu_preprocessor = gpu_preprocessor
 
         self._network = network.to(device)
-        self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['obs', 'actions', 'values', 'log_probs', 'entropies'])
+        self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['obs', 'actions', 'log_probs', 'internals'])
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
         self.network.train()
-        self.epoch_complete = False
-        self.log_probs = None
-        self._cur_epoch = 0
         self.nb_epoch = nb_epoch
 
     @property
@@ -67,7 +64,6 @@ class ActorCriticPPO(Agent, EnvBase):
     def act(self, obs):
         self.network.train()
         results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-        values = results['critic'].squeeze(1)
         logits = {k: v for k, v in results.items() if k != 'critic'}
 
         logits = self.preprocess_logits(logits)
@@ -76,9 +72,8 @@ class ActorCriticPPO(Agent, EnvBase):
         self.exp_cache.write_forward(
             obs=obs,
             actions=actions,
-            values=values,
             log_probs=log_probs,
-            entropies=entropies
+            internals=self.internals
         )
         self.internals = internals
         return actions
@@ -109,73 +104,65 @@ class ActorCriticPPO(Agent, EnvBase):
 
         return actions.squeeze(1).cpu().numpy(), log_probs.squeeze(1), entropies
 
-    def compute_loss(self, rollouts, next_obs):
+    def compute_loss(self, rollouts, next_obs, update_handler):
+        r = rollouts
+        rollout_len = len(r.rewards)
+
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self.network(next_obs_on_device, self.internals)
-            last_values = results['critic'].squeeze(1).data
+            asdf, _ = self.network(next_obs_on_device, self.internals)
+            last_values = asdf['critic'].squeeze(1).data
 
-        r = rollouts
-        policy_loss = 0.
-        value_loss = 0.
+        # calc nsteps
         nstep_returns = last_values
-        gae = torch.zeros_like(nstep_returns)
-
-        rollout_len = len(r.rewards)
-
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
             terminals = r.terminals[i]
-            values = r.values[i]
-            log_probs = r.log_probs[i]
-            entropies = r.entropies[i]
-            obs = r.obs[i]
-            actions = r.actions[i]
 
             nstep_returns = rewards + self.discount * nstep_returns * terminals
-            advantages = nstep_returns.data - values
-            value_loss = value_loss + 0.5 * advantages.pow(2)
+        nstep_returns = torch.cat(list(reversed(nstep_returns))).data
 
-            # Generalized Advantage Estimation
-            if self.gae:
-                if i == rollout_len - 1:
-                    nxt_values = last_values
-                else:
-                    nxt_values = r.values[i + 1]
-                delta_t = rewards + self.discount * nxt_values.data * terminals - values.data
-                gae = gae * self.discount * self.tau * terminals + delta_t
-                advantages = gae
+        for e in range(self.nb_epoch):
+            self.internals = r.internals[0]
+            self.detach_internals()
+            policy_loss = 0.
+            value_loss = 0.
+            gae = torch.zeros_like(nstep_returns)
 
-            # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
-            if self.log_probs is None:
-                self.log_probs = log_probs
-                self.internals = self.epoch_internals
-            else:
-                results, self.internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+            for i in range(rollout_len):
+                old_log_probs = r.log_probs[i]
+                obs = r.obs[i]
+                actions = r.actions[i]
+                # Generalized Advantage Estimation
+                # if self.gae:
+                #     if i == rollout_len - 1:
+                #         nxt_values = last_values
+                #     else:
+                #         nxt_values = r.values[i + 1]
+                #     delta_t = rewards + self.discount * nxt_values.data * terminals - values.data
+                #     gae = gae * self.discount * self.tau * terminals + delta_t
+                #     advantages = gae
+
+                # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
+                results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+                values = results['critic'].squeeze(1)
                 logits = {k: v for k, v in results.items() if k != 'critic'}
                 logits = self.preprocess_logits(logits)
                 prob = F.softmax(logits, dim=1)
-                self.log_probs = F.log_softmax(logits, dim=1)
-                entropies = -(self.log_probs * prob).sum(1)
-                self.log_probs = self.log_probs.gather(1, torch.from_numpy(actions).to(self.log_probs.device).unsqueeze(1))
+                cur_log_probs = F.log_softmax(logits, dim=1)
+                entropies = -(cur_log_probs * prob).sum(1)
+                cur_log_probs = cur_log_probs.gather(1, torch.from_numpy(actions).to(cur_log_probs.device).unsqueeze(1))
+                self.internals = internals
 
-            if log_probs.dim() == 2:
-                # policy_loss = policy_loss - (log_probs * advantages.unsqueeze(1).data + 0.01 * entropies).sum(1)
-                raise NotImplementedError
-            else:
-                # policy_loss = policy_loss - log_probs * advantages.data - 0.01 * entropies
-
-                surrogate_ratio = torch.exp(self.log_probs - log_probs.data)
+                surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data)
                 surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2)
                 policy_loss = policy_loss - torch.min(surrogate_ratio, surrogate_ratio_clipped) * advantages.data - 0.01 * entropies
-
-        policy_loss = torch.mean(policy_loss / rollout_len)
-        value_loss = 0.5 * torch.mean(value_loss / rollout_len)
-        losses = {'value_loss': value_loss, 'policy_loss': policy_loss}
-        metrics = {}
-        self._cur_epoch += 1
-        if self._cur_epoch == self.nb_epoch:
-            self.epoch_complete = True
-            self.epoch_internals = self.internals
+            policy_loss = torch.mean(policy_loss / rollout_len)
+            value_loss = 0.5 * torch.mean(value_loss / rollout_len)
+            losses = {'value_loss': value_loss, 'policy_loss': policy_loss}
+            total_loss = torch.sum(torch.stack(tuple(loss for loss in losses.values())))
+            metrics = {}
+            print('step', e)
+            update_handler.update(total_loss)
         return losses, metrics
