@@ -111,8 +111,8 @@ class ActorCriticPPO(Agent, EnvBase):
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            asdf, _ = self.network(next_obs_on_device, self.internals)
-            last_values = asdf['critic'].squeeze(1).data
+            pred, _ = self.network(next_obs_on_device, self.internals)
+            last_values = pred['critic'].squeeze(1).data
 
         # calc nsteps
         nstep_returns = last_values
@@ -121,7 +121,7 @@ class ActorCriticPPO(Agent, EnvBase):
             terminals = r.terminals[i]
 
             nstep_returns = rewards + self.discount * nstep_returns * terminals
-        nstep_returns = torch.cat(list(reversed(nstep_returns))).data
+        nstep_returns = torch.cat(list(reversed(nstep_returns)))
 
         for e in range(self.nb_epoch):
             self.internals = r.internals[0]
@@ -129,6 +129,8 @@ class ActorCriticPPO(Agent, EnvBase):
             policy_loss = 0.
             value_loss = 0.
             gae = torch.zeros_like(nstep_returns)
+
+            values = []
 
             for i in range(rollout_len):
                 old_log_probs = r.log_probs[i]
@@ -146,7 +148,7 @@ class ActorCriticPPO(Agent, EnvBase):
 
                 # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
                 results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-                values = results['critic'].squeeze(1)
+                values.append(results['critic'].squeeze(1))
                 logits = {k: v for k, v in results.items() if k != 'critic'}
                 logits = self.preprocess_logits(logits)
                 prob = F.softmax(logits, dim=1)
@@ -158,6 +160,13 @@ class ActorCriticPPO(Agent, EnvBase):
                 surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data)
                 surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2)
                 policy_loss = policy_loss - torch.min(surrogate_ratio, surrogate_ratio_clipped) * advantages.data - 0.01 * entropies
+
+            values = torch.cat(values)
+            advantages = nstep_returns.data - values
+            value_loss = (0.5 * advantages.pow(2)).mean()
+
+
+
             policy_loss = torch.mean(policy_loss / rollout_len)
             value_loss = 0.5 * torch.mean(value_loss / rollout_len)
             losses = {'value_loss': value_loss, 'policy_loss': policy_loss}
