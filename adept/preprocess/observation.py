@@ -46,3 +46,8 @@ class ObsPreprocessor:
                     if op.filter(name, rank):
                         obs[name] = op.update_obs(new_obs)
         return obs
+
+    def reset(self):
+        for o in self.ops:
+            o.reset()
+ 

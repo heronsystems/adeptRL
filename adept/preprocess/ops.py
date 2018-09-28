@@ -43,6 +43,9 @@ class BaseOp(abc.ABC):
         else:
             return True
 
+    def reset(self):
+        pass
+    
     @abc.abstractmethod
     def update_space(self, old_space):
         raise NotImplementedError
@@ -137,6 +140,8 @@ class FrameStack(BaseOp):
             if len(self.frames) == self.nb_frame:
                 return torch.cat(list(self.frames), dim=1)
 
+    def reset(self):
+        self.frames = deque([], maxlen=self.nb_frame)
 
 class FlattenSpace(BaseOp):
     def __init__(self, filter_names=set()):
