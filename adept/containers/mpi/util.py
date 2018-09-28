@@ -30,8 +30,8 @@ class MpiMessages(IntEnum):
 class ArrayFlattener:
     def __init__(self, shapes, src_dtype=np.float32, dest_dtype=np.float32):
         self.shapes = shapes
-        self.sizes = [np.prod(x) for x in shapes]
-        self.total_size = np.sum([np.prod(x) for x in self.shapes])
+        self.sizes = [int(np.prod(x))for x in shapes]
+        self.total_size = np.sum([int(np.prod(x)) for x in self.shapes])
         self.src_dtype = src_dtype
         self.dest_dtype = dest_dtype
 
