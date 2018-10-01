@@ -84,13 +84,13 @@ def main(args):
 
     # construct agent
     # host is always the first gpu, workers are distributed evenly across the rest
-    if isinstance(args.gpu_id, list):
+    if len(args.gpu_id) > 1:  # nargs is always a list
         if rank == 0:
             gpu_id = args.gpu_id[0]
         else:
             gpu_id = args.gpu_id[1:][(rank - 1) % len(args.gpu_id[1:])]
     else:
-        gpu_id = args.gpu_id
+        gpu_id = args.gpu_id[-1]
     os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     cudnn = True
