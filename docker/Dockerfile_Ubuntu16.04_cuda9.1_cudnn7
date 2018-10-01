@@ -18,7 +18,7 @@ RUN wget https://download.open-mpi.org/release/open-mpi/v3.1/openmpi-3.1.2.tar.g
 RUN tar -xvf openmpi-3.1.2.tar.gz
 WORKDIR /openmpi-3.1.2
 RUN ./configure
-RUN make install
+RUN make -j 8 install
 WORKDIR /
 
 # Install torch (ubuntu16.04 python is 3.5, and cuda 9.1)
@@ -29,14 +29,17 @@ RUN pip3 install http://download.pytorch.org/whl/cu91/torch-0.4.0-cp35-cp35m-lin
 RUN apt-get install -y cmake zlib1g-dev libjpeg-dev
 RUN pip3 install gym[atari]
 
+# install packages so that docker caches them if the adept library is changed
+# TODO: is there a better way of doing this?
+RUN pip3 install absl-py tensorboardX cloudpickle
+# additional deps aren't installed from the setup.py script
+RUN pip3 install mpi4py pyinstrument
 
 # copy adeptRL
 COPY ./ /adeptRL
 
 # Install adeptRL
 WORKDIR /adeptRL
-# additional deps aren't install from the setup.py script
-RUN pip3 install mpi4py pyinstrument
 RUN python3 setup.py install
 
 # Change into scripts
