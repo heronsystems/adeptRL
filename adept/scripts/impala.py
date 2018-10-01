@@ -171,8 +171,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='AdeptRL IMPALA Mode')
     parser = add_base_args(parser)
-    parser.add_argument('--gpu-id', type=int, nargs='+', default=0,
-                        help='Which GPU to use for training. The host will always be the first gpu, workers are distributed evenly across the rest (default: 0)')
+    parser.add_argument('--gpu-id', type=int, nargs='+', default=[0],
+                        help='Which GPU to use for training. The host will always be the first gpu, workers are distributed evenly across the rest (default: [0])')
     parser.add_argument(
         '-vn', '--vision-network', default='Nature',
         help='name of preset network (default: Nature)'
