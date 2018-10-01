@@ -126,8 +126,7 @@ class ActorCriticPPO(Agent, EnvBase):
 
         for e in range(self.nb_epoch):
             # initialize internals to start
-            self.internals = r.internals[0]
-            self.detach_internals()
+
             policy_loss = 0.
             value_loss = 0.
 
@@ -135,6 +134,8 @@ class ActorCriticPPO(Agent, EnvBase):
                 old_log_probs = r.log_probs[i]
                 obs = r.obs[i]
                 actions = r.actions[i]
+                self.internals = r.internals[i]
+                self.detach_internals()
 
                 # forward pass
                 # advantage, value loss
@@ -150,18 +151,20 @@ class ActorCriticPPO(Agent, EnvBase):
                 cur_log_probs = F.log_softmax(logits, dim=1)
                 entropies = -(cur_log_probs * prob).sum(1)
                 cur_log_probs = cur_log_probs.gather(1, torch.from_numpy(actions).to(cur_log_probs.device).unsqueeze(1))
-                self.internals = internals
+                # self.internals = internals
 
                 # calculate surrogate loss
-                surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data)
-                surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2)
-                policy_loss = policy_loss - torch.min(surrogate_ratio, surrogate_ratio_clipped) * advantages.data - 0.01 * entropies
+                surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data) * advantages.data
+                surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2) * advantages.data
+                policy_loss = policy_loss - torch.min(surrogate_ratio, surrogate_ratio_clipped) - 0.01 * entropies
 
             policy_loss = torch.mean(policy_loss / rollout_len)
             value_loss = 0.5 * torch.mean(value_loss / rollout_len)
             losses = {'value_loss': value_loss, 'policy_loss': policy_loss}
             total_loss = torch.sum(torch.stack(tuple(loss for loss in losses.values())))
             metrics = {}
-            print('step', e)
             update_handler.update(total_loss)
+            # self.detach_internals()
+
+        self.internals = r.internals[-1]
         return losses, metrics
