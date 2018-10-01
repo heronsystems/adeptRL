@@ -115,40 +115,35 @@ class ActorCriticPPO(Agent, EnvBase):
             last_values = pred['critic'].squeeze(1).data
 
         # calc nsteps
-        nstep_returns = last_values
+        returns = last_values
+        nstep_returns = []
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
             terminals = r.terminals[i]
-
-            nstep_returns = rewards + self.discount * nstep_returns * terminals
-        nstep_returns = torch.cat(list(reversed(nstep_returns)))
+            returns = rewards + self.discount * returns * terminals
+            nstep_returns.append(returns)
+        nstep_returns = list(reversed(nstep_returns))
 
         for e in range(self.nb_epoch):
+            # initialize internals to start
             self.internals = r.internals[0]
             self.detach_internals()
             policy_loss = 0.
             value_loss = 0.
-            gae = torch.zeros_like(nstep_returns)
 
-            values = []
-
-            for i in range(rollout_len):
+            for i, retrn in enumerate(nstep_returns):
                 old_log_probs = r.log_probs[i]
                 obs = r.obs[i]
                 actions = r.actions[i]
-                # Generalized Advantage Estimation
-                # if self.gae:
-                #     if i == rollout_len - 1:
-                #         nxt_values = last_values
-                #     else:
-                #         nxt_values = r.values[i + 1]
-                #     delta_t = rewards + self.discount * nxt_values.data * terminals - values.data
-                #     gae = gae * self.discount * self.tau * terminals + delta_t
-                #     advantages = gae
 
-                # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
+                # forward pass
+                # advantage, value loss
+                # calculate new log probability, increment internals
                 results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-                values.append(results['critic'].squeeze(1))
+                values = results['critic'].squeeze(1)
+                advantages = retrn.data - values
+                value_loss = value_loss + 0.5 * advantages.pow(2)
+
                 logits = {k: v for k, v in results.items() if k != 'critic'}
                 logits = self.preprocess_logits(logits)
                 prob = F.softmax(logits, dim=1)
@@ -157,15 +152,10 @@ class ActorCriticPPO(Agent, EnvBase):
                 cur_log_probs = cur_log_probs.gather(1, torch.from_numpy(actions).to(cur_log_probs.device).unsqueeze(1))
                 self.internals = internals
 
+                # calculate surrogate loss
                 surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data)
                 surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2)
                 policy_loss = policy_loss - torch.min(surrogate_ratio, surrogate_ratio_clipped) * advantages.data - 0.01 * entropies
-
-            values = torch.cat(values)
-            advantages = nstep_returns.data - values
-            value_loss = (0.5 * advantages.pow(2)).mean()
-
-
 
             policy_loss = torch.mean(policy_loss / rollout_len)
             value_loss = 0.5 * torch.mean(value_loss / rollout_len)
