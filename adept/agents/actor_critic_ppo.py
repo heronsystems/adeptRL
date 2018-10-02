@@ -131,12 +131,13 @@ class ActorCriticPPO(Agent, EnvBase):
 
             policy_loss = 0.
             value_loss = 0.
+            entropy_loss = 0.
 
             for i, retrn in enumerate(nstep_returns):
-                old_log_probs = r.log_probs[i]
+                old_log_probs = (r.log_probs[i]).data
                 obs = r.obs[i]
                 actions = r.actions[i]
-                adv_targets = retrn - r.values[i]
+                adv_targets = (retrn - r.values[i]).data
                 self.internals = r.internals[i]
                 self.detach_internals()
 
@@ -157,13 +158,17 @@ class ActorCriticPPO(Agent, EnvBase):
                 # self.internals = internals
 
                 # calculate surrogate loss
-                surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data) * adv_targets
-                surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2) * adv_targets
-                policy_loss = policy_loss - torch.min(surrogate_ratio, surrogate_ratio_clipped) - 0.01 * entropies
+                surrogate_ratio = torch.exp(cur_log_probs - old_log_probs)
+                surrogate_loss = surrogate_ratio * adv_targets
+                surrogate_loss_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2) * adv_targets
+                policy_loss = policy_loss - torch.min(surrogate_loss, surrogate_loss_clipped) 
+                entropy_loss = entropy_loss - 0.01 * entropies
 
             policy_loss = torch.mean(policy_loss / rollout_len)
             value_loss = 0.5 * torch.mean(value_loss / rollout_len)
-            losses = {'value_loss': value_loss, 'policy_loss': policy_loss}
+            entropy_loss = torch.mean(entropy_loss / rollout_len)
+            losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss':
+                      entropy_loss}
             total_loss = torch.sum(torch.stack(tuple(loss for loss in losses.values())))
             metrics = {}
             update_handler.update(total_loss)
