@@ -28,7 +28,7 @@ class ActorCriticPPO(Agent, EnvBase):
         self.gpu_preprocessor = gpu_preprocessor
 
         self._network = network.to(device)
-        self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['obs', 'actions', 'log_probs', 'internals'])
+        self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['obs', 'actions', 'log_probs', 'internals', 'values'])
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
         self.network.train()
@@ -63,7 +63,8 @@ class ActorCriticPPO(Agent, EnvBase):
 
     def act(self, obs):
         self.network.train()
-        results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        with torch.no_grad():
+            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
         logits = {k: v for k, v in results.items() if k != 'critic'}
 
         logits = self.preprocess_logits(logits)
@@ -73,7 +74,8 @@ class ActorCriticPPO(Agent, EnvBase):
             obs=obs,
             actions=actions,
             log_probs=log_probs,
-            internals=self.internals
+            internals=self.internals,
+            values=results['critic']
         )
         self.internals = internals
         return actions
@@ -134,6 +136,7 @@ class ActorCriticPPO(Agent, EnvBase):
                 old_log_probs = r.log_probs[i]
                 obs = r.obs[i]
                 actions = r.actions[i]
+                adv_targets = retrn - r.values[i]
                 self.internals = r.internals[i]
                 self.detach_internals()
 
@@ -154,8 +157,8 @@ class ActorCriticPPO(Agent, EnvBase):
                 # self.internals = internals
 
                 # calculate surrogate loss
-                surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data) * advantages.data
-                surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2) * advantages.data
+                surrogate_ratio = torch.exp(cur_log_probs - old_log_probs.data) * adv_targets
+                surrogate_ratio_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2) * adv_targets
                 policy_loss = policy_loss - torch.min(surrogate_ratio, surrogate_ratio_clipped) - 0.01 * entropies
 
             policy_loss = torch.mean(policy_loss / rollout_len)
