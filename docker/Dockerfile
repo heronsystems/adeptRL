@@ -1,5 +1,18 @@
-# Dockerfile for Cuda9.1 with cudnn 7 in an ubuntu16.04 container
+# Supported cuda images: List at https://hub.docker.com/r/nvidia/cuda/
+
+# Ubuntu 16.04 containers
+# Cuda 8.0 with cudnn 7 in an ubuntu16.04 container
+# FROM nvidia/cuda:8.0-cudnn7-runtime-ubuntu16.04
+# Cuda 9.0 with cudnn 7 in an ubuntu16.04 container
+# FROM nvidia/cuda:9.0-cudnn7-runtime-ubuntu16.04
+# Cuda 9.1 with cudnn 7 in an ubuntu16.04 container
 FROM nvidia/cuda:9.1-cudnn7-runtime-ubuntu16.04
+# Cuda 9.2 with cudnn 7 in an ubuntu16.04 container
+# FROM nvidia/cuda:9.2-cudnn7-runtime-ubuntu16.04
+
+# Ubuntu 18.04 containers
+# Cuda 9.2 with cudnn 7 in an ubuntu18.04 container
+# FROM nvidia/cuda:9.2-cudnn7-runtime-ubuntu18.04
 
 # Install basic deps
 RUN apt-get update
@@ -21,8 +34,20 @@ RUN ./configure
 RUN make -j 8 install
 WORKDIR /
 
-# Install torch (ubuntu16.04 python is 3.5, and cuda 9.1)
+# Torch Supported Version (0.4.0). List is at https://pytorch.org/get-started/previous-versions/
+# Ubuntu16.04 python is 3.5
+# cuda 8.0
+# RUN pip3 install http://download.pytorch.org/whl/cu80/torch-0.4.0-cp35-cp35m-linux_x86_64.whl
+# cuda 9.0
+# RUN pip3 install http://download.pytorch.org/whl/cu90/torch-0.4.0-cp35-cp35m-linux_x86_64.whl
+# cuda 9.1
 RUN pip3 install http://download.pytorch.org/whl/cu91/torch-0.4.0-cp35-cp35m-linux_x86_64.whl
+# cuda 9.2
+# RUN pip3 install http://download.pytorch.org/whl/cu92/torch-0.4.0-cp35-cp35m-linux_x86_64.whl
+
+# Ubuntu 18.04 python is 3.6
+# cuda 9.2
+# RUN pip3 install http://download.pytorch.org/whl/cu92/torch-0.4.0-cp36-cp36m-linux_x86_64.whl
 
 # Install gym[atari]
 # deps from https://github.com/openai/gym
