@@ -27,7 +27,7 @@ setup(
         'absl-py>=0.2',
         'tensorboardX>=1.2',
         'cloudpickle>=0.5',
-        'opencv-python>=3.4'
+        'opencv-python-headless>=3.4'
     ],
     extras_require={
         'mpi': ['mpi4py>=3.0'],

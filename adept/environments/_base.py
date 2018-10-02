@@ -52,9 +52,9 @@ class Spaces:
         elif isinstance(space, spaces.Box):
             return {'Box': Space(space.shape, 0., 255., space.dtype)}  # TODO, is it okay to hardcode 0, 255
         elif isinstance(space, spaces.Dict):
-            return {name: Spaces._detect_gym_spaces(s) for name, s in space.spaces.items()}
+            return {name: list(Spaces._detect_gym_spaces(s).values())[0] for name, s in space.spaces.items()}
         elif isinstance(space, spaces.Tuple):
-            return {idx: Spaces._detect_gym_spaces(s) for idx, s in enumerate(space.spaces)}
+            return {idx: list(Spaces._detect_gym_spaces(s).values())[0] for idx, s in enumerate(space.spaces)}
 
 
 class BaseEnvironment(abc.ABC):

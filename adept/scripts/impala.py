@@ -84,13 +84,13 @@ def main(args):
 
     # construct agent
     # host is always the first gpu, workers are distributed evenly across the rest
-    if isinstance(args.gpu_id, list):
+    if len(args.gpu_id) > 1:  # nargs is always a list
         if rank == 0:
             gpu_id = args.gpu_id[0]
         else:
             gpu_id = args.gpu_id[1:][(rank - 1) % len(args.gpu_id[1:])]
     else:
-        gpu_id = args.gpu_id
+        gpu_id = args.gpu_id[-1]
     os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     cudnn = True
@@ -171,8 +171,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='AdeptRL IMPALA Mode')
     parser = add_base_args(parser)
-    parser.add_argument('--gpu-id', type=int, nargs='+', default=0,
-                        help='Which GPU to use for training. The host will always be the first gpu, workers are distributed evenly across the rest (default: 0)')
+    parser.add_argument('--gpu-id', type=int, nargs='+', default=[0],
+                        help='Which GPU to use for training. The host will always be the first gpu, workers are distributed evenly across the rest (default: [0])')
     parser.add_argument(
         '-vn', '--vision-network', default='Nature',
         help='name of preset network (default: Nature)'

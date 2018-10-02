@@ -88,6 +88,7 @@ class AdeptGymEnv(BaseEnvironment):
         return self._wrap_observation(obs), reward, done, info
 
     def reset(self, **kwargs):
+        self.cpu_preprocessor.reset()
         obs = self.gym_env.reset(**kwargs)
         return self._wrap_observation(obs)
 
