@@ -16,7 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import torch
 from torch.nn import functional as F
-
+import numpy as np
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
 from ._base import Agent, EnvBase
@@ -124,20 +124,18 @@ class ActorCriticPPO(Agent, EnvBase):
             terminals = r.terminals[i]
             returns = rewards + self.discount * returns * terminals
             nstep_returns.append(returns)
-        nstep_returns = list(reversed(nstep_returns))
+        nstep_returns = torch.stack(list(reversed(nstep_returns)))
+        values = torch.stack(r.values).squeeze(-1)
+        adv_targets_batch = (nstep_returns - values).data
+        actions_device = torch.from_numpy(np.asarray(r.actions)).to(self.device)
 
         for e in range(self.nb_epoch):
-            # initialize internals to start
-
-            policy_loss = 0.
-            value_loss = 0.
-            entropy_loss = 0.
 
             for i, retrn in enumerate(nstep_returns):
                 old_log_probs = (r.log_probs[i]).data
                 obs = r.obs[i]
-                actions = r.actions[i]
-                adv_targets = (retrn - r.values[i]).data
+                actions = actions_device[i]
+                adv_targets = adv_targets_batch[i]
                 self.internals = r.internals[i]
                 self.detach_internals()
 
@@ -147,32 +145,31 @@ class ActorCriticPPO(Agent, EnvBase):
                 results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
                 values = results['critic'].squeeze(1)
                 advantages = retrn.data - values
-                value_loss = value_loss + 0.5 * advantages.pow(2)
+                value_loss = 0.5 * F.smooth_l1_loss(values, retrn.data)
 
                 logits = {k: v for k, v in results.items() if k != 'critic'}
                 logits = self.preprocess_logits(logits)
                 prob = F.softmax(logits, dim=1)
                 cur_log_probs = F.log_softmax(logits, dim=1)
                 entropies = -(cur_log_probs * prob).sum(1)
-                cur_log_probs = cur_log_probs.gather(1, torch.from_numpy(actions).to(cur_log_probs.device).unsqueeze(1))
+                cur_log_probs = cur_log_probs.gather(1, actions.unsqueeze(1))
                 # self.internals = internals
 
                 # calculate surrogate loss
                 surrogate_ratio = torch.exp(cur_log_probs - old_log_probs)
                 surrogate_loss = surrogate_ratio * adv_targets
                 surrogate_loss_clipped = torch.clamp(surrogate_ratio, 0.8, 1.2) * adv_targets
-                policy_loss = policy_loss - torch.min(surrogate_loss, surrogate_loss_clipped) 
-                entropy_loss = entropy_loss - 0.01 * entropies
+                policy_loss = torch.mean(-torch.min(surrogate_loss, surrogate_loss_clipped)) 
+                entropy_loss = torch.mean(-0.01 * entropies)
 
-            policy_loss = torch.mean(policy_loss / rollout_len)
-            value_loss = 0.5 * torch.mean(value_loss / rollout_len)
-            entropy_loss = torch.mean(entropy_loss / rollout_len)
-            losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss':
-                      entropy_loss}
-            total_loss = torch.sum(torch.stack(tuple(loss for loss in losses.values())))
-            metrics = {}
-            update_handler.update(total_loss)
+                losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss':
+                          entropy_loss}
+                # print('losses', losses)
+                total_loss = torch.sum(torch.stack(tuple(loss for loss in losses.values())))
+                update_handler.update(total_loss)
+
             # self.detach_internals()
 
+        metrics = {'advantage': torch.mean(adv_targets_batch)}
         self.internals = r.internals[-1]
         return losses, metrics
