@@ -23,8 +23,10 @@ from ._base import Agent, EnvBase
 
 
 class ActorCritic(Agent, EnvBase):
-    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout, discount, gae, tau):
+    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
+                 discount, gae, tau, entropy_weight=0.01):
         self.discount, self.gae, self.tau = discount, gae, tau
+        self.entropy_weight = entropy_weight
         self.gpu_preprocessor = gpu_preprocessor
 
         self._network = network.to(device)
@@ -113,6 +115,7 @@ class ActorCritic(Agent, EnvBase):
         r = rollouts
         policy_loss = 0.
         value_loss = 0.
+        entropy_loss = 0.
         nstep_returns = last_values
         gae = torch.zeros_like(nstep_returns)
 
@@ -138,14 +141,22 @@ class ActorCritic(Agent, EnvBase):
                 gae = gae * self.discount * self.tau * terminals + delta_t
                 advantages = gae
 
-            # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
-            if log_probs.dim() == 2:
-                policy_loss = policy_loss - (log_probs * advantages.unsqueeze(1).data + 0.01 * entropies).sum(1)
+            if isinstance(log_probs, dict):
+                for k in log_probs.keys():
+                    policy_loss = policy_loss - (log_probs[k] * advantages.data)
+                    entropy_loss = entropy_loss - self.entropy_weight * entropies[k]
             else:
-                policy_loss = policy_loss - log_probs * advantages.data - 0.01 * entropies
+                # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
+                if log_probs.dim() == 2:
+                    policy_loss = policy_loss - (log_probs * advantages.unsqueeze(1).data).sum(1)
+                    entropy_loss = entropy_loss - (self.entropy_weight * entropies).sum(1)
+                else:
+                    policy_loss = policy_loss - log_probs * advantages.data
+                    entropy_loss = entropy_loss - self.entropy_weight * entropies
 
         policy_loss = torch.mean(policy_loss / rollout_len)
+        entropy_loss = torch.mean(entropy_loss / rollout_len)
         value_loss = 0.5 * torch.mean(value_loss / rollout_len)
-        losses = {'value_loss': value_loss, 'policy_loss': policy_loss}
+        losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
         metrics = {}
         return losses, metrics
