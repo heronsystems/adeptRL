@@ -1,11 +1,30 @@
+#!python
+"""
+Copyright (C) 2018 Heron Systems, Inc.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
 import os
 import torch
 from absl import flags
 from mpi4py import MPI as mpi
 from tensorboardX import SummaryWriter
 from adept.containers import P2PWorker
-from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
+from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, \
+    log_args, write_args_file
+from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, \
+    count_parameters
 from datetime import datetime
 
 # hack to use argparse for SC2
@@ -42,7 +61,7 @@ def main(args):
 
     # construct env
     p2pseed = args.seed  # must be shared seed for p2p communication protocol
-    seed = args.seed if rank == 0 else args.seed * (args.nb_env * (rank - 1))  # unique seed per process
+    seed = args.seed if rank == 0 else args.seed + (args.nb_env * (rank - 1))  # unique seed per process
     env = make_env(args, seed)
 
     # construct network
@@ -54,7 +73,7 @@ def main(args):
     if rank == 0:
         for v in network.parameters():
             comm.Bcast(v.detach().cpu().numpy(), root=0)
-        print('Root variables synced')
+        print('0 variables synced')
     else:
         # can just use the numpy buffers
         variables = [v.detach().cpu().numpy() for v in network.parameters()]
@@ -81,11 +100,15 @@ def main(args):
         return opt
 
     # construct agent
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
+    # distribute evenly across gpus
+    if isinstance(args.gpu_id, list):
+        gpu_id = args.gpu_id[rank % len(args.gpu_id)]
+    else:
+        gpu_id = args.gpu_id
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(network, device, env.engine, args)
-
+    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
     # construct container
     container = P2PWorker(agent, env, make_optimizer, args.nb_env, logger, summary_writer, args.summary_frequency,
                           shared_seed=p2pseed, synchronize_step_interval=args.synchronize_step_interval,
@@ -112,11 +135,10 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='AdeptRL P2P Mode')
     parser = add_base_args(parser)
-    # TODO accept multiple gpu ids
-    parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
+    parser.add_argument('--gpu-id', type=int, nargs='+', default=0, help='Which GPU(s) to use for training (default: 0)')
     parser.add_argument(
-        '-vn', '--vision-network', default='Nature',
-        help='name of preset network (default: Nature)'
+        '-vn', '--vision-network', default='FourConv',
+        help='name of preset network (default: FourConv)'
     )
     parser.add_argument(
         '-dn', '--discrete-network', default='Identity',
@@ -138,7 +160,8 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--synchronize-step-interval', type=int, default=None,
-        help='Number of steps to do before all processes synchronize parameters. (default: None [disabled])'
+        help='Number of steps before all processes synchronize parameters. Not useful if there are'
+             'only 2 peers (default: None [disabled])'
     )
     parser.add_argument(
         '--share-optimizer-params', type=parse_bool, nargs='?', const=True, default=False,

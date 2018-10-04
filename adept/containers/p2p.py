@@ -152,9 +152,6 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
     def close(self):
         pass
 
-    def should_stop(self):
-        return False
-
     def mpi_shapes(self, force_optimizer=False, force_buffers=False):
         param_shapes = [tuple(x.shape) for x in self.network.parameters()]
         if self._share_optimizer_params or force_optimizer:
