@@ -61,7 +61,7 @@ def main(args):
     comm.Barrier()
 
     # construct env
-    seed = args.seed if rank == 0 else args.seed * (args.nb_env * (rank - 1))  # unique seed per process
+    seed = args.seed if rank == 0 else args.seed + (args.nb_env * (rank - 1))  # unique seed per process
     env = make_env(args, seed)
 
     # construct network
