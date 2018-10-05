@@ -29,7 +29,8 @@ AGENT_ARGS = {
         args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau
     ),
     'ActorCriticPPO': lambda args: (
-        args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau, args.ppo_nb_epoch
+        args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation,
+        args.tau, args.ppo_nb_epoch, 32
     ),
     'ActorCriticVtrace': lambda args: (args.nb_env, args.exp_length, args.discount),
 }
