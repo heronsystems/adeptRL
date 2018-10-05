@@ -185,18 +185,23 @@ class ActorCriticPPO(Agent, EnvBase):
             last_values = pred['critic'].squeeze(1).data
 
         # calc nsteps
-        returns = last_values
-        nstep_returns = []
+        gae = 0.
+        next_values = last_values
+        gae_returns = []
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
             terminals = r.terminals[i]
-            returns = rewards + self.discount * returns * terminals
-            nstep_returns.append(returns)
-        nstep_returns = torch.stack(list(reversed(nstep_returns))).data
+            current_values = r.values[i].squeeze(1)
+            # generalized advantage estimation
+            delta_t = rewards + self.discount * next_values.data * terminals - current_values
+            gae = gae * self.discount * self.tau * terminals + delta_t
+            gae_returns.append(gae + current_values)
+            next_values = current_values.data
+        gae_returns = torch.stack(list(reversed(gae_returns))).data
 
         # Convert to torch tensors of [seq, num_env]
         old_values = torch.stack(r.values).squeeze(-1)
-        adv_targets_batch = (nstep_returns - old_values).data
+        adv_targets_batch = (gae_returns - old_values).data
         actions_device = torch.from_numpy(np.asarray(r.actions)).to(self.device)
         starting_internals = r.internals[0]
         old_log_probs_batch = torch.stack(r.log_probs).data
@@ -206,7 +211,7 @@ class ActorCriticPPO(Agent, EnvBase):
             # setup minibatch iterator
             minibatch_inds = BatchSampler(SequentialSampler(range(rollout_len)), self.batch_size, drop_last=False)
             for i in minibatch_inds:
-                nstep_return = nstep_returns[i]
+                gae_return = gae_returns[i]
                 old_log_probs = old_log_probs_batch[i]
                 sampled_actions = actions_device[i]
                 adv_targets = adv_targets_batch[i]
@@ -220,8 +225,8 @@ class ActorCriticPPO(Agent, EnvBase):
                 # forward pass
                 cur_log_probs, cur_values, entropies = self.act_batch(obs, terminal_masks, sampled_actions,
                                                                       starting_internals)
-                advantages = nstep_return - cur_values
-                value_loss = torch.mean((cur_values - nstep_return).pow(2))
+                advantages = gae_return - cur_values
+                value_loss = 0.5 * torch.mean((cur_values - gae_return).pow(2))
 
                 # calculate surrogate loss
                 surrogate_ratio = torch.exp(cur_log_probs - old_log_probs)
