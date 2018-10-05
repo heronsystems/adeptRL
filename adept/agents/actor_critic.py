@@ -116,8 +116,9 @@ class ActorCritic(Agent, EnvBase):
         policy_loss = 0.
         value_loss = 0.
         entropy_loss = 0.
-        nstep_returns = last_values
-        gae = torch.zeros_like(nstep_returns)
+        next_values = last_values
+        if self.gae:
+            gae = 0.
 
         rollout_len = len(r.rewards)
         for i in reversed(range(rollout_len)):
@@ -127,19 +128,21 @@ class ActorCritic(Agent, EnvBase):
             log_probs = r.log_probs[i]
             entropies = r.entropies[i]
 
-            nstep_returns = rewards + self.discount * nstep_returns * terminals
-            advantages = nstep_returns.data - values
-            value_loss = value_loss + 0.5 * advantages.pow(2)
-
             # Generalized Advantage Estimation
             if self.gae:
-                if i == rollout_len - 1:
-                    nxt_values = last_values
-                else:
-                    nxt_values = r.values[i + 1]
-                delta_t = rewards + self.discount * nxt_values.data * terminals - values.data
+                delta_t = rewards + self.discount * next_values * terminals - values.data
                 gae = gae * self.discount * self.tau * terminals + delta_t
-                advantages = gae
+                target_returns = gae + values.data
+                next_values = values.data
+            # Nstep return
+            else:
+                # First step of nstep reward target is estimated value of t+1
+                if i == rollout_len - 1:
+                    target_returns = next_values
+                target_returns = rewards + self.discount * target_returns * terminals
+            advantages = target_returns.data - values
+            value_loss = value_loss + 0.5 * advantages.pow(2)
+
 
             if isinstance(log_probs, dict):
                 for k in log_probs.keys():
