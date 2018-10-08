@@ -203,7 +203,6 @@ class ActorCriticPPO(Agent, EnvBase):
         old_values = torch.stack(r.values).squeeze(-1)
         adv_targets_batch = (gae_returns - old_values).data
         actions_device = torch.from_numpy(np.asarray(r.actions)).to(self.device)
-        starting_internals = r.internals[0]
         old_log_probs_batch = torch.stack(r.log_probs).data
         terminals_batch = torch.stack(r.terminals)
 
@@ -211,6 +210,7 @@ class ActorCriticPPO(Agent, EnvBase):
             # setup minibatch iterator
             minibatch_inds = BatchSampler(SequentialSampler(range(rollout_len)), self.batch_size, drop_last=False)
             for i in minibatch_inds:
+                starting_internals = self._detach_internals(r.internals[i[0]])
                 gae_return = gae_returns[i]
                 old_log_probs = old_log_probs_batch[i]
                 sampled_actions = actions_device[i]

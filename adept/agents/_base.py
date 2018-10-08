@@ -97,6 +97,12 @@ class Agent(abc.ABC):
         for k, v in self.network.new_internals(self.device).items():
             self.internals[k][env_idx] = v
 
+    @staticmethod
+    def _detach_internals(internals):
+        for k, vs in internals.items():
+            internals[k] = [v.detach() for v in vs]
+        return internals
+
     def detach_internals(self):
-        for k, vs in self.internals.items():
-            self.internals[k] = [v.detach() for v in vs]
+        self.internals = self._detach_internals(self.internals)
+
