@@ -24,8 +24,9 @@ from ._base import Agent, EnvBase
 
 class ActorCritic(Agent, EnvBase):
     def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
-                 discount, gae, tau, entropy_weight=0.01):
+                 discount, gae, tau, normalize_advantage, entropy_weight=0.01):
         self.discount, self.gae, self.tau = discount, gae, tau
+        self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
         self.gpu_preprocessor = gpu_preprocessor
 
@@ -113,53 +114,65 @@ class ActorCritic(Agent, EnvBase):
             last_values = results['critic'].squeeze(1).data
 
         r = rollouts
-        policy_loss = 0.
-        value_loss = 0.
-        entropy_loss = 0.
+        rollout_len = len(r.rewards)
+
+        # compute nstep return over batch
         next_values = last_values
+        batch_values = torch.stack(r.values)
         if self.gae:
             gae = 0.
 
-        rollout_len = len(r.rewards)
+        nstep_target_returns = []
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
             terminals = r.terminals[i]
-            values = r.values[i]
-            log_probs = r.log_probs[i]
-            entropies = r.entropies[i]
 
             # Generalized Advantage Estimation
             if self.gae:
-                delta_t = rewards + self.discount * next_values * terminals - values.data
+                delta_t = rewards + self.discount * next_values * terminals - batch_values[i].data
                 gae = gae * self.discount * self.tau * terminals + delta_t
-                target_returns = gae + values.data
-                next_values = values.data
+                gae_target_returns = gae + batch_values[i].data
+                nstep_target_returns.append(gae_target_returns)
+                next_values = batch_values[i].data
             # Nstep return
             else:
                 # First step of nstep reward target is estimated value of t+1
                 if i == rollout_len - 1:
                     target_returns = next_values
                 target_returns = rewards + self.discount * target_returns * terminals
-            advantages = target_returns.data - values
-            value_loss = value_loss + 0.5 * advantages.pow(2)
+                nstep_target_returns.append(target_returns)
 
+        nstep_target_returns = torch.stack(list(reversed(nstep_target_returns))).data
+        # batch advantage
+        batch_advantages = nstep_target_returns - batch_values
+        value_loss = 0.5 * torch.mean(batch_advantages.pow(2))
+
+        # normalized advantage
+        if self.normalize_advantage:
+            batch_advantages = (batch_advantages - batch_advantages.mean()) / \
+                               (batch_advantages.std() + 1e-5)
+        policy_loss = 0.
+        entropy_loss = 0.
+
+        for i in range(rollout_len):
+            log_probs = r.log_probs[i]
+            entropies = r.entropies[i]
 
             if isinstance(log_probs, dict):
                 for k in log_probs.keys():
-                    policy_loss = policy_loss - (log_probs[k] * advantages.data)
+                    policy_loss = policy_loss - (log_probs[k] * batch_advantages[i].data)
                     entropy_loss = entropy_loss - self.entropy_weight * entropies[k]
             else:
                 # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
                 if log_probs.dim() == 2:
-                    policy_loss = policy_loss - (log_probs * advantages.unsqueeze(1).data).sum(1)
+                    policy_loss = policy_loss - (log_probs * batch_advantages[i].unsqueeze(1).data).sum(1)
                     entropy_loss = entropy_loss - (self.entropy_weight * entropies).sum(1)
                 else:
-                    policy_loss = policy_loss - log_probs * advantages.data
+                    policy_loss = policy_loss - log_probs * batch_advantages[i].data
                     entropy_loss = entropy_loss - self.entropy_weight * entropies
 
         policy_loss = torch.mean(policy_loss / rollout_len)
         entropy_loss = torch.mean(entropy_loss / rollout_len)
-        value_loss = 0.5 * torch.mean(value_loss / rollout_len)
         losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
         metrics = {}
         return losses, metrics
