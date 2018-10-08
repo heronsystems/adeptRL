@@ -26,7 +26,7 @@ from torch.utils.data.sampler import SequentialSampler, BatchSampler
 
 class ActorCriticPPO(Agent, EnvBase):
     def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
-                 discount, gae, tau, nb_epoch, batch_size, loss_clip=0.2):
+                 discount, gae, tau, nb_epoch, batch_size, loss_clip):
         self.discount, self.gae, self.tau = discount, gae, tau
         self.gpu_preprocessor = gpu_preprocessor
 
@@ -206,6 +206,10 @@ class ActorCriticPPO(Agent, EnvBase):
         old_log_probs_batch = torch.stack(r.log_probs).data
         terminals_batch = torch.stack(r.terminals)
 
+        # Normalize advantage
+        adv_targets_batch = (adv_targets_batch - adv_targets_batch.mean()) / \
+                            (adv_targets_batch.std() + 1e-5)
+
         for e in range(self.nb_epoch):
             # setup minibatch iterator
             minibatch_inds = BatchSampler(SequentialSampler(range(rollout_len)), self.batch_size, drop_last=False)
@@ -225,7 +229,6 @@ class ActorCriticPPO(Agent, EnvBase):
                 # forward pass
                 cur_log_probs, cur_values, entropies = self.act_batch(obs, terminal_masks, sampled_actions,
                                                                       starting_internals)
-                advantages = gae_return - cur_values
                 value_loss = 0.5 * torch.mean((cur_values - gae_return).pow(2))
 
                 # calculate surrogate loss
