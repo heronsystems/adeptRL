@@ -202,8 +202,16 @@ def add_base_args(parser):
         help='number of rollouts or size of experience replay'
     )
     parser.add_argument(
-        '--ppo-nb-epoch', type=int, default=10,
-        help='number of times to learn on a rollout (default: 10)'
+        '--ppo-nb-epoch', type=int, default=3,
+        help='number of times to learn on a rollout (default: 3)'
+    )
+    parser.add_argument(
+        '--ppo-mb-size', type=int, default=32,
+        help='PPO minibatch size (default: 32)'
+    )
+    parser.add_argument(
+        '--ppo-clip', type=float, default=0.1,
+        help='PPO policy surrogate loss clipping (default: 0.1)'
     )
 
     """
