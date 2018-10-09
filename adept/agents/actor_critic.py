@@ -14,26 +14,52 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
+from collections import OrderedDict
+
 import torch
+from adept.environments import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
-from ._base import Agent, EnvBase
+from ._base import Agent
 
 
-class ActorCritic(Agent, EnvBase):
-    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
-                 discount, gae, tau, entropy_weight=0.01):
+class ActorCritic(Agent):
+    def __init__(
+            self,
+            network,
+            device,
+            reward_normalizer,
+            gpu_preprocessor,
+            engine,
+            action_space,
+            nb_env,
+            nb_rollout,
+            discount,
+            gae,
+            tau,
+            entropy_weight=0.01
+    ):
         self.discount, self.gae, self.tau = discount, gae, tau
         self.entropy_weight = entropy_weight
         self.gpu_preprocessor = gpu_preprocessor
+        self.engine = engine
 
         self._network = network.to(device)
         self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['values', 'log_probs', 'entropies'])
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
-        self.network.train()
+        self.action_space = action_space
+        self._action_keys = list(sorted(action_space.entries_by_name.keys()))
+        self._func_id_idx = None
+
+    @classmethod
+    def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
+        return cls(
+            network, device, reward_normalizer, gpu_preprocessor, engine, action_space,
+            args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau
+        )
 
     @property
     def exp_cache(self):
@@ -64,12 +90,88 @@ class ActorCritic(Agent, EnvBase):
 
     def act(self, obs):
         self.network.train()
-        results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-        values = results['critic'].squeeze(1)
-        logits = {k: v for k, v in results.items() if k != 'critic'}
 
-        logits = self.preprocess_logits(logits)
-        actions, log_probs, entropies = self.process_logits(logits, obs, deterministic=False)
+        if self.engine == Engines.GYM:
+            return self._act_atari(obs)
+        elif self.engine == Engines.SC2:
+            return self._act_sc2(obs)
+        else:
+            raise NotImplementedError()
+        # generate the action masks
+        # save action masks in exp cache
+
+
+    def _act_atari(self, obs):
+        predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        values = predictions['critic']
+
+        # reduce feature dim, build action_key dim
+        actions = OrderedDict()
+        log_probs = []
+        entropies = []
+        # TODO support multi-dimensional action spaces?
+        for key in self._action_keys:
+            logit = predictions[key]
+            prob = F.softmax(logit, dim=1)
+            log_prob = F.log_softmax(logit, dim=1)
+
+            action = prob.multinomial(1)
+            log_prob = log_prob.gather(1, action)
+            entropy = -(log_prob * prob).sum(1, keepdim=True)
+
+            actions[key] = action.squeeze(1).cpu().numpy()
+            log_probs.append(log_prob)
+            entropies.append(entropy)
+
+        log_probs = torch.cat(log_probs, dim=1)
+        entropies = torch.cat(entropies, dim=1)
+
+        self.exp_cache.write_forward(
+            values=values,
+            log_probs=log_probs,
+            entropies=entropies
+        )
+        self.internals = internals
+        return actions
+
+    def _act_sc2(self, obs):
+        predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        values = predictions['critic']
+
+        if self._func_id_idx is None:
+            self._func_id_idx = self._action_keys.index('func_id')
+
+        # reduce feature dim, build action_key dim
+        actions = OrderedDict()
+        log_probs = []
+        entropies = []
+        action_masks = []
+        for key in self._action_keys:
+            logit = predictions[key]
+            prob = F.softmax(logit, dim=1)
+            log_prob = F.log_softmax(logit, dim=1)
+
+            action = prob.multinomial(1)
+            log_prob = log_prob.gather(1, action)
+            entropy = -(log_prob * prob).sum(1, keepdim=True)
+
+            actions[key] = action.squeeze(1).cpu().numpy()
+            log_probs.append(log_prob)
+            entropies.append(entropy)
+            if key == 'func_id':
+                action_masks.append(torch.ones_like(entropy))
+            else:
+                action_masks = torch.zeros_like(entropy)
+
+        log_probs = torch.cat(log_probs, dim=1)
+        entropies = torch.cat(entropies, dim=1)
+
+        action_masks = torch.cat(action_masks, dim=1)
+        for i in range(actions.shape[0]):
+            for j in range(actions.shape[1]):
+                pass  # TODO
+
+        # TODO apply mask to log probs and entropies
 
         self.exp_cache.write_forward(
             values=values,
@@ -82,18 +184,23 @@ class ActorCritic(Agent, EnvBase):
     def act_eval(self, obs):
         self.network.eval()
         with torch.no_grad():
-            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-            logits = {k: v for k, v in results.items() if k != 'critic'}
+            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
 
-            logits = self.preprocess_logits(logits)
-            actions, _, _ = self.process_logits(logits, obs, deterministic=True)
+        # reduce feature dim, build action_key dim
+        actions = OrderedDict()
+        for key in self._action_keys:
+            logit = predictions[key]
+            prob = F.softmax(logit, dim=1)
+            action = torch.argmax(prob, 1, keepdim=True)
+            actions[key] = action.squeeze(1).cpu().numpy()
+
         self.internals = internals
         return actions
 
-    def preprocess_logits(self, logits):
+    def preprocess_logits(self, logits):  # TODO delete
         return logits['Discrete']
 
-    def process_logits(self, logits, obs, deterministic):
+    def process_logits(self, logits, obs, deterministic):  # TODO delete
         prob = F.softmax(logits, dim=1)
         log_probs = F.log_softmax(logits, dim=1)
         entropies = -(log_probs * prob).sum(1)
@@ -123,9 +230,9 @@ class ActorCritic(Agent, EnvBase):
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
             terminals = r.terminals[i]
-            values = r.values[i]
-            log_probs = r.log_probs[i]
-            entropies = r.entropies[i]
+            values = r.values[i]        # N, F
+            log_probs = r.log_probs[i]  # N, F
+            entropies = r.entropies[i]  # N, F
 
             nstep_returns = rewards + self.discount * nstep_returns * terminals
             advantages = nstep_returns.data - values

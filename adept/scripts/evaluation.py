@@ -62,7 +62,7 @@ def main(args):
     env.close()
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
+    network_head_shapes = get_head_shapes(train_args.agent)
     network = make_network(env.observation_space, network_head_shapes, train_args)
 
     results = []
@@ -79,7 +79,7 @@ def main(args):
             network.load_state_dict(torch.load(network_file, map_location=lambda storage, loc: storage))
 
             # construct agent
-            agent = make_agent(network, device, env.engine, env.gpu_preprocessor, train_args)
+            agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, train_args)
 
             # container
             container = Evaluation(agent, env_fn, device, args.seed, args.render)

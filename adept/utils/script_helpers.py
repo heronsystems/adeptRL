@@ -16,7 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
 
-from adept.agents import AGENTS, AGENT_ARGS
+from adept.agents import AGENTS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
 from adept.environments import reward_normalizer_by_env_id
 from adept.environments.atari import make_atari_env
@@ -100,23 +100,15 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def get_agent_class(agent_name, engine):
-    if engine == Engines.SC2:
-        agent_class = type(agent_name, (SC2AgentOverrides, AGENTS[agent_name]), {})
-    else:
-        agent_class = AGENTS[agent_name]
-    return agent_class
-
-
-def make_agent(network, device, engine, gpu_preprocessor, args):
-    agent_class = get_agent_class(args.agent, engine)
+def make_agent(network, device, gpu_preprocessor, engine, action_space, args):
+    Agent = AGENTS[args.agent]
     reward_normalizer = reward_normalizer_by_env_id(args.env_id)
-    return agent_class(network, device, reward_normalizer, gpu_preprocessor, *AGENT_ARGS[args.agent](args))
+    return Agent.from_args(network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args)
 
 
-def get_head_shapes(action_space, engine, agent_name):
-    agent_class = get_agent_class(agent_name, engine)
-    return agent_class.output_shape(action_space)
+def get_head_shapes(action_space, agent_name):
+    Agent = AGENTS[agent_name]
+    return Agent.output_shape(action_space)
 
 
 def add_base_args(parser):

@@ -23,7 +23,7 @@ import torch
 from torch import multiprocessing as mp
 
 from adept.environments._base import BaseEnvironment
-from adept.utils.util import listd_to_dlist
+from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 
 class CloudpickleWrapper(object):
@@ -149,7 +149,7 @@ class SubProcEnv(BaseEnvironment):
         return self.step_wait()
 
     def step_async(self, actions):
-        for remote, action in zip(self.remotes, actions):
+        for remote, action in zip(self.remotes, dlist_to_listd(actions)):
             remote.send(('step', action))
         self.waiting = True
 

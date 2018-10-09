@@ -60,7 +60,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
+    network_head_shapes = get_head_shapes(env.action_space, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
     network.load_state_dict(torch.load(network_file))
 
@@ -68,7 +68,7 @@ def main(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
+    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
 
     # Construct the Container
     def make_optimizer(params):

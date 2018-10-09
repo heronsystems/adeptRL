@@ -21,11 +21,11 @@ from torch.nn import functional as F
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
-from .._base import Agent, EnvBase
+from .._base import Agent
 
 
-class ActorCriticVtrace(Agent, EnvBase):
-    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout, discount,
+class ActorCriticVtrace(Agent):
+    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, nb_env, nb_rollout, discount,
                  minimum_importance_value=1.0, minimum_importance_policy=1.0, entropy_weight=0.01):
         self.discount = discount
         self.gpu_preprocessor = gpu_preprocessor
@@ -38,6 +38,13 @@ class ActorCriticVtrace(Agent, EnvBase):
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
         self.network.train()
+
+    @classmethod
+    def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
+        return cls(
+            network, device, reward_normalizer, gpu_preprocessor, engine, action_space,
+            args.nb_env, args.exp_length, args.discount
+        )
 
     @property
     def exp_cache(self):
