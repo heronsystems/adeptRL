@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
+from copy import deepcopy 
 import torch
 from absl import flags
 from mpi4py import MPI as mpi
@@ -62,7 +63,13 @@ def main(args):
 
     # construct env
     seed = args.seed if rank == 0 else args.seed + (args.nb_env * (rank - 1))  # unique seed per process
-    env = make_env(args, seed)
+    # don't make a ton of envs if host
+    if rank == 0:
+        env_args = deepcopy(args)
+        env_args.nb_env = 1
+        env = make_env(env_args, seed)
+    else:
+        env = make_env(args, seed)
 
     # construct network
     torch.manual_seed(args.seed)
