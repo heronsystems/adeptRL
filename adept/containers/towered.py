@@ -349,7 +349,7 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
             self.global_step = 0
         # host decides when it wants pytorch buffers
         if self.mpi_buffer_request.test()[0]:
-            buffer_list = [x.numpy() for x in self.network._all_buffers()]
+            buffer_list = [x.cpu().numpy() for x in self.network._all_buffers()]
             self.mpi_buffer_sender.Isend(buffer_list, dest=0, tag=MpiMessages.BUFFER_REQUEST)
             self.mpi_buffer_request = self._create_mpi_buffer_request()
 

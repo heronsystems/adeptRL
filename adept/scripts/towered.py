@@ -111,7 +111,8 @@ def main(args):
         agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
 
         # construct container
-        container = ToweredWorker(agent, env, args.nb_env, logger, summary_writer, args.summary_frequency)
+        container = ToweredWorker(agent, env, args.nb_env, logger, summary_writer,
+                                  args.summary_frequency)
 
         # Run the container
         try:
@@ -158,8 +159,8 @@ if __name__ == '__main__':
     parser = add_base_args(parser)
     parser.add_argument('--gpu-id', type=int, nargs='+', default=0, help='Which GPU(s) to use for training (default: 0)')
     parser.add_argument(
-        '-vn', '--vision-network', default='Nature',
-        help='name of preset network (default: Nature)'
+        '-vn', '--vision-network', default='FourConv',
+        help='name of preset network (default: FourConv)'
     )
     parser.add_argument(
         '-dn', '--discrete-network', default='Identity',
