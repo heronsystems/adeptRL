@@ -114,46 +114,23 @@ class ActorCritic(Agent, EnvBase):
             last_values = results['critic'].squeeze(1).data
 
         r = rollouts
-        rollout_len = len(r.rewards)
 
-        # compute nstep return over batch
-        next_values = last_values
+        # compute nstep return and advantage over batch
         batch_values = torch.stack(r.values)
-        if self.gae:
-            gae = 0.
+        value_targets, batch_advantages = self._compute_returns_advantages(batch_values, last_values,
+                                                                          r.rewards, r.terminals)
 
-        nstep_target_returns = []
-        for i in reversed(range(rollout_len)):
-            rewards = r.rewards[i]
-            terminals = r.terminals[i]
+        # batched value loss
+        value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
 
-            # Generalized Advantage Estimation
-            if self.gae:
-                delta_t = rewards + self.discount * next_values * terminals - batch_values[i].data
-                gae = gae * self.discount * self.tau * terminals + delta_t
-                gae_target_returns = gae + batch_values[i].data
-                nstep_target_returns.append(gae_target_returns)
-                next_values = batch_values[i].data
-            # Nstep return
-            else:
-                # First step of nstep reward target is estimated value of t+1
-                if i == rollout_len - 1:
-                    target_returns = next_values
-                target_returns = rewards + self.discount * target_returns * terminals
-                nstep_target_returns.append(target_returns)
-
-        nstep_target_returns = torch.stack(list(reversed(nstep_target_returns))).data
-        # batch advantage
-        batch_advantages = nstep_target_returns - batch_values
-        value_loss = 0.5 * torch.mean(batch_advantages.pow(2))
-
-        # normalized advantage
+        # normalize advantage so that an even number of actions are reinforced and penalized
         if self.normalize_advantage:
             batch_advantages = (batch_advantages - batch_advantages.mean()) / \
                                (batch_advantages.std() + 1e-5)
         policy_loss = 0.
         entropy_loss = 0.
 
+        rollout_len = len(r.rewards)
         for i in range(rollout_len):
             log_probs = r.log_probs[i]
             entropies = r.entropies[i]
@@ -176,3 +153,38 @@ class ActorCritic(Agent, EnvBase):
         losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
         metrics = {}
         return losses, metrics
+
+    def _compute_returns_advantages(self, values, estimated_value, rewards, terminals):
+        if self.gae:
+            gae = 0.
+            gae_advantages = []
+
+        next_value = estimated_value
+        # First step of nstep reward target is estimated value of t+1
+        target_return = estimated_value
+        nstep_target_returns = []
+        for i in reversed(range(len(rewards))):
+            reward = rewards[i]
+            terminal = terminals[i]
+
+            # Nstep return is always calculated for the critic's target
+            # using the GAE target for the critic results in the same or worse performance
+            target_return = reward + self.discount * target_return * terminal
+            nstep_target_returns.append(target_return)
+
+            # Generalized Advantage Estimation
+            if self.gae:
+                delta_t = reward + self.discount * next_value * terminal - values[i].data
+                gae = gae * self.discount * self.tau * terminal + delta_t
+                gae_advantages.append(gae)
+                next_value = values[i].data
+
+        # reverse lists
+        nstep_target_returns = torch.stack(list(reversed(nstep_target_returns))).data
+
+        if self.gae:
+            advantages = torch.stack(list(reversed(gae_advantages))).data
+        else:
+            advantages = nstep_target_returns - values.data
+
+        return nstep_target_returns, advantages
