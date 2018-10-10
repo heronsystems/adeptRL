@@ -92,7 +92,7 @@ class ActorCritic(Agent):
         self.network.train()
 
         if self.engine == Engines.GYM:
-            return self._act_atari(obs)
+            return self._act_gym(obs)
         elif self.engine == Engines.SC2:
             return self._act_sc2(obs)
         else:
@@ -101,9 +101,9 @@ class ActorCritic(Agent):
         # save action masks in exp cache
 
 
-    def _act_atari(self, obs):
+    def _act_gym(self, obs):
         predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-        values = predictions['critic']
+        values = predictions['critic'].squeeze(1)
 
         # reduce feature dim, build action_key dim
         actions = OrderedDict()
@@ -114,10 +114,10 @@ class ActorCritic(Agent):
             logit = predictions[key]
             prob = F.softmax(logit, dim=1)
             log_prob = F.log_softmax(logit, dim=1)
+            entropy = -(log_prob * prob).sum(1, keepdim=True)
 
             action = prob.multinomial(1)
             log_prob = log_prob.gather(1, action)
-            entropy = -(log_prob * prob).sum(1, keepdim=True)
 
             actions[key] = action.squeeze(1).cpu().numpy()
             log_probs.append(log_prob)
@@ -136,32 +136,25 @@ class ActorCritic(Agent):
 
     def _act_sc2(self, obs):
         predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-        values = predictions['critic']
-
-        if self._func_id_idx is None:
-            self._func_id_idx = self._action_keys.index('func_id')
+        values = predictions['critic'].squeeze(1)
 
         # reduce feature dim, build action_key dim
         actions = OrderedDict()
         log_probs = []
         entropies = []
-        action_masks = []
+        # TODO support multi-dimensional action spaces?
         for key in self._action_keys:
             logit = predictions[key]
             prob = F.softmax(logit, dim=1)
             log_prob = F.log_softmax(logit, dim=1)
+            entropy = -(log_prob * prob).sum(1, keepdim=True)
 
             action = prob.multinomial(1)
             log_prob = log_prob.gather(1, action)
-            entropy = -(log_prob * prob).sum(1, keepdim=True)
 
             actions[key] = action.squeeze(1).cpu().numpy()
             log_probs.append(log_prob)
             entropies.append(entropy)
-            if key == 'func_id':
-                action_masks.append(torch.ones_like(entropy))
-            else:
-                action_masks = torch.zeros_like(entropy)
 
         log_probs = torch.cat(log_probs, dim=1)
         entropies = torch.cat(entropies, dim=1)
@@ -170,8 +163,6 @@ class ActorCritic(Agent):
         for i in range(actions.shape[0]):
             for j in range(actions.shape[1]):
                 pass  # TODO
-
-        # TODO apply mask to log probs and entropies
 
         self.exp_cache.write_forward(
             values=values,
@@ -186,31 +177,16 @@ class ActorCritic(Agent):
         with torch.no_grad():
             predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
 
-        # reduce feature dim, build action_key dim
-        actions = OrderedDict()
-        for key in self._action_keys:
-            logit = predictions[key]
-            prob = F.softmax(logit, dim=1)
-            action = torch.argmax(prob, 1, keepdim=True)
-            actions[key] = action.squeeze(1).cpu().numpy()
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            for key in self._action_keys:
+                logit = predictions[key]
+                prob = F.softmax(logit, dim=1)
+                action = torch.argmax(prob, 1, keepdim=True)
+                actions[key] = action.squeeze(1).cpu().numpy()
 
         self.internals = internals
         return actions
-
-    def preprocess_logits(self, logits):  # TODO delete
-        return logits['Discrete']
-
-    def process_logits(self, logits, obs, deterministic):  # TODO delete
-        prob = F.softmax(logits, dim=1)
-        log_probs = F.log_softmax(logits, dim=1)
-        entropies = -(log_probs * prob).sum(1)
-        if not deterministic:
-            actions = prob.multinomial(1)
-        else:
-            actions = torch.argmax(prob, 1, keepdim=True)
-        log_probs = log_probs.gather(1, actions)
-
-        return actions.squeeze(1).cpu().numpy(), log_probs.squeeze(1), entropies
 
     def compute_loss(self, rollouts, next_obs):
         # estimate value of next state
@@ -230,7 +206,7 @@ class ActorCritic(Agent):
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
             terminals = r.terminals[i]
-            values = r.values[i]        # N, F
+            values = r.values[i]
             log_probs = r.log_probs[i]  # N, F
             entropies = r.entropies[i]  # N, F
 
@@ -248,22 +224,14 @@ class ActorCritic(Agent):
                 gae = gae * self.discount * self.tau * terminals + delta_t
                 advantages = gae
 
-            if isinstance(log_probs, dict):
-                for k in log_probs.keys():
-                    policy_loss = policy_loss - (log_probs[k] * advantages.data)
-                    entropy_loss = entropy_loss - self.entropy_weight * entropies[k]
-            else:
-                # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
-                if log_probs.dim() == 2:
-                    policy_loss = policy_loss - (log_probs * advantages.unsqueeze(1).data).sum(1)
-                    entropy_loss = entropy_loss - (self.entropy_weight * entropies).sum(1)
-                else:
-                    policy_loss = policy_loss - log_probs * advantages.data
-                    entropy_loss = entropy_loss - self.entropy_weight * entropies
+            policy_loss = policy_loss - (log_probs * advantages.unsqueeze(1).data).sum(1)
+            entropy_loss = entropy_loss - (self.entropy_weight * entropies).sum(1)
 
-        policy_loss = torch.mean(policy_loss / rollout_len)
-        entropy_loss = torch.mean(entropy_loss / rollout_len)
-        value_loss = 0.5 * torch.mean(value_loss / rollout_len)
+        batch_size = policy_loss.shape[0]
+        nb_action = log_probs.shape[1]
+        policy_loss = policy_loss.sum(0) / (batch_size * rollout_len * nb_action)
+        entropy_loss = entropy_loss.sum(0) / (batch_size * rollout_len * nb_action)
+        value_loss = 0.5 * value_loss.sum(0) / (batch_size * rollout_len)
         losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
         metrics = {}
         return losses, metrics
