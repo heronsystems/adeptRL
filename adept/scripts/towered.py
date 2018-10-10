@@ -183,7 +183,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--num-grads-to-drop', type=int, default=0,
         help='The number of gradient receives to drop in a round. https://arxiv.org/abs/1604.00981 recommends dropping'
-             '10% of gradients for maximum speed (default: 0)'
+             ' 10 percent of gradients for maximum speed (default: 0)'
     )
     args = parser.parse_args()
 
