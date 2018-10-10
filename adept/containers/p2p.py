@@ -18,6 +18,8 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
             summary_writer,
             summary_frequency,
             shared_seed,
+            save_interval,
+            saver=None,
             synchronize_step_interval=None,
             share_optimizer_params=False
     ):
@@ -28,6 +30,9 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         self._logger = logger
         self._summary_writer = summary_writer
         self._summary_frequency = summary_frequency
+        self._save_interval = save_interval
+        self._next_save_step = save_interval
+        self.saver = saver
         self._synchronize_step_interval = synchronize_step_interval
         self._send_count = 0
         self._share_optimizer_params = share_optimizer_params
@@ -96,8 +101,18 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         total_loss.backward()
         self.optimizer.step()
         self._send_count += 1  # increment here since first step synchronization isn't needed
-        if self._synchronize_step_interval is not None and self._send_count % self._synchronize_step_interval == 0:
+        # synchronize step?
+        should_synchronize = self._synchronize_step_interval is not None and self._send_count % self._synchronize_step_interval == 0
+        # save step?
+        should_save = self.local_step_count * self._mpi_size > self._next_save_step
+        if should_synchronize or should_save:
             self.synchronize_parameters()
+            if should_save:
+                self._next_save_step += self._save_interval
+                # only rank 0 saves
+                if self._mpi_rank == 0:
+                    self.saver.save_state_dicts(self.network, self.local_step_count * self._mpi_size,
+                                                optimizer=self.optimizer)
         else:
             self.submit()
             self.receive()
@@ -181,6 +196,9 @@ class P2PWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewa
         if self._mpi_recv is None:
             self._mpi_recv = MPIArrayRecv(mpi.COMM_WORLD, self.mpi_shapes())
         return self._mpi_recv
+
+    def should_stop(self):
+        return False
 
     def synchronize_parameters(self):
         # use send to get a buffer

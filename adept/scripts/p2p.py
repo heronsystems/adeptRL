@@ -22,7 +22,7 @@ from mpi4py import MPI as mpi
 from tensorboardX import SummaryWriter
 from adept.containers import P2PWorker
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, \
-    log_args, write_args_file
+    log_args, write_args_file, SimpleModelSaver
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, \
     count_parameters
 from datetime import datetime
@@ -46,6 +46,7 @@ def main(args):
                                             timestamp)
         log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
         os.makedirs(log_id_dir)
+        saver = SimpleModelSaver(log_id_dir)
         print_ascii_logo()
     else:
         timestamp = None
@@ -56,12 +57,13 @@ def main(args):
                                             args.vision_network + args.network_body,
                                             timestamp)
         log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+        saver = None
 
     comm.Barrier()
 
     # construct env
     p2pseed = args.seed  # must be shared seed for p2p communication protocol
-    seed = args.seed if rank == 0 else args.seed + (args.nb_env * (rank - 1))  # unique seed per process
+    seed = args.seed if rank == 0 else args.seed + (args.nb_env * rank)  # unique seed per process
     env = make_env(args, seed)
 
     # construct network
@@ -111,7 +113,8 @@ def main(args):
     agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
     # construct container
     container = P2PWorker(agent, env, make_optimizer, args.nb_env, logger, summary_writer, args.summary_frequency,
-                          shared_seed=p2pseed, synchronize_step_interval=args.synchronize_step_interval,
+                          save_interval=args.epoch_len, saver=saver, shared_seed=p2pseed,
+                          synchronize_step_interval=args.synchronize_step_interval,
                           share_optimizer_params=args.share_optimizer_params)
 
     # Run the container
