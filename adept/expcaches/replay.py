@@ -18,19 +18,48 @@ from ._base import BaseExperience
 
 
 class ExperienceReplay(BaseExperience):
+    def __init__(self, batch_size, rollout_len, max_len, reward_normalizer, keys):
+        super(RolloutCache, self).__init__()
+        for k in keys:
+            self[k] = []
+        self['states'] = []
+        self['rewards'] = []
+        self['terminals'] = []
+        self.max_len = max_len
+        self.batch_size = batch_size
+        self.rollout_len = rollout_len
+        self.reward_normalizer = reward_normalizer
 
-    def write_forward(self, items):
-        pass
+    def write_forward(self, **kwargs):
+        for k, v in kwargs.items():
+            self[k].append(v)
+            if len(self[k]) > self.max_len:
+                # TODO: this is really slow according to https://wiki.python.org/moin/TimeComplexity
+                del self[k][0]
 
     def write_env(self, obs, rewards, terminals, infos):
-        pass
+        self['states'].append(obs)
+        if len(self['states']) > self.max_len:
+            # TODO: this is really slow according 
+            del self['states'][0]
+        self['rewards'].append(rewards)
+        if len(self['rewards']) > self.max_len:
+            # TODO: this is really slow according 
+            del self['rewards'][0]
+        self['terminals'].append(terminals)
+        if len(self['terminals']) > self.max_len:
+            # TODO: this is really slow according 
+            del self['terminals'][0]
 
     def read(self):
+        max_ind = len(self) - 2
         pass
 
     def is_ready(self):
         pass
 
+    def __len__(self):
+        return len(self['rewards'])
 
 class PrioritizedExperienceReplay(BaseExperience):
 
