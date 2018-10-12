@@ -35,7 +35,7 @@ We designed this library to be flexible and extensible. Plugging in novel resear
 * We use CUDA 9.1, pytorch 0.4.0, python 3.6
 
 ## Installation
-If you just want to run the code, see the [docker instructions](./docker/)
+If you just want to run the code, see the [docker instructions](./docker/), otherwise:
 * Follow instructions for [PyTorch](https://pytorch.org/)
 * (Optional) Follow instructions for [StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
 
