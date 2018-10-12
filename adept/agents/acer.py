@@ -18,6 +18,7 @@ import torch
 from torch.nn import functional as F
 
 from adept.expcaches.replay import ExperienceReplay
+from adept.networks._base import ModularNetwork
 from adept.utils.util import listd_to_dlist
 from ._base import Agent, EnvBase
 
@@ -26,12 +27,14 @@ class Acer(Agent, EnvBase):
     def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
                  discount, gae, tau, normalize_advantage, entropy_weight=0.01):
         self.discount, self.gae, self.tau = discount, gae, tau
+        self.retrace_clip = 1
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
         self.gpu_preprocessor = gpu_preprocessor
+        self.nb_env = nb_env
 
         self._network = network.to(device)
-        self._exp_cache = ExperienceReplay(32, nb_rollout, 50000, reward_normalizer, 
+        self._exp_cache = ExperienceReplay(self.nb_env, 32, nb_rollout, 50000, reward_normalizer, 
                                            ['actions', 'log_probs', 'internals'])
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
@@ -61,7 +64,8 @@ class Acer(Agent, EnvBase):
     def output_shape(action_space):
         ebn = action_space.entries_by_name
         actor_outputs = {name: entry.shape[0] for name, entry in ebn.items()}
-        head_dict = {'critic': 1, **actor_outputs}
+        # TODO multiple Q outputs
+        head_dict = {'critic': 6, **actor_outputs}
         return head_dict
 
     def act(self, obs):
@@ -107,25 +111,90 @@ class Acer(Agent, EnvBase):
 
         return actions.squeeze(1).cpu().numpy(), log_probs, entropies
 
-    def compute_loss(self, rollouts, next_obs):
+    def compute_forward_batch(self, rollout, obs, internals, terminal_masks, actions):
+        # list to tensor dict
+        obs = {k: torch.stack(v) for k, v in listd_to_dlist(obs).items()}
+
+        values = []
+        log_probs_of_action = []
+        entropies = []
+
+        seq_len, batch_size = terminal_masks.shape
+
+        # if network is modular, trunk can be sped up by combining batch & seq dim
+        def get_results_generator():
+            if isinstance(self.network, ModularNetwork):
+                pathway_dict = self.gpu_preprocessor(obs, self.device)
+                # flatten obs
+                flat_obs = {k: v.view(-1, *v.shape[2:]) for k, v in pathway_dict.items()}
+                embeddings = self.network.trunk.forward(flat_obs)
+                # add back in seq dim
+                seq_embeddings = embeddings.view(seq_len, batch_size, embeddings.shape[-1])
+
+                def get_results(seq_ind, internals):
+                    embedding = seq_embeddings[seq_ind]
+                    pre_result, internals = self.network.body.forward(embedding, internals)
+                    return self.network.head.forward(pre_result, internals)
+                return get_results
+            else:
+                obs_on_device = self.seq_obs_to_pathways(obs, self.device)
+
+                def get_results(seq_ind, internals):
+                    obs_of_seq_ind = obs_on_device[seq_ind]
+                    return self.network(obs_of_seq_ind, internals)
+                return get_results
+
+        result_fn = get_results_generator()
+        all_probs = []
+        log_probs = []
+        for seq_ind in range(terminal_masks.shape[0]):
+            results, internals = result_fn(seq_ind, internals)
+            logits_seq = {k: v for k, v in results.items() if k != 'critic'}
+            logits_seq = self.preprocess_logits(logits_seq)
+            probs_seq, log_probs_seq, log_probs_action_seq, entropies_seq = self.process_logits_batch(logits_seq, actions[seq_ind])
+            # seq lists
+            values.append(results['critic'])
+            all_probs.append(probs_seq)
+            log_probs.append(log_probs_seq)
+            log_probs_of_action.append(log_probs_action_seq)
+            entropies.append(entropies_seq)
+
+            # if this state was terminal reset internals
+            for batch_ind, t_mask in enumerate(terminal_masks[seq_ind]):
+                if t_mask == 0:
+                    reset_internals = self.network.new_internals(self.device)
+                    for k, v in reset_internals.items():
+                        internals[k][batch_ind] = v
+
         # estimate value of next state
-        # nextobs should be [batch, ...]
         with torch.no_grad():
-            next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self.network(next_obs_on_device, self.internals)
-            last_Q = results['critic'].squeeze(1).data
+            last_obs = {k: torch.stack(v) for k, v in rollout.last_obs.items()}
+            next_obs_on_device = self.gpu_preprocessor(last_obs, self.device)
+            results, _ = self.network(next_obs_on_device, rollout.last_internals)
+            # TODO: support action dict
+            last_probs = F.softmax(results['Discrete'], dim=1)
+            last_Q = results['critic']
             # Qret == V(s)
             last_Qret = (last_Q * last_probs).sum(1) 
 
+        # TODO: can't stack if dict
+        return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
+        print('forward batch', type(obs), type(internals))
+        return all_probs, log_probs, Q, entropies
+
+    def compute_loss(self, rollouts, next_obs):
         r = rollouts
+
         actions = r.actions
         terminals = r.terminals
         rewards = r.rewards
         behavior_log_probs = r.log_probs
 
-        # assume that everything is in batch format [seq, bs, ...]
         # recompute forward pass
-        current_probs, current_log_probs, current_Q, entropies = self.compute_forward_batch()
+        current_probs, current_log_probs, current_Q, entropies = self.compute_forward_batch(r.obs,
+                                                                                            r.internals,
+                                                                                            r.terminals)
+        # assume that everything is in batch format [seq, bs, ...]
         current_log_probs_action = current_log_probs.gather(-1, actions)
         values = (current_probs * current_Q).sum(-1)
 
