@@ -20,6 +20,7 @@ import torch
 from adept.environments import Engines
 from torch.nn import functional as F
 
+from adept.environments.sc2 import lookup_headnames_by_id
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
 from ._base import Agent
@@ -52,7 +53,6 @@ class ActorCritic(Agent):
         self._device = device
         self.action_space = action_space
         self._action_keys = list(sorted(action_space.entries_by_name.keys()))
-        self._func_id_idx = None
 
     @classmethod
     def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
@@ -97,9 +97,6 @@ class ActorCritic(Agent):
             return self._act_sc2(obs)
         else:
             raise NotImplementedError()
-        # generate the action masks
-        # save action masks in exp cache
-
 
     def _act_gym(self, obs):
         predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
@@ -140,6 +137,7 @@ class ActorCritic(Agent):
 
         # reduce feature dim, build action_key dim
         actions = OrderedDict()
+        action_masks = OrderedDict()
         log_probs = []
         entropies = []
         # TODO support multi-dimensional action spaces?
@@ -156,13 +154,24 @@ class ActorCritic(Agent):
             log_probs.append(log_prob)
             entropies.append(entropy)
 
+            if key == 'func_id':
+                action_masks[key] = torch.ones_like(entropy)
+            else:
+                action_masks[key] = torch.zeros_like(entropy)
+
         log_probs = torch.cat(log_probs, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
-        action_masks = torch.cat(action_masks, dim=1)
-        for i in range(actions.shape[0]):
-            for j in range(actions.shape[1]):
-                pass  # TODO
+        for i, action in enumerate(actions['func_id']):
+            # convert unavailable actions to NOOP
+            if action not in obs['available_actions']:
+                actions['func_id'][i] = 0
+
+            # build SC2 action masks
+            args = []
+            selected_heads = lookup_headnames_by_id(action)  # TODO, use caching
+            for headname in selected_heads.keys():
+                action_masks[headname][i] = 1.
 
         self.exp_cache.write_forward(
             values=values,

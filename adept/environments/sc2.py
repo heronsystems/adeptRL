@@ -29,7 +29,6 @@ from pysc2.lib.actions import FunctionCall
 from pysc2.lib.features import parse_agent_interface_format, SCREEN_FEATURES, MINIMAP_FEATURES
 from pysc2.lib.static_data import UNIT_TYPES
 
-from adept.agents import EnvBase
 from adept.environments._base import BaseEnvironment, Spaces, Space
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import BaseOp, CastToFloat, FlattenSpace
@@ -159,6 +158,9 @@ class AdeptSC2Env(BaseEnvironment):
         obs['control_groups'] = torch.from_numpy(observation['control_groups'])
         obs['available_actions'] = frozenset(observation['available_actions'])
         return obs
+
+    def _wrap_action(self, action):
+        pass # TODO
 
 
 class SC2RemoveFeatures(BaseOp):
