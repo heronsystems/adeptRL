@@ -17,8 +17,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from .local import Local
 from .evaluation_thread import EvaluationThread
 from .evaluation import ReplayGenerator, Renderer, Evaluation
-try:
+
+# test if mpi exists https://stackoverflow.com/a/14050282/3403018
+import importlib
+mpi4py_spec = importlib.util.find_spec("mpi4py")
+if mpi4py_spec is not None:
     from .towered import ToweredHost, ToweredWorker
     from .impala import ImpalaHost, ImpalaWorker
-except ImportError:
-    print('MPI not detected')

@@ -17,12 +17,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from ._base import (
     HasAgent, WritesSummaries, LogsAndSummarizesRewards, AppliesGrads, MPIProc, HasEnvironment
 )
-from .mpi import MPIHelper, MpiMessages, ArrayFlattener
+from .mpi import MPIHelper, MPIArraySend, MpiMessages, ArrayFlattener
 import numpy as np
 import torch
 import time
 from mpi4py import MPI as mpi
 from collections import OrderedDict
+from threading import Thread
 
 
 class ToweredHost(AppliesGrads):
@@ -46,6 +47,10 @@ class ToweredHost(AppliesGrads):
             [tuple(x.shape) for x in self.network.parameters()] + [(1)])  # +1 for timestep
         self.variable_flattener = ArrayFlattener([tuple(x.shape) for x in self.network.parameters()])
 
+        # vars for sending network buffers
+        self.mpi_buffer_sender = MPIArraySend(mpi_comm, [tuple(x.shape) for x in 
+                                                         self.network._all_buffers()])
+
         # workers will send name and shapes of gradients just check the order is the same
         for w_ind in range(1, mpi_comm.size):
             # Workers should send an ordered dict of {'name': shape, ...}
@@ -59,6 +64,11 @@ class ToweredHost(AppliesGrads):
         return self._optimizer
 
     def run(self, max_steps=float('inf'), initial_step_count=0):
+        # start saving thread
+        self._saver_should_be_done = False
+        saver_thread = Thread(target=self._saver_thread, args=())
+        saver_thread.start()
+
         variable_buffer = np.empty(self.variable_flattener.total_size, np.float32)
 
         # setup gradient buffers
@@ -79,20 +89,7 @@ class ToweredHost(AppliesGrads):
         num_grads_to_keep = (size - 1) - self.num_grads_to_drop
 
         # vars for the next step to save/req buffers at
-        save_step = -1
-        send_request_for_buffers_step = -1
         while self.global_step < max_steps:
-            # if pytorch model has buffers, all workers need to send to host, and host has to wait for all
-            send_request_for_buffers = False
-            # if should save, send out a request for pytorch buffers if they exist
-            if self.should_save():
-                save_step = self.sent_parameters_count + 1
-                has_buffers = len(list(self.network._all_buffers())) > 0
-                if has_buffers:
-                    send_request_for_buffers = True
-                    # this has to happen on the next step, since workers will recieve the request the next time they check for ack
-                    send_request_for_buffers_step = self.sent_parameters_count + 1
-
             # get batch workers
             while len(workers_in_this_batch) < num_grads_to_keep:
                 status = mpi.Status()
@@ -103,7 +100,7 @@ class ToweredHost(AppliesGrads):
                 timesteps[worker - 1] = grad_buffers[worker - 1][-1]  # just want a single value
                 self.global_step = sum(timesteps)
                 # upon recieving batch, send ack
-                batch_acks[worker - 1] = self.comm.isend((self.global_step, send_request_for_buffers), dest=worker,
+                batch_acks[worker - 1] = self.comm.isend((self.global_step), dest=worker,
                                                          tag=MpiMessages.SEND_ACK)
                 # setup new receive
                 reqs[worker - 1] = self.comm.Irecv(grad_buffers[worker - 1], source=worker, tag=MpiMessages.SEND)
@@ -123,15 +120,6 @@ class ToweredHost(AppliesGrads):
                 if i not in workers_in_this_batch:
                     workers_to_drop.add(i)
 
-            # if request for buffers was sent last step, workers will wait on Reduce to host
-            if send_request_for_buffers_step == self.sent_parameters_count:
-                # TODO: this is probably faster if all buffers are flattened
-                for x in self.network._all_buffers():
-                    cpux = x.numpy()  # technically, this shares the numpy buffer so the copy below isn't needed
-                    self.comm.Reduce(np.zeros_like(cpux), cpux, op=mpi.SUM, root=0)
-                    # average workers buffers
-                    x.copy_(torch.from_numpy(cpux)).div_(size - 1)
-
             # batch ready
             combined_grads = self.combine_gradients(received_grads)
             self.write_gradient_summaries(combined_grads, self.global_step)
@@ -139,10 +127,6 @@ class ToweredHost(AppliesGrads):
             new_variables_flat = self.variable_flattener.flatten(self.get_parameters_numpy(),
                                                                  buffer=variable_buffer)
             self.comm.Ibcast(new_variables_flat, root=0)
-
-            # this has to be before incrementing the sent param count
-            if save_step == self.sent_parameters_count:
-                self.saver.save_state_dicts(self.network, int(self.global_step), optimizer=self.optimizer)
 
             self.sent_parameters_count += 1
             received_grads = []
@@ -155,6 +139,7 @@ class ToweredHost(AppliesGrads):
                 ))
 
         # cleanup
+        self._saver_should_be_done = True
         print('Host sending stop')
         for i in range(1, size):
             self.comm.isend(True, dest=i, tag=MpiMessages.STOP)
@@ -180,6 +165,56 @@ class ToweredHost(AppliesGrads):
                         time.sleep(0.1)
 
         print('Host sees all threads as stopped.')
+
+    def _saver_thread(self):
+        num_workers = self.comm.Get_size() - 1
+        # setup for receiving buffers
+        buffer_shapes = [tuple(x.shape) for x in self.network._all_buffers()]
+        buffer_flattener = ArrayFlattener(buffer_shapes)
+        next_save_step = self.save_interval
+        try:
+            while not self._saver_should_be_done:
+                current_step = self.global_step
+                if current_step > next_save_step:
+                    buffer_params = [buffer_flattener.create_buffer() for i in range(num_workers)]
+                    statuses = []
+                    # request buffers params from all workers
+                    recv_comms = []
+                    for i in range(num_workers):
+                        self.comm.isend(True, dest=i, tag=MpiMessages.BUFFER_REQUEST)
+                        recv_comms.append(self.comm.Irecv(buffer_params[i], source=i,
+                                                          tag=MpiMessages.BUFFER_REQUEST))
+                        statuses.append(mpi.Status())
+
+                    # wait for all workers to send buffers
+                    mpi.Request.Waitall(recv_comms, statuses)
+
+                    # all buffers are filled
+                    unflattened_buffer_params = None
+                    for i in range(num_workers):
+                        if unflattened_buffer_params is None:
+                            unflattened_buffer_params = buffer_flattener.unflatten(buffer_params[i])
+                        else:
+                            for all_bp, bp in zip(unflattened_buffer_params,
+                                                  buffer_flattener.unflatten(buffer_params[i])):
+                                all_bp += bp
+
+                    # can't divide here since numpy reduces from array to float on tensors with shape ()
+                    all_buffer_params = [x for x in unflattened_buffer_params]
+                    # set buffers
+                    for b, all_bp in zip(self.network._all_buffers(), all_buffer_params):
+                        # mean over all workers
+                        b.copy_(torch.from_numpy(all_bp)).div_(num_workers)
+
+                    # finally save
+                    self.saver.save_state_dicts(self.network, int(current_step), optimizer=self.optimizer)
+                    next_save_step += self.save_interval
+                time.sleep(1)
+        except Exception as e:
+            print('Error saving', e)
+
+        # final save
+        self.saver.save_state_dicts(self.network, int(self.global_step), optimizer=self.optimizer)
 
     def combine_gradients(self, gradients_list):
         gradients = []
@@ -208,12 +243,6 @@ class ToweredHost(AppliesGrads):
                 p.grad.copy_(g)  # overwrite values in parameter grad without creating a new memory copy
 
         self.optimizer.step()
-
-    def should_save(self):
-        if self.global_step > self._next_save_step:
-            self._next_save_step += self.save_interval
-            return True
-        return False
 
 
 class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards, MPIProc):
@@ -244,6 +273,9 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
         self.mpi_helper = MPIHelper(
             send_shapes, recv_shapes, 0, max_parameter_skip, gradient_warning_time, variable_warning_time
         )
+        self.mpi_buffer_request = self._create_mpi_buffer_request()
+        self.mpi_buffer_sender = MPIArraySend(self._mpi_comm, [tuple(x.shape) for x in
+                                                               self.network._all_buffers()])
         self.global_step = 0
 
     @property
@@ -312,14 +344,17 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
         gradients = self._get_gradients()
         host_info = self.mpi_helper.send(gradients, self.local_step_count)
         if host_info is not None:
-            self.global_step, should_send_buffers = host_info
+            self.global_step = host_info
         else:
-            self.global_step, should_send_buffers = 0, False
-        # host decides when it wants pytorch buffers, if true reduce buffers to host
-        if should_send_buffers:
-            for x in self.network._all_buffers():
-                cpux = x.cpu().numpy()
-                self._mpi_comm.Reduce(cpux, None, op=mpi.SUM, root=0)
+            self.global_step = 0
+        # host decides when it wants pytorch buffers
+        if self.mpi_buffer_request.test()[0]:
+            buffer_list = [x.cpu().numpy() for x in self.network._all_buffers()]
+            self.mpi_buffer_sender.Isend(buffer_list, dest=0, tag=MpiMessages.BUFFER_REQUEST)
+            self.mpi_buffer_request = self._create_mpi_buffer_request()
+
+    def _create_mpi_buffer_request(self):
+        return self._mpi_comm.irecv(source=0, tag=MpiMessages.BUFFER_REQUEST)
 
     def receive(self):
         """
