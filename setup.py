@@ -33,6 +33,7 @@ setup(
         'mpi': ['mpi4py>=3.0'],
         'sc2': ['pysc2>=2.0'],
         'profiler': ['pyinstrument>=2.0']
+        'hearthstone':['gym-hearthstone']
     },
     include_package_data=True
 )
