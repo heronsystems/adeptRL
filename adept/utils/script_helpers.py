@@ -20,6 +20,7 @@ from adept.agents import AGENTS, AGENT_ARGS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
 from adept.environments import reward_normalizer_by_env_id
 from adept.environments.atari import make_atari_env
+from adept.environments.hearthstone import make_hearthstone_env
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
 from adept.utils.util import parse_bool
