@@ -25,6 +25,7 @@ Execution Modes
 Environments
 * OpenAI Gym
 * StarCraft 2 (alpha, impala mode does not work with SC2 yet)
+* Hearthstone (alpha, impala mode is causing memory to crash)
 
 We designed this library to be flexible and extensible. Plugging in novel research ideas should be doable.
 
@@ -79,6 +80,10 @@ mpiexec -n 3 python -m adept.scripts.impala --env-id BeamRiderNoFrameskip-v4
 # StarCraft 2 (IMPALA not supported yet)
 # Warning: much more resource intensive than Atari
 python -m adept.scripts.local --env-id CollectMineralShards
+
+# Hearthstone (Currently fixing memory bug)
+# Must install environment using directions here: https://github.com/SethKitchen/hearthstone-gym
+mpiexec -n 3 python -m adept.scripts.impala --env-id hearthstone
 
 # To see a full list of options:
 python -m adept.scripts.local -h
