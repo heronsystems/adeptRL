@@ -35,7 +35,7 @@ def make_env(args, seed, subprocess=True, render=False):
         envs = sc2_from_args(args, seed, subprocess, render)
     elif (args.env_id=='hearthstone'):
         envs = hearthstone_from_args(args, seed, subprocess)
-    else
+    else:
         envs = atari_from_args(args, seed, subprocess)
     return envs
 
