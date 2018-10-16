@@ -20,6 +20,7 @@ from adept.agents import AGENTS, AGENT_ARGS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
 from adept.environments import reward_normalizer_by_env_id
 from adept.environments.atari import make_atari_env
+from adept.environments.hearthstone import make_hearthstone_env
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
 from adept.utils.util import parse_bool
@@ -33,6 +34,8 @@ except ImportError:
 def make_env(args, seed, subprocess=True, render=False):
     if args.env_id in SC2_ENVS:
         envs = sc2_from_args(args, seed, subprocess, render)
+    elif (args.env_id=='hearthstone'):
+        envs = hearthstone_from_args(args, seed, subprocess)
     else:
         envs = atari_from_args(args, seed, subprocess)
     return envs
@@ -63,6 +66,14 @@ def atari_from_args(args, seed, subprocess=True):
     )
     return envs
 
+def hearthstone_from_args(args, seed, subprocess=True):
+    env_wrapper_class = SubProcEnv if subprocess else DummyVecEnv
+    envs = env_wrapper_class(
+        [
+            make_hearthstone_env() for i in range(args.nb_env)
+        ], Engines.GYM
+    )
+    return envs
 
 def make_network(
     observation_space,
