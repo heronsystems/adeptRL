@@ -253,21 +253,26 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
     def get_parameter_shapes(self):
         shapes = [tuple(x.shape) for x in self.network.parameters()]
         if not self.use_local_buffers:
-            if torch.__version__=='1.0.0a0+16b8075':
-                shapes.extend([tuple(x.shape) for x in self.network.buffers()])
-            else:
-                shapes.extend([tuple(x.shape) for x in self.network._all_buffers()])         
+            shapes.extend(_collect_buffer_shapes())   
         return shapes
 
     def get_parameters_numpy(self):
         params = [p.detach().cpu().numpy() for p in self.network.parameters()]
         if not self.use_local_buffers:
-            if torch.__version__=='1.0.0a0+16b8075':
-                params.extend([b.cpu().numpy() for b in self.network.buffers()])
-            else:
-                params.extend([b.cpu().numpy() for b in self.network._all_buffers()])
+            params.extend(_numpy_collect_buffer_shapes())
         return params
+    
+    def _numpy_collect_buffer_shapes():
+        if "0.4.0" in torch.__version__:
+            return [b.cpu().numpy() for b in self.network._all_buffers()]
+        else:
+            return [b.cpu().numpy() for b in self.network.buffers()]
 
+    def _collect_buffer_shapes():
+        if "0.4.0" in torch.__version__:
+            return [tuple(x.shape) for x in self.network._all_buffers()]
+        else:
+            return [tuple(x.shape) for x in self.network.buffers()]
 
 class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
     def __init__(
@@ -433,10 +438,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
     def set_parameters(self, parameters):
         local_params = list(self.network.parameters())
         if not self.use_local_buffers:
-            if torch.__version__=='1.0.0a0+16b8075':
-                local_params.extend([b for b in self.network.buffers()])
-            else:
-                local_params.extend([b for b in self.network._all_buffers()])
+            local_params.extend(_local_collect_buffer_shapes())
 
         for p, v in zip(local_params, parameters):
             p.data.copy_(v, non_blocking=True)
@@ -444,11 +446,20 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
     def get_parameter_shapes(self):
         shapes = [tuple(x.shape) for x in self.network.parameters()]
         if not self.use_local_buffers:
-            if torch.__version__=='1.0.0a0+16b8075':
-                shapes.extend([tuple(x.shape) for x in self.network.buffers()])
-            else
-                shapes.extend([tuple(x.shape) for x in self.network._all_buffers()])
+            shapes.extend(_collect_buffer_shapes())
         return shapes
+
+    def _local_collect_buffer_shapes():
+        if "0.4.0" in torch.__version__:
+            return [b for b in self.network._all_buffers()]
+        else:
+            return [b for b in self.network.buffers()]
+
+    def _collect_buffer_shapes():
+        if "0.4.0" in torch.__version__:
+            return [tuple(x.shape) for x in self.network._all_buffers()]
+        else:
+            return [tuple(x.shape) for x in self.network.buffers()]
 
     def close(self):
         self.mpi_helper.close()
