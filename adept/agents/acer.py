@@ -16,6 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import torch
 from torch.nn import functional as F
+import numpy as np
 
 from adept.expcaches.replay import ExperienceReplay
 from adept.networks._base import ModularNetwork
@@ -111,10 +112,14 @@ class Acer(Agent, EnvBase):
 
         return actions.squeeze(1).cpu().numpy(), log_probs, entropies
 
-    def compute_forward_batch(self, rollout, obs, internals, terminal_masks, actions):
-        # list to tensor dict
-        obs = {k: torch.stack(v) for k, v in listd_to_dlist(obs).items()}
+    def process_logits_batch(self, logits):
+        prob = F.softmax(logits, dim=-1)
+        log_probs = F.log_softmax(logits, dim=-1)
+        entropies = -(log_probs * prob).sum(-1)
 
+        return prob, log_probs, entropies
+
+    def compute_forward_batch(self, obs, internals, last_obs, last_internals, terminal_masks, actions):
         values = []
         log_probs_of_action = []
         entropies = []
@@ -151,12 +156,11 @@ class Acer(Agent, EnvBase):
             results, internals = result_fn(seq_ind, internals)
             logits_seq = {k: v for k, v in results.items() if k != 'critic'}
             logits_seq = self.preprocess_logits(logits_seq)
-            probs_seq, log_probs_seq, log_probs_action_seq, entropies_seq = self.process_logits_batch(logits_seq, actions[seq_ind])
+            probs_seq, log_probs_seq, entropies_seq = self.process_logits_batch(logits_seq) 
             # seq lists
             values.append(results['critic'])
             all_probs.append(probs_seq)
             log_probs.append(log_probs_seq)
-            log_probs_of_action.append(log_probs_action_seq)
             entropies.append(entropies_seq)
 
             # if this state was terminal reset internals
@@ -168,9 +172,8 @@ class Acer(Agent, EnvBase):
 
         # estimate value of next state
         with torch.no_grad():
-            last_obs = {k: torch.stack(v) for k, v in rollout.last_obs.items()}
             next_obs_on_device = self.gpu_preprocessor(last_obs, self.device)
-            results, _ = self.network(next_obs_on_device, rollout.last_internals)
+            results, _ = self.network(next_obs_on_device, last_internals)
             # TODO: support action dict
             last_probs = F.softmax(results['Discrete'], dim=1)
             last_Q = results['critic']
@@ -178,48 +181,50 @@ class Acer(Agent, EnvBase):
             last_Qret = (last_Q * last_probs).sum(1) 
 
         # TODO: can't stack if dict
-        return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
-        print('forward batch', type(obs), type(internals))
-        return all_probs, log_probs, Q, entropies
+        # return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
+        
+        return torch.stack(all_probs), torch.stack(log_probs), torch.stack(values), torch.stack(entropies), last_Qret
 
     def compute_loss(self, rollouts, next_obs):
         r = rollouts
 
-        actions = r.actions
-        terminals = r.terminals
-        rewards = r.rewards
-        behavior_log_probs = r.log_probs
+        # everything is batch x seq transpose to seq x batch
+        terminal_masks = r.terminals.t().float()
+        actions = r.actions.t()
+        rewards = r.rewards.t().float()  # TODO: make replay return floats?
+        behavior_log_probs = r.log_probs.transpose(0, 1)
+        # TODO: calling contiguous is slow
+        obs = {k: v.transpose(0, 1).contiguous() for k, v in r.obs.items()}
+        internals = {k: v.transpose(0, 1).contiguous() for k, v in r.internals.items()}
+        last_obs = r.last_obs
+        last_internals = r.last_internals
 
         # recompute forward pass
-        current_probs, current_log_probs, current_Q, entropies = self.compute_forward_batch(r.obs,
-                                                                                            r.internals,
-                                                                                            r.terminals)
-        # assume that everything is in batch format [seq, bs, ...]
-        current_log_probs_action = current_log_probs.gather(-1, actions)
+        current_probs, current_log_probs, current_Q, entropies, last_Qret = \
+            self.compute_forward_batch(obs, internals, last_obs, last_internals, terminal_masks, actions)
+        # everything is in batch format [seq, bs, ...]
+        current_log_probs_action = current_log_probs.gather(-1, actions.unsqueeze(-1)).squeeze(-1)
         values = (current_probs * current_Q).sum(-1)
+
 
         # loop over seq
         Qret = last_Qret
         next_importance = 1.
-        batch_size = len(r.rewards[0])
-        rollout_len = len(r.rewards)
-        for i in range(rollout_len):
-            terminal_mask = terminals[i]
-            current_Q_action = current_Q[i].gather(1, actions[i])
+        rollout_len = len(r.rewards[0])
+        batch_size = len(r.rewards)
+        critic_loss_seq = 0.
+        policy_loss_seq = 0.
+        for i in reversed(range(rollout_len)):
+            terminal_mask = terminal_masks[i]
+            current_Q_action = current_Q[i].gather(-1, actions[i].unsqueeze(-1)).squeeze(-1)
 
             # targets and constants have no grad
             with torch.no_grad():
                 # importance ratio
                 log_diff = current_log_probs[i] - behavior_log_probs[i]
                 importance = torch.exp(log_diff)
-                importance_action = importance.gather(1, actions[i])
+                importance_action = importance.gather(-1, actions[i].unsqueeze(-1)).squeeze(-1)
                 importance_action_clipped = torch.clamp(importance_action, max=1)
-
-                # discounted Retrace return 
-                discount_mask = self.discount * terminal_mask
-                delta_Qret = (Qret - current_Q_action) * next_importance
-                Qret = rewards[i] + discount_mask * delta_Qret \
-                       + discount_mask * next_value
 
                 # advantage
                 advantage = Qret - values[i]
@@ -232,10 +237,10 @@ class Acer(Agent, EnvBase):
             policy_loss /= batch_size
 
             # off policy bias correction last half of eq(9)
-            bias_advantage = (current_Q_action - values[i]).data
-            bias_weight = F.relu((importance - self.retrace_clip) / importance)
+            bias_advantage = (current_Q[i] - values[i].unsqueeze(1)).data
+            bias_weight = F.relu((importance - self.retrace_clip) / importance).data
             # sum over actions
-            off_policy_loss = (-bias_weight * current_log_probs * bias_advantage).sum(1)
+            off_policy_loss = -(bias_weight * current_log_probs[i] * bias_advantage).sum(-1)
             off_policy_loss /= batch_size
 
             # sum policy loss over seq
@@ -245,7 +250,13 @@ class Acer(Agent, EnvBase):
             next_value = values[i].data
             next_importance = importance_action_clipped.data
 
-        print(critic_loss_seq.shape, policy_loss_seq.shape)
+            # discounted Retrace return 
+            with torch.no_grad():
+                discount_mask = self.discount * terminal_mask
+                delta_Qret = (Qret - current_Q_action) * next_importance
+                Qret = rewards[i] + discount_mask * delta_Qret \
+                       + discount_mask * next_value
+
         critic_loss = critic_loss_seq / rollout_len
         policy_loss = torch.mean(policy_loss_seq / rollout_len)
         entropy_loss = -torch.mean(self.entropy_weight * entropies)
