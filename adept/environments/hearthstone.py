@@ -36,7 +36,7 @@ def hearthstone_env():
     return env
 
 
-class AdeptGymEnv(BaseEnvironment):
+class AdeptHearthstoneEnv(BaseEnvironment):
     def __init__(self, env):
         self.gym_env = env
         cpu_ops = []

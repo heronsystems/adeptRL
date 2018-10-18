@@ -48,12 +48,8 @@ class ToweredHost(AppliesGrads):
         self.variable_flattener = ArrayFlattener([tuple(x.shape) for x in self.network.parameters()])
 
         # vars for sending network buffers
-        if torch.__version__=='1.0.0a0+16b8075':
-            self.mpi_buffer_sender = MPIArraySend(mpi_comm, [tuple(x.shape) for x in 
-                                                         self.network.buffers()])
-        else:
-            self.mpi_buffer_sender = MPIArraySend(mpi_comm, [tuple(x.shape) for x in 
-                                                         self.network._all_buffers()])
+        self.mpi_buffer_sender = MPIArraySend(mpi_comm, _collect_buffer_shapes())
+
 
         # workers will send name and shapes of gradients just check the order is the same
         for w_ind in range(1, mpi_comm.size):
@@ -170,13 +166,22 @@ class ToweredHost(AppliesGrads):
 
         print('Host sees all threads as stopped.')
 
+    def _numpy_collect_buffer_shapes():
+        if "0.4.0" in torch.__version__:
+            return [b.cpu().numpy() for b in self.network._all_buffers()]
+        else:
+            return [b.cpu().numpy() for b in self.network.buffers()]
+    
+    def _collect_buffer_shapes():
+        if "0.4.0" in torch.__version__:
+            return [tuple(x.shape) for x in self.network._all_buffers()]
+        else:
+            return [tuple(x.shape) for x in self.network.buffers()]
+
     def _saver_thread(self):
         num_workers = self.comm.Get_size() - 1
         # setup for receiving buffers
-        if torch.__version__=='1.0.0a0+16b8075':
-            buffer_shapes = [tuple(x.shape) for x in self.network.buffers()]
-        else:
-            buffer_shapes = [tuple(x.shape) for x in self.network._all_buffers()]
+        buffer_shapes = _collect_buffer_shapes()
 
         buffer_flattener = ArrayFlattener(buffer_shapes)
         next_save_step = self.save_interval
@@ -210,12 +215,12 @@ class ToweredHost(AppliesGrads):
                     # can't divide here since numpy reduces from array to float on tensors with shape ()
                     all_buffer_params = [x for x in unflattened_buffer_params]
                     # set buffers
-                    if torch.__version__=='1.0.0a0+16b8075':
-                        for b, all_bp in zip(self.network.buffers(), all_buffer_params):
+                    if "0.4.0" in torch.__version__:
+                        for b, all_bp in zip(self.network._all_buffers(), all_buffer_params):
                             # mean over all workers
                             b.copy_(torch.from_numpy(all_bp)).div_(num_workers)
                     else:
-                        for b, all_bp in zip(self.network._all_buffers(), all_buffer_params):
+                        for b, all_bp in zip(self.network.buffers(), all_buffer_params):
                             # mean over all workers
                             b.copy_(torch.from_numpy(all_bp)).div_(num_workers)
 
@@ -287,12 +292,7 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
             send_shapes, recv_shapes, 0, max_parameter_skip, gradient_warning_time, variable_warning_time
         )
         self.mpi_buffer_request = self._create_mpi_buffer_request()
-        if torch.__version__=='1.0.0a0+16b8075':
-            self.mpi_buffer_sender = MPIArraySend(self._mpi_comm, [tuple(x.shape) for x in
-                                                                self.network.buffers()])
-        else:
-            self.mpi_buffer_sender = MPIArraySend(self._mpi_comm, [tuple(x.shape) for x in
-                                                                self.network._all_buffers()])
+        self.mpi_buffer_sender = MPIArraySend(self._mpi_comm, _collect_buffer_shapes())
 
         self.global_step = 0
 
@@ -367,11 +367,8 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
             self.global_step = 0
         # host decides when it wants pytorch buffers
         if self.mpi_buffer_request.test()[0]:
-            if torch.__version__=='1.0.0a0+16b8075':
-                buffer_list = [x.cpu().numpy() for x in self.network.buffers()]
-            else:
-                buffer_list = [x.cpu().numpy() for x in self.network._all_buffers()]
-                
+            buffer_list = _numpy_collect_buffer_shapes()
+ 
             self.mpi_buffer_sender.Isend(buffer_list, dest=0, tag=MpiMessages.BUFFER_REQUEST)
             self.mpi_buffer_request = self._create_mpi_buffer_request()
 
