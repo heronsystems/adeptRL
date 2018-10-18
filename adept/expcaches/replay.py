@@ -38,8 +38,8 @@ class ExperienceReplay(dict, BaseExperience):
         self.reward_normalizer = reward_normalizer
         self._cached_rollout = []
         self._cache_thread = Thread(target=self._cache_loop)
-        self._cache_thread.start()
-        self.max_cache = 5
+        # self._cache_thread.start()
+        self.max_cache = 2
 
     def write_forward(self, **kwargs):
         for k, v in kwargs.items():
@@ -133,7 +133,6 @@ class ExperienceReplay(dict, BaseExperience):
             orig_shape = tensor.shape
             tensor = tensor.reshape(self.batch_size, self.rollout_len, self.nb_env, -1)
             return tensor[np.arange(self.batch_size), :, worker_inds]
-            return tensor.reshape((self.batch_size, self.rollout_len,) + orig_shape[2:])
         # list of lists or numpy arrays
         else: 
             array = torch.from_numpy(np.asarray(sliced_v))

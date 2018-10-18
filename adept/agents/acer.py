@@ -77,7 +77,7 @@ class Acer(Agent, EnvBase):
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
-            actions, log_probs_all, _ = self.process_logits(logits, obs, deterministic=False)
+            actions, log_probs_all = self.process_logits(logits, obs, deterministic=False)
 
         self.exp_cache.write_forward(
             log_probs=log_probs_all,
@@ -104,13 +104,12 @@ class Acer(Agent, EnvBase):
     def process_logits(self, logits, obs, deterministic):
         prob = F.softmax(logits, dim=1)
         log_probs = F.log_softmax(logits, dim=1)
-        entropies = -(log_probs * prob).sum(1)
         if not deterministic:
             actions = prob.multinomial(1)
         else:
             actions = torch.argmax(prob, 1, keepdim=True)
 
-        return actions.squeeze(1).cpu().numpy(), log_probs, entropies
+        return actions.squeeze(1).cpu().numpy(), log_probs.cpu().numpy()
 
     def process_logits_batch(self, logits):
         prob = F.softmax(logits, dim=-1)
@@ -189,10 +188,10 @@ class Acer(Agent, EnvBase):
         r = rollouts
 
         # everything is batch x seq transpose to seq x batch
-        terminal_masks = r.terminals.t().float()
-        actions = r.actions.t()
-        rewards = r.rewards.t().float()  # TODO: make replay return floats?
-        behavior_log_probs = r.log_probs.transpose(0, 1)
+        terminal_masks = r.terminals.t().float().to(self.device)
+        actions = r.actions.t().to(self.device)
+        rewards = r.rewards.t().float().to(self.device)  # TODO: make replay return floats?
+        behavior_log_probs = r.log_probs.transpose(0, 1).to(self.device)
         # TODO: calling contiguous is slow
         obs = {k: v.transpose(0, 1).contiguous() for k, v in r.obs.items()}
         internals = {k: v.transpose(0, 1).contiguous() for k, v in r.internals.items()}
