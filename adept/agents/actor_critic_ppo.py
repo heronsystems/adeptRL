@@ -26,8 +26,9 @@ from torch.utils.data.sampler import SequentialSampler, BatchSampler
 
 class ActorCriticPPO(Agent, EnvBase):
     def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
-                 discount, gae, tau, nb_epoch, batch_size, loss_clip):
+                 discount, gae, tau, normalize_advantage, nb_epoch, batch_size, loss_clip):
         self.discount, self.gae, self.tau = discount, gae, tau
+        self.normalize_advantage = normalize_advantage
         self.gpu_preprocessor = gpu_preprocessor
 
         self._network = network.to(device)
@@ -207,8 +208,9 @@ class ActorCriticPPO(Agent, EnvBase):
         terminals_batch = torch.stack(r.terminals)
 
         # Normalize advantage
-        adv_targets_batch = (adv_targets_batch - adv_targets_batch.mean()) / \
-                            (adv_targets_batch.std() + 1e-5)
+        if self.normalize_advantage:
+            adv_targets_batch = (adv_targets_batch - adv_targets_batch.mean()) / \
+                                (adv_targets_batch.std() + 1e-5)
 
         for e in range(self.nb_epoch):
             # setup minibatch iterator
