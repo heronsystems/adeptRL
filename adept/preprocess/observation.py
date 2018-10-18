@@ -35,17 +35,18 @@ class ObsPreprocessor:
 
     def __call__(self, obs, device=None):
         nbr = self.observation_space.names_by_rank
+        processed_obs = {k: v for k, v in obs.items()}
         for op in self.ops:
             for rank, names in nbr.items():
                 for name in names:
                     if device is not None:
-                        new_obs = obs[name].to(device)
+                        new_obs = processed_obs[name].to(device)
                     else:
-                        new_obs = obs[name]
+                        new_obs = processed_obs[name]
 
                     if op.filter(name, rank):
-                        obs[name] = op.update_obs(new_obs)
-        return obs
+                        processed_obs[name] = op.update_obs(new_obs)
+        return processed_obs
 
     def reset(self):
         for o in self.ops:
