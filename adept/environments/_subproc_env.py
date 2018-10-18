@@ -52,7 +52,15 @@ def worker(remote, parent_remote, env_fn_wrapper):
     env = env_fn_wrapper.x()
 
     ebn = env.cpu_preprocessor.observation_space.entries_by_name
-    shared_memory = {name: torch.FloatTensor(*entry.shape) for name, entry in ebn.items() if None not in entry.shape}
+    shared_memory = {}
+    for name, entry in ebn.items(): 
+        if None not in entry.shape:
+            if entry.dtype == np.uint8:
+                tensor = torch.ByteTensor(*entry.shape)
+            # TODO: support more datatypes
+            else:
+                tensor = torch.FloatTensor(*entry.shape)
+            shared_memory[name] = tensor
 
     while True:
         cmd, data = remote.recv()
