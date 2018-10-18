@@ -73,16 +73,15 @@ class Acer(Agent, EnvBase):
         self.network.train()
         with torch.no_grad():
             results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-            values = results['critic'].squeeze(1)
             logits = {k: v for k, v in results.items() if k != 'critic'}
 
             logits = self.preprocess_logits(logits)
             actions, log_probs_all = self.process_logits(logits, obs, deterministic=False)
 
         self.exp_cache.write_forward(
-            log_probs=log_probs_all,
+            log_probs=log_probs_all.cpu().numpy(),
             actions=actions,
-            internals=self.internals
+            # internals=self.internals  # TODO: detach internals
         )
         self.internals = internals
         return actions
@@ -109,7 +108,7 @@ class Acer(Agent, EnvBase):
         else:
             actions = torch.argmax(prob, 1, keepdim=True)
 
-        return actions.squeeze(1).cpu().numpy(), log_probs.cpu().numpy()
+        return actions.squeeze(1).cpu().numpy(), log_probs
 
     def process_logits_batch(self, logits):
         prob = F.softmax(logits, dim=-1)

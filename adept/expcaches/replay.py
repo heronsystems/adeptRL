@@ -25,43 +25,52 @@ from collections import namedtuple
 class ExperienceReplay(dict, BaseExperience):
     def __init__(self, nb_env, batch_size, rollout_len, max_len, reward_normalizer, keys):
         super().__init__()
-        for k in keys:
-            self[k] = []
-        self['obs'] = []
-        self['rewards'] = []
-        self['terminals'] = []
+        # TODO: it's best to give the observation_space here along with any other data that will be
+        # stored
+        self['rewards'] = np.empty((max_len, nb_env), dtype=np.float32)
+        self['terminals'] = np.empty((max_len, nb_env), dtype=np.float32)
         self.nb_env = nb_env
-        self.max_len = max_len
+        self.max_len = max_len // nb_env
         self.batch_size = batch_size
         self.rollout_len = rollout_len
         self.min_length = 100
         self.reward_normalizer = reward_normalizer
         self._cached_rollout = []
         self._cache_thread = Thread(target=self._cache_loop)
-        # self._cache_thread.start()
-        self.max_cache = 2
+        self.max_cache = 5
+        self._current_index = 0
+        self._num_inserted = 0
+        self._cache_thread.start()
 
     def write_forward(self, **kwargs):
+        # TODO: support internals
         for k, v in kwargs.items():
-            self[k].append(v)
-            if len(self[k]) > self.max_len:
-                self._cache_thread.start()
-                # TODO: this is really slow according to https://wiki.python.org/moin/TimeComplexity
-                del self[k][0]
+            v = np.asarray(v)
+            if k not in self:
+                # get size and create empty array
+                print(k, v.shape)
+                # assumes nb_env is first dim
+                self[k] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
+            # insert
+            self[k][self._current_index] = v
 
     def write_env(self, obs, rewards, terminals, infos):
-        self['obs'].append(obs)
-        if len(self['obs']) > self.max_len:
-            # TODO: this is really slow according 
-            del self['obs'][0]
-        self['rewards'].append(rewards)
-        if len(self['rewards']) > self.max_len:
-            # TODO: this is really slow according 
-            del self['rewards'][0]
-        self['terminals'].append(1 - np.asarray(terminals))
-        if len(self['terminals']) > self.max_len:
-            # TODO: this is really slow according 
-            del self['terminals'][0]
+        for k in obs.keys():
+            self_key = 'obs-{}'.format(k)
+            v = obs[k].cpu().numpy()
+            if self_key not in self:
+                # get size and create empty array
+                print(k, v.shape)
+                # assumes nb_env is first dim
+                self[self_key] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
+                self[self_key] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
+            # insert
+            self[self_key][self._current_index] = v
+        self['rewards'][self._current_index] = np.asarray(rewards)
+        self['terminals'][self._current_index] = 1 - np.asarray(terminals)
+
+        self._current_index = (self._current_index + 1) % self.max_len
+        self._num_inserted += 1
 
     def clear(self):
         """ 
@@ -105,12 +114,13 @@ class ExperienceReplay(dict, BaseExperience):
         return rollout
 
     def is_ready(self):
-        return len(self['rewards']) > self.min_length and len(self['rewards']) % self.rollout_len == 0
-
+        return self._num_inserted > self.min_length
+        
     def __len__(self):
-        return len(self['rewards'])
+        return min(self._num_inserted, self.max_len)
 
     def take(self, values, flat_indexes, worker_inds):
+        print('values', values.shape, values.dtype)
         sliced_v = [values[i] for i in flat_indexes]
         if isinstance(sliced_v[0], dict):
             slice_dict = listd_to_dlist(sliced_v)
