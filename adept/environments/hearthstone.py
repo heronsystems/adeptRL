@@ -32,7 +32,7 @@ def make_hearthstone_env():
 
 def hearthstone_env():
     env = gym.make('Hearthstone-v0')
-    env = AdeptGymEnv(env)
+    env = AdeptHearthstoneEnv(env)
     return env
 
 
