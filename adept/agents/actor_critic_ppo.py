@@ -77,7 +77,7 @@ class ActorCriticPPO(Agent, EnvBase):
         actions, log_probs, entropies = self.process_logits(logits, obs, deterministic=False)
 
         self.exp_cache.write_forward(
-            obs=obs,
+            obs={k: v.clone() for k, v in obs.items()},
             actions=actions,
             log_probs=log_probs,
             internals=self.internals,
