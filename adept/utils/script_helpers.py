@@ -189,6 +189,10 @@ def add_base_args(parser):
     Agent Arguments
     """
     parser.add_argument(
+        '-na', '--normalize-advantage', type=parse_bool, nargs='?', const=True, default=False,
+        help='normalize the advantage'
+    )
+    parser.add_argument(
         '-gae', '--generalized-advantage-estimation', type=parse_bool, nargs='?', const=True, default=True,
         help='use generalized advantage estimation'
     )

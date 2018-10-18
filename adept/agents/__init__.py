@@ -26,7 +26,8 @@ AGENTS = {
 }
 AGENT_ARGS = {
     'ActorCritic': lambda args: (
-        args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau
+        args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation,
+        args.tau, args.normalize_advantage
     ),
     'ActorCriticPPO': lambda args: (
         args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation,
