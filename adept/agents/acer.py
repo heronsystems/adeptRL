@@ -28,14 +28,14 @@ class Acer(Agent, EnvBase):
     def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
                  discount, gae, tau, normalize_advantage, entropy_weight=0.01):
         self.discount, self.gae, self.tau = discount, gae, tau
-        self.retrace_clip = 1
+        self.retrace_clip = 10
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
         self.gpu_preprocessor = gpu_preprocessor
         self.nb_env = nb_env
 
         self._network = network.to(device)
-        self._exp_cache = ExperienceReplay(self.nb_env, 32, nb_rollout, 50000, reward_normalizer, 
+        self._exp_cache = ExperienceReplay(self.nb_env, 32, nb_rollout, 50000, reward_normalizer,
                                            ['actions', 'log_probs', 'internals'])
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
@@ -154,7 +154,7 @@ class Acer(Agent, EnvBase):
             results, internals = result_fn(seq_ind, internals)
             logits_seq = {k: v for k, v in results.items() if k != 'critic'}
             logits_seq = self.preprocess_logits(logits_seq)
-            probs_seq, log_probs_seq, entropies_seq = self.process_logits_batch(logits_seq) 
+            probs_seq, log_probs_seq, entropies_seq = self.process_logits_batch(logits_seq)
             # seq lists
             values.append(results['critic'])
             all_probs.append(probs_seq)
@@ -176,12 +176,11 @@ class Acer(Agent, EnvBase):
             last_probs = F.softmax(results['Discrete'], dim=1)
             last_Q = results['critic']
             # Qret == V(s)
-            last_Qret = (last_Q * last_probs).sum(1) 
+            last_V = (last_Q * last_probs).sum(1)
 
         # TODO: can't stack if dict
         # return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
-        
-        return torch.stack(all_probs), torch.stack(log_probs), torch.stack(values), torch.stack(entropies), last_Qret
+        return torch.stack(all_probs), torch.stack(log_probs), torch.stack(values), torch.stack(entropies), last_V
 
     def compute_loss(self, rollouts, next_obs):
         r = rollouts
@@ -202,31 +201,33 @@ class Acer(Agent, EnvBase):
         last_internals = r.last_internals
 
         # recompute forward pass
-        current_probs, current_log_probs, current_Q, entropies, last_Qret = \
+        current_probs, current_log_probs, current_Q, entropies, last_V = \
             self.compute_forward_batch(obs, internals, last_obs, last_internals, terminal_masks, actions)
         # everything is in batch format [seq, bs, ...]
         current_log_probs_action = current_log_probs.gather(-1, actions.unsqueeze(-1)).squeeze(-1)
         values = (current_probs * current_Q).sum(-1)
 
-
         # loop over seq
-        Qret = last_Qret
+        Qret_delta = 0.
+        next_value = last_V
         next_importance = 1.
         rollout_len = len(r.rewards[0])
         batch_size = len(r.rewards)
         critic_loss_seq = 0.
-        policy_loss_seq = 0.
+        on_policy_loss_seq = 0.
+        off_policy_loss_seq = 0.
         for i in reversed(range(rollout_len)):
             terminal_mask = terminal_masks[i]
             current_Q_action = current_Q[i].gather(-1, actions[i].unsqueeze(-1)).squeeze(-1)
 
             # targets and constants have no grad
             with torch.no_grad():
+                Qret = rewards[i] + self.discount * next_importance * Qret_delta + self.discount * next_value
                 # importance ratio
                 log_diff = current_log_probs[i] - behavior_log_probs[i]
                 importance = torch.exp(log_diff)
                 importance_action = importance.gather(-1, actions[i].unsqueeze(-1)).squeeze(-1)
-                importance_action_clipped = torch.clamp(importance_action, max=1)
+                importance_action_clipped = torch.clamp(importance_action, max=self.retrace_clip)
 
                 # advantage
                 advantage = Qret - values[i]
@@ -234,19 +235,14 @@ class Acer(Agent, EnvBase):
             # critic loss
             critic_loss_seq += 0.5 * F.mse_loss(current_Q_action, Qret)
 
-            # on policy loss first half of eq(9)
-            policy_loss = -importance_action_clipped * current_log_probs_action[i] * advantage
-            policy_loss /= batch_size
+            # on policy loss first half of eq(9), mean over batch
+            on_policy_loss_seq += (-importance_action_clipped * current_log_probs_action[i] * advantage).mean()
 
             # off policy bias correction last half of eq(9)
             bias_advantage = (current_Q[i] - values[i].unsqueeze(1)).data
             bias_weight = F.relu((importance - self.retrace_clip) / importance).data
-            # sum over actions
-            off_policy_loss = -(bias_weight * current_log_probs[i] * bias_advantage).sum(-1)
-            off_policy_loss /= batch_size
-
-            # sum policy loss over seq
-            policy_loss_seq += policy_loss + off_policy_loss
+            # sum over actions, mean over batch
+            off_policy_loss_seq += (-(bias_weight * current_log_probs[i] * bias_advantage).sum(-1)).mean()
 
             # variables for next step
             next_value = values[i].data
@@ -255,14 +251,13 @@ class Acer(Agent, EnvBase):
             # discounted Retrace return 
             with torch.no_grad():
                 discount_mask = self.discount * terminal_mask
-                delta_Qret = (Qret - current_Q_action) * next_importance
-                Qret = rewards[i] + discount_mask * delta_Qret \
-                       + discount_mask * next_value
+                delta_Qret = (Qret - current_Q_action)
 
         critic_loss = critic_loss_seq / rollout_len
-        policy_loss = torch.mean(policy_loss_seq / rollout_len)
+        on_policy_loss = on_policy_loss_seq / rollout_len
+        off_policy_loss = off_policy_loss_seq / rollout_len
         entropy_loss = -torch.mean(self.entropy_weight * entropies)
-        losses = {'critic_loss': critic_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
+        losses = {'critic_loss': critic_loss, 'on_policy_loss': on_policy_loss, 'off_policy_loss': off_policy_loss, 'entropy_loss': entropy_loss}
         metrics = {}
         return losses, metrics
 

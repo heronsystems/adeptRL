@@ -59,7 +59,7 @@ class ExperienceReplay(dict, BaseExperience):
     def write_env(self, obs, rewards, terminals, infos):
         for k in obs.keys():
             self_key = 'obs_{}'.format(k)
-            v = obs[k].cpu().numpy()
+            v = obs[k].clone().cpu().numpy()
             if self_key not in self:
                 self.obs_keys.append(self_key)
                 # get size and create empty array
