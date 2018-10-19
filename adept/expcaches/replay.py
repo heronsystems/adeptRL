@@ -109,7 +109,7 @@ class ExperienceReplay(dict, BaseExperience):
         end_indexes = start_indexes + self.rollout_len
         flat_indexes = np.array([np.arange(s_ind, e_ind) for s_ind, e_ind in
                              zip(start_indexes, end_indexes)]).ravel()
-        flat_indexes %= self.m % self.max_leiax_len
+        flat_indexes %= self.max_len
         env_ind = torch.from_numpy(np.random.randint(0, self.nb_env, size=self.batch_size))
 
         rollout = {k: self.take(self[k], flat_indexes, env_ind) for k, v in self.items()}
