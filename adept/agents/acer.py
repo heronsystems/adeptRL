@@ -192,14 +192,22 @@ class Acer(Agent, EnvBase):
         rewards = r.rewards.t().float().to(self.device)  # TODO: make replay return floats?
         behavior_log_probs = r.log_probs.transpose(0, 1).to(self.device)
         # TODO: calling contiguous is slow
-        obs = {k: v.transpose(0, 1).contiguous() for k, v in r.obs.items()}
-        internals = {k: v.transpose(0, 1).contiguous() for k, v in r.internals.items()}
+        observation_keys = list(filter(lambda x: 'obs_' in x, r._fields))
+        obs = {}
+        for k in observation_keys:
+            obs[k.split('obs_')[-1]] = getattr(r, k).transpose(0, 1).contiguous()
+        # internals = {k: v.transpose(0, 1).contiguous() for k, v in r.internals.items()}
+        internals = {}
         last_obs = r.last_obs
         last_internals = r.last_internals
+        print(['{}: {}, {}'.format(k, v.min(), v.max()) for k, v in obs.items()])
+        print(['last {}: {}, {}'.format(k, v.min(), v.max()) for k, v in last_obs.items()])
 
         # recompute forward pass
         current_probs, current_log_probs, current_Q, entropies, last_Qret = \
             self.compute_forward_batch(obs, internals, last_obs, last_internals, terminal_masks, actions)
+        import pudb
+        pudb.set_trace()
         # everything is in batch format [seq, bs, ...]
         current_log_probs_action = current_log_probs.gather(-1, actions.unsqueeze(-1)).squeeze(-1)
         values = (current_probs * current_Q).sum(-1)
@@ -259,6 +267,7 @@ class Acer(Agent, EnvBase):
         policy_loss = torch.mean(policy_loss_seq / rollout_len)
         entropy_loss = -torch.mean(self.entropy_weight * entropies)
         losses = {'critic_loss': critic_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
+        print(losses)
         metrics = {}
         return losses, metrics
 

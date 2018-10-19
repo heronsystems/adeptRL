@@ -27,20 +27,22 @@ class ExperienceReplay(dict, BaseExperience):
         super().__init__()
         # TODO: it's best to give the observation_space here along with any other data that will be
         # stored
-        self['rewards'] = np.empty((max_len, nb_env), dtype=np.float32)
-        self['terminals'] = np.empty((max_len, nb_env), dtype=np.float32)
         self.nb_env = nb_env
         self.max_len = max_len // nb_env
         self.batch_size = batch_size
         self.rollout_len = rollout_len
-        self.min_length = 100
+        self.min_length = 5000 // nb_env
         self.reward_normalizer = reward_normalizer
         self._cached_rollout = []
         self._cache_thread = Thread(target=self._cache_loop)
         self.max_cache = 5
         self._current_index = 0
         self._num_inserted = 0
-        self._cache_thread.start()
+        # self._cache_thread.start()
+        self.obs_keys = []
+
+        self['rewards'] = np.empty((self.max_len, nb_env), dtype=np.float32)
+        self['terminals'] = np.empty((self.max_len, nb_env), dtype=np.float32)
 
     def write_forward(self, **kwargs):
         # TODO: support internals
@@ -48,7 +50,6 @@ class ExperienceReplay(dict, BaseExperience):
             v = np.asarray(v)
             if k not in self:
                 # get size and create empty array
-                print(k, v.shape)
                 # assumes nb_env is first dim
                 self[k] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
             # insert
@@ -56,11 +57,11 @@ class ExperienceReplay(dict, BaseExperience):
 
     def write_env(self, obs, rewards, terminals, infos):
         for k in obs.keys():
-            self_key = 'obs-{}'.format(k)
+            self_key = 'obs_{}'.format(k)
             v = obs[k].cpu().numpy()
             if self_key not in self:
+                self.obs_keys.append(self_key)
                 # get size and create empty array
-                print(k, v.shape)
                 # assumes nb_env is first dim
                 self[self_key] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
                 self[self_key] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
@@ -91,7 +92,7 @@ class ExperienceReplay(dict, BaseExperience):
                 time.sleep(0.1)
 
     def read(self):
-        if len(self._cached_rollout) > 1:
+        if len(self._cached_rollout) > 0:
             return self._cached_rollout.pop(0)
         else:
             print('Cache miss')
@@ -99,80 +100,53 @@ class ExperienceReplay(dict, BaseExperience):
 
     def _read(self):
         # returns torch tensors (or dict of tensors) of shape [batch, seq, ...]
-        max_ind = len(self) - 2 - self.rollout_len
-        start_indexes = np.random.randint(0, max_ind, size=self.batch_size)
+        if self._num_inserted > self.max_len:
+            min_ind = (self._num_inserted - self.max_len) % self.max_len
+            max_ind = min_ind + self.max_len
+        else:
+            min_ind = 0
+            max_ind = self._num_inserted - 1
+        print(min_ind, max_ind)
+        start_indexes = np.random.randint(min_ind, max_ind, size=self.batch_size)
         end_indexes = start_indexes + self.rollout_len
         flat_indexes = np.array([np.arange(s_ind, e_ind) for s_ind, e_ind in
                              zip(start_indexes, end_indexes)]).ravel()
+        flat_indexes %= self.max_len
+        print(flat_indexes[0:self.rollout_len])
         env_ind = torch.from_numpy(np.random.randint(0, self.nb_env, size=self.batch_size))
 
         rollout = {k: self.take(self[k], flat_indexes, env_ind) for k, v in self.items()}
-        rollout['last_obs'] = self.take_single(self['obs'], end_indexes + 1, env_ind)
-        rollout['last_internals'] = self.take_single(self['internals'], end_indexes + 1, env_ind)
+        last_obs = {}
+        last_indexes = end_indexes % self.max_len
+        print(last_indexes[0])
+        for k in self.obs_keys:
+            last_obs[k.split('obs_')[-1]] = self.take_single(self[k], last_indexes, env_ind)
+
+        rollout['last_obs'] = last_obs
+        # rollout['last_internals'] = self.take_single(self['internals'], end_indexes + 1, env_ind)
+        rollout['last_internals'] = ()
         # returns rollout as a named tuple
         rollout = namedtuple(self.__class__.__name__, rollout.keys())(**rollout)
         return rollout
 
     def is_ready(self):
-        return self._num_inserted > self.min_length
+        return self._num_inserted > self.min_length and self._num_inserted % self.rollout_len == 0
         
     def __len__(self):
         return min(self._num_inserted, self.max_len)
 
     def take(self, values, flat_indexes, worker_inds):
-        print('values', values.shape, values.dtype)
-        sliced_v = [values[i] for i in flat_indexes]
-        if isinstance(sliced_v[0], dict):
-            slice_dict = listd_to_dlist(sliced_v)
-            new_dict = {}
-            for k, v in slice_dict.items():
-                # can be list/array or tensor
-                if isinstance(v[0], torch.Tensor):
-                    arr_v = torch.stack(v)
-                # array/list
-                else:
-                    arr_v = torch.from_numpy(np.asarray(v))
-                orig_shape = arr_v.shape
-                arr_v = arr_v.reshape(self.batch_size, self.rollout_len, self.nb_env, -1)
-                arr_v = arr_v[np.arange(self.batch_size), :, worker_inds]
-                new_dict[k] = arr_v.reshape((self.batch_size, self.rollout_len,) + orig_shape[2:])
-            return new_dict
-        # list of tensors
-        elif isinstance(sliced_v[0], torch.Tensor):
-            tensor = torch.stack(sliced_v)
-            orig_shape = tensor.shape
-            tensor = tensor.reshape(self.batch_size, self.rollout_len, self.nb_env, -1)
-            return tensor[np.arange(self.batch_size), :, worker_inds]
-        # list of lists or numpy arrays
-        else: 
-            array = torch.from_numpy(np.asarray(sliced_v))
-            orig_shape = array.shape
-            array = array.reshape(self.batch_size, self.rollout_len, self.nb_env, -1)
-            array = array[np.arange(self.batch_size), :, worker_inds]
-            return array.reshape((self.batch_size, self.rollout_len,) + orig_shape[2:])
+        sliced_v = values[flat_indexes]
+        array = torch.from_numpy(sliced_v)
+        orig_shape = array.shape
+        array = array.reshape(self.batch_size, self.rollout_len, self.nb_env, -1)
+        array = array[np.arange(self.batch_size), :, worker_inds]
+        return array.reshape((self.batch_size, self.rollout_len,) + orig_shape[2:])
 
     def take_single(self, values, inds, worker_inds):
-        sliced_v = [values[i] for i in inds]
-        if isinstance(sliced_v[0], dict):
-            slice_dict = listd_to_dlist(sliced_v)
-            new_dict = {}
-            for k, v in slice_dict.items():
-                # can be list/array or tensor
-                if isinstance(v[0], torch.Tensor):
-                    arr_v = torch.stack(v)
-                # array/list
-                else:
-                    arr_v = torch.from_numpy(np.asarray(v))
-                new_dict[k] = arr_v[np.arange(self.batch_size), worker_inds]
-            return new_dict
-        # list of tensors
-        elif isinstance(sliced_v[0], torch.Tensor):
-            tensor = torch.stack(sliced_v)
-            return tensor[np.arange(self.batch_size), worker_inds]
-        # list of lists or numpy arrays
-        else: 
-            array = torch.from_numpy(np.asarray(sliced_v))
-            return array[np.arange(self.batch_size), worker_inds]
+        sliced_v = values[inds]
+        array = torch.from_numpy(np.asarray(sliced_v))
+        return array[np.arange(self.batch_size), worker_inds]
 
 class PrioritizedExperienceReplay(BaseExperience):
 
