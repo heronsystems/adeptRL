@@ -31,6 +31,7 @@ class ExperienceReplay(dict, BaseExperience):
         self.max_len = max_len // nb_env
         self.batch_size = batch_size
         self.rollout_len = rollout_len
+        # TODO: this should be an arg and must be > rollout len
         self.min_length = 5000 // nb_env
         self.reward_normalizer = reward_normalizer
         self._cached_rollout = []
@@ -63,7 +64,6 @@ class ExperienceReplay(dict, BaseExperience):
                 self.obs_keys.append(self_key)
                 # get size and create empty array
                 # assumes nb_env is first dim
-                self[self_key] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
                 self[self_key] = np.empty((self.max_len, self.nb_env, ) + v.shape[1:], dtype=v.dtype)
             # insert
             self[self_key][self._current_index] = v
@@ -101,24 +101,20 @@ class ExperienceReplay(dict, BaseExperience):
     def _read(self):
         # returns torch tensors (or dict of tensors) of shape [batch, seq, ...]
         if self._num_inserted > self.max_len:
-            min_ind = (self._num_inserted - self.max_len) % self.max_len
-            max_ind = min_ind + self.max_len
+            min_ind = (self._num_inserted - self.max_len)
         else:
             min_ind = 0
-            max_ind = self._num_inserted - 1
-        print(min_ind, max_ind)
+        max_ind = (self._num_inserted - self.rollout_len - 1)  # -1 because the last obs is needed
         start_indexes = np.random.randint(min_ind, max_ind, size=self.batch_size)
         end_indexes = start_indexes + self.rollout_len
         flat_indexes = np.array([np.arange(s_ind, e_ind) for s_ind, e_ind in
                              zip(start_indexes, end_indexes)]).ravel()
-        flat_indexes %= self.max_len
-        print(flat_indexes[0:self.rollout_len])
+        flat_indexes %= self.m % self.max_leiax_len
         env_ind = torch.from_numpy(np.random.randint(0, self.nb_env, size=self.batch_size))
 
         rollout = {k: self.take(self[k], flat_indexes, env_ind) for k, v in self.items()}
         last_obs = {}
         last_indexes = end_indexes % self.max_len
-        print(last_indexes[0])
         for k in self.obs_keys:
             last_obs[k.split('obs_')[-1]] = self.take_single(self[k], last_indexes, env_ind)
 
