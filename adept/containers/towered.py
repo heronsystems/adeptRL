@@ -167,7 +167,7 @@ class ToweredHost(AppliesGrads):
         print('Host sees all threads as stopped.')
 
     def _saver_thread(self):
-        num_workers = self.comm.Get_size() - 1
+        workers = list(range(1, self.comm.Get_size()))
         # setup for receiving buffers
         buffer_shapes = [tuple(x.shape) for x in self.network._all_buffers()]
         buffer_flattener = ArrayFlattener(buffer_shapes)
@@ -176,27 +176,25 @@ class ToweredHost(AppliesGrads):
             while not self._saver_should_be_done:
                 current_step = self.global_step
                 if current_step > next_save_step:
-                    buffer_params = [buffer_flattener.create_buffer() for i in range(num_workers)]
-                    statuses = []
+                    buffer_params = [buffer_flattener.create_buffer() for i in workers]
                     # request buffers params from all workers
-                    recv_comms = []
-                    for i in range(num_workers):
+                    for i in workers:
                         self.comm.isend(True, dest=i, tag=MpiMessages.BUFFER_REQUEST)
-                        recv_comms.append(self.comm.Irecv(buffer_params[i], source=i,
-                                                          tag=MpiMessages.BUFFER_REQUEST))
-                        statuses.append(mpi.Status())
 
                     # wait for all workers to send buffers
-                    mpi.Request.Waitall(recv_comms, statuses)
+                    for i in workers:
+                        self.comm.Recv(buffer_params[i - 1], source=i,
+                                       tag=MpiMessages.BUFFER_REQUEST)
 
                     # all buffers are filled
                     unflattened_buffer_params = None
-                    for i in range(num_workers):
+                    for i in workers:
+                        list_ind = i - 1
                         if unflattened_buffer_params is None:
-                            unflattened_buffer_params = buffer_flattener.unflatten(buffer_params[i])
+                            unflattened_buffer_params = buffer_flattener.unflatten(buffer_params[list_ind])
                         else:
                             for all_bp, bp in zip(unflattened_buffer_params,
-                                                  buffer_flattener.unflatten(buffer_params[i])):
+                                                  buffer_flattener.unflatten(buffer_params[list_ind])):
                                 all_bp += bp
 
                     # can't divide here since numpy reduces from array to float on tensors with shape ()
@@ -204,7 +202,7 @@ class ToweredHost(AppliesGrads):
                     # set buffers
                     for b, all_bp in zip(self.network._all_buffers(), all_buffer_params):
                         # mean over all workers
-                        b.copy_(torch.from_numpy(all_bp)).div_(num_workers)
+                        b.copy_(torch.from_numpy(all_bp)).div_(len(workers))
 
                     # finally save
                     self.saver.save_state_dicts(self.network, int(current_step), optimizer=self.optimizer)
