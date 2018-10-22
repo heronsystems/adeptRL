@@ -218,11 +218,12 @@ class Acer(Agent, EnvBase):
         off_policy_loss_seq = 0.
         for i in reversed(range(rollout_len)):
             terminal_mask = terminal_masks[i]
+            discount_mask = self.discount * terminal_mask
             current_Q_action = current_Q[i].gather(-1, actions[i].unsqueeze(-1)).squeeze(-1)
 
             # targets and constants have no grad
             with torch.no_grad():
-                Qret = rewards[i] + self.discount * next_importance * Qret_delta + self.discount * next_value
+                Qret = rewards[i] + discount_mask * next_importance * Qret_delta + discount_mask * next_value
                 # importance ratio
                 log_diff = current_log_probs[i] - behavior_log_probs[i]
                 importance = torch.exp(log_diff)
@@ -250,7 +251,6 @@ class Acer(Agent, EnvBase):
 
             # discounted Retrace return 
             with torch.no_grad():
-                discount_mask = self.discount * terminal_mask
                 delta_Qret = (Qret - current_Q_action)
 
         critic_loss = critic_loss_seq / rollout_len
