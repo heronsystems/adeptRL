@@ -20,7 +20,7 @@ import torch
 from adept.environments import Engines
 from torch.nn import functional as F
 
-from adept.environments.sc2 import lookup_headnames_by_id
+from adept.environments.sc2 import lookup_headnames_by_id, SC2ActionLookup
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
 from ._base import Agent
@@ -132,12 +132,15 @@ class ActorCritic(Agent):
         return actions
 
     def _act_sc2(self, obs):
+        if self._func_id_to_headnames is None:
+            self._func_id_to_headnames = SC2ActionLookup()
+
         predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
         values = predictions['critic'].squeeze(1)
 
         # reduce feature dim, build action_key dim
         actions = OrderedDict()
-        action_masks = OrderedDict()
+        head_masks = OrderedDict()
         log_probs = []
         entropies = []
         # TODO support multi-dimensional action spaces?
@@ -154,24 +157,30 @@ class ActorCritic(Agent):
             log_probs.append(log_prob)
             entropies.append(entropy)
 
+            # Initialize masks
             if key == 'func_id':
-                action_masks[key] = torch.ones_like(entropy)
+                head_masks[key] = torch.ones_like(entropy)
             else:
-                action_masks[key] = torch.zeros_like(entropy)
+                head_masks[key] = torch.zeros_like(entropy)
 
         log_probs = torch.cat(log_probs, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
+        # Mask invalid actions with NOOP and fill masks with ones
         for i, action in enumerate(actions['func_id']):
             # convert unavailable actions to NOOP
             if action not in obs['available_actions']:
                 actions['func_id'][i] = 0
 
             # build SC2 action masks
-            args = []
-            selected_heads = lookup_headnames_by_id(action)  # TODO, use caching
-            for headname in selected_heads.keys():
-                action_masks[headname][i] = 1.
+            func_id = actions['func_id'][i]
+            # TODO this can be vectorized via gather
+            for headname in self._func_id_to_headnames[func_id].keys():
+                head_masks[headname][i] = 1.
+
+        head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+        log_probs = log_probs * head_masks
+        entropies = entropies * head_masks
 
         self.exp_cache.write_forward(
             values=values,

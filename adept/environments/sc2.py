@@ -107,6 +107,7 @@ class AdeptSC2Env(BaseEnvironment):
         )
         self._observation_space = self._gpu_preprocessor.observation_space
         self._action_space = Spaces(act_entries_by_name)
+        self._func_id_to_headnames = SC2ActionLookup()
 
     @property
     def observation_space(self):
@@ -129,7 +130,7 @@ class AdeptSC2Env(BaseEnvironment):
         :param action_by_name: Dict{.}[headname: action/arg]
         :return:
         """
-        timesteps = self.sc2_env.step([action])
+        timesteps = self.sc2_env.step(self._wrap_action(action))
         assert len(timesteps) == 1
         # pysc2 returns a tuple of timesteps, with one timestep inside
         # get first timestep
@@ -160,7 +161,18 @@ class AdeptSC2Env(BaseEnvironment):
         return obs
 
     def _wrap_action(self, action):
-        pass # TODO
+        func_id = action['func_id']
+        required_heads = self._func_id_to_headnames[func_id]
+        args = []
+
+        for headname in required_heads.keys():
+            if '_y' in headname:
+                continue
+            elif '_x' in headname:
+                args.append([action[headname], action[headname][:-2] + '_y'])
+            else:
+                args.append([action[headname]])
+        return [FunctionCall(func_id, args)]
 
 
 class SC2RemoveFeatures(BaseOp):
@@ -281,90 +293,29 @@ class SC2RemoveAvailableActions(ObsPreprocessor):
         return {k: v for k, v in result.items() if k != 'available_actions'}
 
 
-def lookup_headnames_by_id(func_id):
-    argnames = lookup_argnames_by_id(func_id)
-    headnames = []
-    for argname in argnames:
-        if argname == 'screen':
-            headnames.extend(['screen_x', 'screen_y'])
-        elif argname == 'minimap':
-            headnames.extend(['minimap_x', 'minimap_y'])
-        elif argname == 'screen2':
-            headnames.extend(['screen2_x', 'screen2_y'])
-        else:
-            headnames.append(argname)
-    # OrderedDict for constant time membership test while preserving order
-    return OrderedDict.fromkeys(headnames)
+class SC2ActionLookup(dict):
+    def __init__(self):
+        super().__init__()
+        for func in FUNCTIONS:
+            func_id = func.id
+            for function_type in func.function_type:
+                arg_names = [arg.name for arg in FUNCTION_TYPES[function_type]]
+                self[func_id] = self._arg_names_to_head_names(arg_names)
 
-
-def lookup_argnames_by_id(func_id):
-    """
-    :param func_id: int
-    :return: argument_names: List{.}[arg_name]
-    """
-    func = FUNCTIONS[func_id]
-    required_args = FUNCTION_TYPES[func.function_type]
-    argument_names = []
-    for arg in required_args:
-        argument_names.append(arg.name)
-    return argument_names
-
-
-class SC2AgentOverrides(EnvBase):
-    def preprocess_logits(self, logits):
-        return logits
-
-    def process_logits(self, logits, obs, deterministic):
-        """
-        The SC2 environment requires special logic to mask out unused network outputs.
-        :param logits:
-        :return:
-        """
-        available_actions = obs['available_actions']
-        actions, log_probs, entropies, head_masks = OrderedDict(), OrderedDict(), OrderedDict(), OrderedDict()
-        headnames = logits.keys()
-
-        for headname in headnames:
-            actions[headname], log_probs[headname], entropies[headname] = super().process_logits(logits[headname], obs, deterministic)
-            if headname == 'func_id':
-                head_masks[headname] = torch.ones_like(entropies[headname])
+    def _arg_names_to_head_names(self, arg_names):
+        headnames = []
+        for argname in arg_names:
+            if argname == 'screen':
+                headnames.extend(['screen_x', 'screen_y'])
+            elif argname == 'minimap':
+                headnames.extend(['minimap_x', 'minimap_y'])
+            elif argname == 'screen2':
+                headnames.extend(['screen2_x', 'screen2_y'])
             else:
-                head_masks[headname] = torch.zeros_like(entropies[headname])
-
-        function_calls = []
-        # iterate over batch dimension
-        for i in range(actions['func_id'].shape[0]):
-            # force a no op if action is unavailable
-            if actions['func_id'][i] not in available_actions[i]:
-                function_calls.append(FunctionCall(0, []))
-                continue
-
-            # build the masks and the FunctionCall's in the same loop
-            args = []
-            func_id = actions['func_id'][i]
-            required_heads = lookup_headnames_by_id(func_id)
-            for headname in required_heads.keys():
-                # toggle mask to 1 if the head is required
-                head_masks[headname][i] = 1.
-
-                # skip y's
-                if '_y' in headname:
-                    continue
-                # if x, build the argument
-                elif '_x' in headname:
-                    args.append([actions[headname][i], actions[headname[:-2] + '_y'][i]])
-                else:
-                    args.append([actions[headname][i]])
-            function_calls.append(FunctionCall(func_id, args))
-
-        # apply masks to log_probs and entropies
-        for headname in headnames:
-            log_probs[headname] = log_probs[headname] * head_masks[headname]
-            entropies[headname] = entropies[headname] * head_masks[headname]
-
-        log_probs = torch.stack(tuple(v for v in log_probs.values()), dim=1)
-        entropies = torch.stack(tuple(v for v in entropies.values()), dim=1)
-        return function_calls, log_probs, entropies
+                headnames.append(argname)
+        # OrderedDict for constant time membership test while preserving order
+        # TODO make an OrderedSet in utils
+        return OrderedDict.fromkeys(headnames)
 
 
 if __name__ == '__main__':
