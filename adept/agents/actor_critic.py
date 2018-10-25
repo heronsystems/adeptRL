@@ -167,9 +167,6 @@ class ActorCritic(Agent):
         log_probs = torch.cat(log_probs, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
-        if len(actions['func_id']) == 1:
-            print('aha')
-
         # Mask invalid actions with NOOP and fill masks with ones
         for batch_idx, action in enumerate(actions['func_id']):
             # convert unavailable actions to NOOP
@@ -196,6 +193,15 @@ class ActorCritic(Agent):
 
     def act_eval(self, obs):
         self.network.eval()
+
+        if self.engine == Engines.GYM:
+            return self._act_eval_gym(obs)
+        elif self.engine == Engines.SC2:
+            return self._act_eval_sc2(obs)
+        else:
+            raise NotImplementedError()
+
+    def _act_eval_gym(self, obs):
         with torch.no_grad():
             predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
 
@@ -208,6 +214,27 @@ class ActorCritic(Agent):
                 actions[key] = action.squeeze(1).cpu().numpy()
 
         self.internals = internals
+        return actions
+
+    def _act_eval_sc2(self, obs):
+        with torch.no_grad():
+            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            for key in self._action_keys:
+                logit = predictions[key]
+                prob = F.softmax(logit, dim=1)
+                action = torch.argmax(prob, 1, keepdim=True)
+                actions[key] = action.squeeze(1).cpu().numpy()
+
+        self.internals = internals
+
+        for batch_idx, action in enumerate(actions['func_id']):
+            # convert unavailable actions to NOOP
+            if action not in obs['available_actions'][batch_idx]:
+                actions['func_id'][batch_idx] = 0
+
         return actions
 
     def compute_loss(self, rollouts, next_obs):

@@ -16,9 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 from collections import OrderedDict
 from functools import reduce
-from itertools import chain
 
-import gym
 import numpy as np
 import torch
 from pysc2.env import environment
@@ -131,7 +129,6 @@ class AdeptSC2Env(BaseEnvironment):
         :return:
         """
         timesteps = self.sc2_env.step(self._wrap_action(action))
-        assert len(timesteps) == 1
         # pysc2 returns a tuple of timesteps, with one timestep inside
         # get first timestep
         pysc2_step = timesteps[0]
@@ -241,8 +238,12 @@ class SC2OneHot(BaseOp):
             result = torch.cat([obs, one_hot_channels.to(one_hot_channels.device, dtype=torch.int32)])
             return result
         elif obs.dim() == 4:
-            # TODO
-            raise NotImplementedError
+            one_hot_channels = []
+            for i, rngs in self._ranges_by_feature_idx.items():
+                for rng in rngs:
+                    one_hot_channels.append(obs[:, i, :, :] == rng)
+            one_hot_channels = torch.stack(one_hot_channels, dim=1)
+            return torch.cat([obs[self._scalar_idxs], one_hot_channels], dim=1)
         else:
             raise ValueError('Cannot convert {}-dimensional tensor to one-hot'.format(obs.dim()))
 
@@ -318,14 +319,3 @@ class SC2ActionLookup(dict):
         return OrderedDict.fromkeys(headnames)
 
 
-if __name__ == '__main__':
-    from absl import flags
-    # import sys
-    # FLAGS = flags.FLAGS
-    # FLAGS(sys.argv)
-    FLAGS = flags.FLAGS
-    FLAGS(['sc2.py'])
-
-    env = sc2_feature_env('MoveToBeacon', 1, None)
-    env.reset()
-    print()
