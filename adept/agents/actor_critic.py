@@ -210,8 +210,8 @@ class ActorCritic(Agent):
             for key in self._action_keys:
                 logit = predictions[key]
                 prob = F.softmax(logit, dim=1)
-                action = torch.argmax(prob, 1, keepdim=True)
-                actions[key] = action.squeeze(1).cpu().numpy()
+                action = torch.argmax(prob, 1)
+                actions[key] = action.cpu().numpy()
 
         self.internals = internals
         return actions
@@ -225,16 +225,15 @@ class ActorCritic(Agent):
             for key in self._action_keys:
                 logit = predictions[key]
                 prob = F.softmax(logit, dim=1)
-                action = torch.argmax(prob, 1, keepdim=True)
-                actions[key] = action.squeeze(1).cpu().numpy()
-
-        self.internals = internals
+                action = torch.argmax(prob, 1)
+                actions[key] = action.cpu().numpy()
 
         for batch_idx, action in enumerate(actions['func_id']):
             # convert unavailable actions to NOOP
             if action not in obs['available_actions'][batch_idx]:
                 actions['func_id'][batch_idx] = 0
 
+        self.internals = internals
         return actions
 
     def compute_loss(self, rollouts, next_obs):
