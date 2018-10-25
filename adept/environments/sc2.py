@@ -169,9 +169,10 @@ class AdeptSC2Env(BaseEnvironment):
             if '_y' in headname:
                 continue
             elif '_x' in headname:
-                args.append([action[headname], action[headname][:-2] + '_y'])
+                args.append([action[headname], action[headname[:-2] + '_y']])
             else:
                 args.append([action[headname]])
+
         return [FunctionCall(func_id, args)]
 
 
@@ -298,9 +299,8 @@ class SC2ActionLookup(dict):
         super().__init__()
         for func in FUNCTIONS:
             func_id = func.id
-            for function_type in func.function_type:
-                arg_names = [arg.name for arg in FUNCTION_TYPES[function_type]]
-                self[func_id] = self._arg_names_to_head_names(arg_names)
+            arg_names = [arg.name for arg in FUNCTION_TYPES[func.function_type]]
+            self[func_id] = self._arg_names_to_head_names(arg_names)
 
     def _arg_names_to_head_names(self, arg_names):
         headnames = []

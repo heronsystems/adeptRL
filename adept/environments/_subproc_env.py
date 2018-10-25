@@ -149,7 +149,8 @@ class SubProcEnv(BaseEnvironment):
         return self.step_wait()
 
     def step_async(self, actions):
-        for remote, action in zip(self.remotes, dlist_to_listd(actions)):
+        action_dicts = dlist_to_listd(actions)
+        for remote, action in zip(self.remotes, action_dicts):
             remote.send(('step', action))
         self.waiting = True
 

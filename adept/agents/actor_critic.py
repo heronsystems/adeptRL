@@ -20,7 +20,7 @@ import torch
 from adept.environments import Engines
 from torch.nn import functional as F
 
-from adept.environments.sc2 import lookup_headnames_by_id, SC2ActionLookup
+from adept.environments.sc2 import SC2ActionLookup
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
 from ._base import Agent
@@ -53,6 +53,7 @@ class ActorCritic(Agent):
         self._device = device
         self.action_space = action_space
         self._action_keys = list(sorted(action_space.entries_by_name.keys()))
+        self._func_id_to_headnames = None
 
     @classmethod
     def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
@@ -166,17 +167,20 @@ class ActorCritic(Agent):
         log_probs = torch.cat(log_probs, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
+        if len(actions['func_id']) == 1:
+            print('aha')
+
         # Mask invalid actions with NOOP and fill masks with ones
-        for i, action in enumerate(actions['func_id']):
+        for batch_idx, action in enumerate(actions['func_id']):
             # convert unavailable actions to NOOP
-            if action not in obs['available_actions']:
-                actions['func_id'][i] = 0
+            if action not in obs['available_actions'][batch_idx]:
+                actions['func_id'][batch_idx] = 0
 
             # build SC2 action masks
-            func_id = actions['func_id'][i]
+            func_id = actions['func_id'][batch_idx]
             # TODO this can be vectorized via gather
             for headname in self._func_id_to_headnames[func_id].keys():
-                head_masks[headname][i] = 1.
+                head_masks[headname][batch_idx] = 1.
 
         head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
         log_probs = log_probs * head_masks
