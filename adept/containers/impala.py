@@ -311,6 +311,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         return self._summary_writer
 
     def run(self, initial_count=0):
+        self.local_step_count = initial_count
         next_obs = self.environment.reset()
         self._starting_internals = self.agent.internals
         while not self.should_stop():

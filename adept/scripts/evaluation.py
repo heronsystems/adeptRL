@@ -53,7 +53,7 @@ def main(args):
 
     with open(os.path.join(args.log_id_dir, 'args.json'), 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.nb_env = 1
+    train_args.env_nb = 1
 
     # construct env
     def env_fn(seed):

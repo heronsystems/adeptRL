@@ -301,6 +301,7 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
         return self._nb_env
 
     def run(self, initial_count=0):
+        self.local_step_count = initial_count
         next_obs = self.environment.reset()
         self.start_time = time.time()
         while not self.should_stop():
@@ -344,7 +345,7 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
         if host_info is not None:
             self.global_step = host_info
         else:
-            self.global_step = 0
+            self.global_step = self.local_step_count
         # host decides when it wants pytorch buffers
         if self.mpi_buffer_request.test()[0]:
             buffer_list = [x.cpu().numpy() for x in self.network._all_buffers()]

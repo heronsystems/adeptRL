@@ -39,7 +39,7 @@ def main(args):
 
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.nb_env = 1
+    train_args.env_nb = 1
 
     # construct env
     replay_dir = os.path.split(args.network_file)[0]
