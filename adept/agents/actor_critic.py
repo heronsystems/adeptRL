@@ -20,7 +20,6 @@ import torch
 from adept.environments import Engines
 from torch.nn import functional as F
 
-from adept.environments.sc2 import SC2ActionLookup
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
 from ._base import Agent
@@ -56,6 +55,9 @@ class ActorCritic(Agent):
         self.action_space = action_space
         self._action_keys = list(sorted(action_space.entries_by_name.keys()))
         self._func_id_to_headnames = None
+        if self.engine == Engines.SC2:
+            from adept.environments.sc2 import SC2ActionLookup
+            self._func_id_to_headnames = SC2ActionLookup()
 
     @classmethod
     def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
@@ -135,9 +137,6 @@ class ActorCritic(Agent):
         return actions
 
     def _act_sc2(self, obs):
-        if self._func_id_to_headnames is None:
-            self._func_id_to_headnames = SC2ActionLookup()
-
         predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
         values = predictions['critic'].squeeze(1)
 

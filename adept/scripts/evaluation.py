@@ -62,7 +62,7 @@ def main(args):
     env.close()
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    network_head_shapes = get_head_shapes(train_args.agent)
+    network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
     network = make_network(env.observation_space, network_head_shapes, train_args)
 
     results = []
