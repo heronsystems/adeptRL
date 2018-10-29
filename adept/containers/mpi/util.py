@@ -25,19 +25,21 @@ class MpiMessages(IntEnum):
     NAMES_AND_SHAPES = 3
     SEND = 20
     SEND_ACK = 25
+    BUFFER_REQUEST = 40
 
 
 class ArrayFlattener:
     def __init__(self, shapes, src_dtype=np.float32, dest_dtype=np.float32):
         self.shapes = shapes
-        self.sizes = [int(np.prod(x))for x in shapes]
+        # product of an empty shape is 1 [np.prod(()) == 1]
+        self.sizes = [int(np.prod(x)) for x in shapes]
         self.total_size = np.sum([int(np.prod(x)) for x in self.shapes])
         self.src_dtype = src_dtype
         self.dest_dtype = dest_dtype
 
     def flatten(self, values, buffer=None):
         if buffer is None:
-            buffer = np.empty(self.total_size, dtype=self.dest_dtype)
+            buffer = self.create_buffer()
         curr_start = 0
         for ind, s in enumerate(self.shapes):
             val = values[ind]
@@ -55,6 +57,33 @@ class ArrayFlattener:
             values.append(val.reshape(shape))
             curr_start += size
         return values
+
+    def create_buffer(self):
+        return np.empty(self.total_size, dtype=self.dest_dtype)
+
+
+class MPIArraySend:
+    def __init__(self, mpi_comm, shapes, dtype=np.float32):
+        self.comm = mpi_comm
+        self.dtype = dtype
+        self.flattener = ArrayFlattener(shapes, dest_dtype=dtype)
+        self._current_msg = None
+        self._send_buffer = self.flattener.create_buffer()
+
+    def Send(self, list_of_arrays, dest, tag):
+        flattened = self.flattener.flatten(list_of_arrays)
+        self.comm.Send(flattened, dest=dest, tag=tag)
+
+    def Isend(self, list_of_arrays, dest, tag):
+        self._send_buffer = self.flattener.flatten(list_of_arrays, buffer=self._send_buffer)
+        self._current_msg = self.comm.Isend(self._send_buffer, dest=dest, tag=tag)
+
+    def Wait(self):
+        if self._current_msg is None:
+            raise AttributeError("Not currently waiting on an Isend")
+        else:
+            self._current_msg.Wait()
+            self._current_msg = None
 
 
 class VariableRecieverSingle:

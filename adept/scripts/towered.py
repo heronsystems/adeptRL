@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
+from copy import deepcopy 
 import torch
 from absl import flags
 from mpi4py import MPI as mpi
@@ -61,8 +62,14 @@ def main(args):
     comm.Barrier()
 
     # construct env
-    seed = args.seed if rank == 0 else args.seed * (args.nb_env * (rank - 1))  # unique seed per process
-    env = make_env(args, seed)
+    seed = args.seed if rank == 0 else args.seed + (args.nb_env * (rank - 1))  # unique seed per process
+    # don't make a ton of envs if host
+    if rank == 0:
+        env_args = deepcopy(args)
+        env_args.nb_env = 1
+        env = make_env(env_args, seed)
+    else:
+        env = make_env(args, seed)
 
     # construct network
     torch.manual_seed(args.seed)
@@ -104,7 +111,8 @@ def main(args):
         agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
 
         # construct container
-        container = ToweredWorker(agent, env, args.nb_env, logger, summary_writer, args.summary_frequency)
+        container = ToweredWorker(agent, env, args.nb_env, logger, summary_writer,
+                                  args.summary_frequency)
 
         # Run the container
         try:
@@ -151,8 +159,8 @@ if __name__ == '__main__':
     parser = add_base_args(parser)
     parser.add_argument('--gpu-id', type=int, nargs='+', default=0, help='Which GPU(s) to use for training (default: 0)')
     parser.add_argument(
-        '-vn', '--vision-network', default='Nature',
-        help='name of preset network (default: Nature)'
+        '-vn', '--vision-network', default='FourConv',
+        help='name of preset network (default: FourConv)'
     )
     parser.add_argument(
         '-dn', '--discrete-network', default='Identity',
@@ -175,7 +183,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--num-grads-to-drop', type=int, default=0,
         help='The number of gradient receives to drop in a round. https://arxiv.org/abs/1604.00981 recommends dropping'
-             '10% of gradients for maximum speed (default: 0)'
+             ' 10 percent of gradients for maximum speed (default: 0)'
     )
     args = parser.parse_args()
 

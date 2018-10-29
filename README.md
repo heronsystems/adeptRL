@@ -1,3 +1,4 @@
+[![Gitter chat](https://badges.gitter.im/adeptRL.png)](https://gitter.im/adeptRL/Lobby)
 # adept
 
 adept is a library designed to accelerate reinforcement learning research by providing:
@@ -14,7 +15,7 @@ This code is alpha, expect rough edges.
 Agents / Networks
 * Actor Critic with Generalized Advantage Estimation
 * Stateful networks (ie. LSTMs)
-* Batch Normalization for reinforcement learning
+* Batch Normalization for reinforcement learning (paper in progress)
 
 Execution Modes
 * Local (Single-GPU, A2C)
@@ -31,9 +32,11 @@ We designed this library to be flexible and extensible. Plugging in novel resear
 * gym
 * PyTorch 0.4.x (excluding 0.4.1 due to an [unbind bug](https://github.com/pytorch/pytorch/pull/9995))
 * Python 3.5+
+* We use CUDA 9.1, pytorch 0.4.0, python 3.6
 
 ## Installation
-* Follow instructions for [PyTorch](https://pytorch.org/)  
+If you just want to run the code, see the [docker instructions](./docker/), otherwise:
+* Follow instructions for [PyTorch](https://pytorch.org/)
 * (Optional) Follow instructions for [StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
 
 ```
@@ -45,14 +48,14 @@ pip install adeptRL[mpi,sc2,profiler]
 * Used to win a [Doom competition](http://vizdoom.cs.put.edu.pl/competition-cig-2018/competition-results) (Ben Bell / Marv2in)
 * ~2500 training frames per second single-GPU performance on a Dell XPS 15" laptop (Geforce 1050Ti)  
 
-| Env                         | ResNet18V2LSTM (ours) | IMPALA deep (paper) |
-|-----------------------------|-----------------------|---------------------|
-| BeamRiderNoFrameskip-v4     |             17058.533 |            32463.47 |
-| BreakoutNoFrameskip-v4      |               546.467 |              787.34 |
-| PongNoFrameskip-v4          |                    21 |               20.98 |
-| QbertNoFrameskip-v4         |                4497.5 |           351200.12 |
-| SeaquestNoFrameskip-v4      |                  8732 |              1753.2 |
-| SpaceInvadersNoFrameskip-v4 |              1159.667 |            43595.78 |
+| Env                         | ResNet18V2LSTM A2C (ours) | IMPALA deep (paper) |
+|-----------------------------|---------------------------|---------------------|
+| BeamRiderNoFrameskip-v4     |                 17058.533 |            32463.47 |
+| BreakoutNoFrameskip-v4      |                   546.467 |              787.34 |
+| PongNoFrameskip-v4          |                        21 |               20.98 |
+| QbertNoFrameskip-v4         |                    4497.5 |           351200.12 |
+| SeaquestNoFrameskip-v4      |                      8732 |              1753.2 |
+| SpaceInvadersNoFrameskip-v4 |                  1159.667 |            43595.78 |
 * 30-episode average calculated every 1M training frames up to 50M training frames, then taking best
 
 ## Examples
