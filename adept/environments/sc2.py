@@ -100,7 +100,8 @@ class AdeptSC2Env(BaseEnvironment):
         )
 
         self._gpu_preprocessor = SC2RemoveAvailableActions(
-            [CastToFloat(), SC2ScaleChannels(24)],
+            # [CastToFloat(), SC2ScaleChannels(24)],
+            [SC2OneHot()],
             self._cpu_preprocessor.observation_space
         )
         self._observation_space = self._gpu_preprocessor.observation_space
@@ -222,11 +223,19 @@ class SC2OneHot(BaseOp):
                 else:
                     self._ranges_by_feature_idx[i] = list(range(feat.scale))
 
+        scales = []
+        for i, feat in enumerate(feats):
+            if feat.type == features.FeatureType.SCALAR:
+                scales.append(feat.scale)
+        self._scales = 1. / torch.tensor(scales).float()
+
     def update_space(self, old_space):
         new_shape = (len(self._scalar_idxs) + len(reduce(lambda prev, cur: prev + cur, self._ranges_by_feature_idx.values())),) + old_space.shape[1:]
         return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
 
     def update_obs(self, obs):
+        if self._scales.device != obs.device:
+            self._scales = self._scales.to(obs.device)
         # warning, this is really slow
         if obs.dim() == 3:
             one_hot_channels = []
@@ -243,7 +252,7 @@ class SC2OneHot(BaseOp):
                 for rng in rngs:
                     one_hot_channels.append(obs[:, i, :, :] == rng)
             one_hot_channels = torch.stack(one_hot_channels, dim=1)
-            return torch.cat([obs[self._scalar_idxs], one_hot_channels], dim=1)
+            return torch.cat([obs[:, self._scalar_idxs, :, :].float() * self._scales.view(1, -1, 1, 1), one_hot_channels.float()], dim=1)
         else:
             raise ValueError('Cannot convert {}-dimensional tensor to one-hot'.format(obs.dim()))
 
@@ -251,7 +260,6 @@ class SC2OneHot(BaseOp):
 class SC2ScaleChannels(BaseOp):
     def __init__(self, nb_channel, feats=SCREEN_FEATURES + MINIMAP_FEATURES, mode='all'):
         """
-
         :param nb_channel:
         :param feats:
         :param mode: 'all' or 'scalar' to decide which type of features to scale
