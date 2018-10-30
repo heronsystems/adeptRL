@@ -316,7 +316,6 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         while not self.should_stop():
             obs = next_obs
             # need to copy the obs so the rollout append works
-            # TODO: remove torch stack and improve flattening handling in learn()
             copied_obs = {k: [x.clone() for x in v] for k, v in obs.items()}
             # Build rollout
             if not self.use_local_buffers:

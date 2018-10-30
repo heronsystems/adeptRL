@@ -15,9 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 # Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py for reference
+from collections import OrderedDict
 import torch
 from torch.nn import functional as F
 
+from adept.environments import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
@@ -29,6 +31,7 @@ class ActorCriticVtrace(Agent):
                  minimum_importance_value=1.0, minimum_importance_policy=1.0, entropy_weight=0.01):
         self.discount = discount
         self.gpu_preprocessor = gpu_preprocessor
+        self.engine = engine
         self.minimum_importance_value = minimum_importance_value
         self.minimum_importance_policy = minimum_importance_policy
         self.entropy_weight = entropy_weight
@@ -37,7 +40,14 @@ class ActorCriticVtrace(Agent):
         self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['log_prob_of_action', 'sampled_action'])
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
-        self.network.train()
+        self.action_space = action_space
+        self._action_keys = list(sorted(action_space.entries_by_name.keys()))
+        self._func_id_to_headnames = None
+        if self.engine == Engines.SC2:
+            # TODO: support sc2
+            raise NotImplementedError('SC2 Env not supported with IMPALA yet')
+            # from adept.environments.sc2 import SC2ActionLookup
+            # self._func_id_to_headnames = SC2ActionLookup()
 
     @classmethod
     def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
@@ -81,42 +91,80 @@ class ActorCriticVtrace(Agent):
         return dlist_to_listd(pathway_dict)
 
     def act(self, obs):
+        # TODO: set use_local_buffers flag in the agent 
+        # The container currently sets network.eval() if batch norm modules are requested
+        # to use the learned parameters instead of per batch stats
+        # self.network.train()
+
+        if self.engine == Engines.GYM:
+            return self._act_gym(obs)
+        elif self.engine == Engines.SC2:
+            # TODO: sc2 support
+            raise NotImplementedError()
+            # return self._act_sc2(obs)
+        else:
+            raise NotImplementedError()
+
+    def _act_gym(self, obs):
         """
             This is the method called on each worker so it does not require grads and must
             keep track of it's internals. IMPALA only needs log_probs(a) and the sampled action from the worker
-            Additionally, no gradients are needed here
         """
         with torch.no_grad():
-            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-            logits = {k: v for k, v in results.items() if k != 'critic'}
+            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+            values = predictions['critic'].squeeze(1)
 
-            logits = self.preprocess_logits(logits)
-            actions, log_prob = self.process_logits(logits, obs)
-            compressed_actions, compressed_log_probs = self.compress_actions_log_probs(actions, log_prob)
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            log_probs = []
+            compressed_actions = []
+            # TODO support multi-dimensional action spaces?
+            for key in self._action_keys:
+                logit = predictions[key]
+                prob = F.softmax(logit, dim=1)
+                log_prob = F.log_softmax(logit, dim=1)
+
+                action = prob.multinomial(1)
+                log_prob = log_prob.gather(1, action)
+
+                actions[key] = action.squeeze(1).cpu().numpy()
+                compressed_actions.append(action)
+                log_probs.append(log_prob)
+
+            log_probs = torch.cat(log_probs, dim=1)
+            compressed_actions = torch.cat(compressed_actions, dim=1)
 
             self.exp_cache.write_forward(
-                log_prob_of_action=compressed_log_probs,
+                log_prob_of_action=log_probs,
                 sampled_action=compressed_actions
             )
             self.internals = internals
             return actions
 
-    def compress_actions_log_probs(self, actions, log_probs):
-        """
-            Used to convert actions & log_probs into something that can be sent across MPI
-            Must be overriden for envs with complex action spaces
-            Must return an int, array, or tensor
-        """
-        return actions, log_probs
-
     def act_eval(self, obs):
         self.network.eval()
-        with torch.no_grad():
-            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-            logits = {k: v for k, v in results.items() if k != 'critic'}
 
-            logits = self.preprocess_logits(logits)
-            actions, _ = self.process_logits(logits, obs, deterministic=True)
+        if self.engine == Engines.GYM:
+            return self._act_eval_gym(obs)
+        elif self.engine == Engines.SC2:
+            # TODO: sc2 support
+            raise NotImplementedError()
+            # return self._act_eval_sc2(obs)
+        else:
+            raise NotImplementedError()
+
+    def _act_eval_gym(self, obs):
+        with torch.no_grad():
+            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            for key in self._action_keys:
+                logit = predictions[key]
+                prob = F.softmax(logit, dim=1)
+                action = torch.argmax(prob, 1)
+                actions[key] = action.cpu().numpy()
+
         self.internals = internals
         return actions
 
@@ -125,6 +173,7 @@ class ActorCriticVtrace(Agent):
             This is the method to recompute the forward pass on the host, it must return log_probs, values and entropies
             Obs, sampled_actions, terminal_masks here are [seq, batch], internals must be reset if terminal
         """
+        self.network.train()
         next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
 
         values = []
@@ -160,8 +209,7 @@ class ActorCriticVtrace(Agent):
         for seq_ind in range(terminal_masks.shape[0]):
             results, internals = result_fn(seq_ind, internals)
             logits_seq = {k: v for k, v in results.items() if k != 'critic'}
-            logits_seq = self.preprocess_logits(logits_seq)
-            log_probs_action_seq, entropies_seq = self.process_logits_host(logits_seq, sampled_actions[seq_ind])
+            log_probs_action_seq, entropies_seq = self.__predictions_to_logprobs_ents_host(logits_seq, sampled_actions[seq_ind])
             # seq lists
             values.append(results['critic'].squeeze(1))
             log_probs_of_action.append(log_probs_action_seq)
@@ -179,30 +227,27 @@ class ActorCriticVtrace(Agent):
             results, _ = self.network(next_obs_on_device, internals)
             last_values = results['critic'].squeeze(1)
 
-        # TODO: can't stack if dict
         return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
 
-    def preprocess_logits(self, logits):
-        return logits['Discrete']
+    def __predictions_to_logprobs_ents_host(self, predictions, actions_taken):
+        log_probs = []
+        entropies = []
+        # TODO support multi-dimensional action spaces?
+        for key_ind, key in enumerate(self._action_keys):
+            logit = predictions[key]
+            prob = F.softmax(logit, dim=1)
+            log_softmax = F.log_softmax(logit, dim=1)
+            # actions taken is batch, num_actions
+            log_prob = log_softmax.gather(1, actions_taken[:, key_ind].unsqueeze(1))
+            entropy = -(log_softmax * prob).sum(1, keepdim=True)
 
-    def process_logits(self, logits, obs, deterministic=False):
-        prob = F.softmax(logits, dim=1)
-        log_probs = F.log_softmax(logits, dim=1)
-        if not deterministic:
-            actions = prob.multinomial(1)
-        else:
-            actions = torch.argmax(prob, 1, keepdim=True)
-        log_probs = log_probs.gather(1, actions)
+            log_probs.append(log_prob)
+            entropies.append(entropy)
 
-        return actions.squeeze(1).cpu().numpy(), log_probs.squeeze(1)
+        log_probs = torch.cat(log_probs, dim=1)
+        entropies = torch.cat(entropies, dim=1)
 
-    def process_logits_host(self, logits, actions):
-        prob = F.softmax(logits, dim=1)
-        log_probs = F.log_softmax(logits, dim=1)
-        entropies = -(log_probs * prob).sum(1)
-        log_probs = log_probs.gather(1, actions.unsqueeze(1))
-
-        return log_probs.squeeze(1), entropies
+        return log_probs, entropies
 
     def compute_loss(self, rollouts):
         # rollouts here are a list of [seq, nb_env]
