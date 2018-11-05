@@ -141,48 +141,49 @@ class ActorCriticVtrace(Agent):
             This is the method called on each worker so it does not require grads and must
             keep track of it's internals. IMPALA only needs log_probs(a) and the sampled action from the worker
         """
-        with torch.no_grad():
-            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-
-            # reduce feature dim, build action_key dim
-            actions = OrderedDict()
-            head_masks = OrderedDict()
-            log_probs = []
-            compressed_actions = []
-            # TODO support multi-dimensional action spaces?
-            for key in self._action_keys:
-                logit = predictions[key]
-                prob = F.softmax(logit, dim=1)
-                log_softmax = F.log_softmax(logit, dim=1)
-
-                action = prob.multinomial(1)
-                log_prob = log_softmax.gather(1, action)
-                print(log_prob.shape, 'lp shape')
-
-                actions[key] = action.squeeze(1).cpu().numpy()
-                compressed_actions.append(action)
-                log_probs.append(log_prob)
-
-                # Initialize masks
-                if key == 'func_id':
-                    head_masks[key] = torch.ones_like(log_softmax)
-                else:
-                    head_masks[key] = torch.zeros_like(log_softmax)
-
-            log_probs = torch.cat(log_probs, dim=1)
-            compressed_actions = torch.cat(compressed_actions, dim=1)
-
-            self.__mask_sc2_actions_(obs, actions, head_masks)
-
-            head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
-            log_probs = log_probs * head_masks
-
-        self.exp_cache.write_forward(
-            log_prob_of_action=log_probs,
-            sampled_action=compressed_actions
-        )
-        self.internals = internals
-        return actions
+        # with torch.no_grad():
+        #     predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        #
+        #     # reduce feature dim, build action_key dim
+        #     actions = OrderedDict()
+        #     head_masks = OrderedDict()
+        #     log_probs = []
+        #     compressed_actions = []
+        #     # TODO support multi-dimensional action spaces?
+        #     for key in self._action_keys:
+        #         logit = predictions[key]
+        #         prob = F.softmax(logit, dim=1)
+        #         log_softmax = F.log_softmax(logit, dim=1)
+        #
+        #         action = prob.multinomial(1)
+        #         log_prob = log_softmax.gather(1, action)
+        #         print(log_prob.shape, 'lp shape')
+        #
+        #         actions[key] = action.squeeze(1).cpu().numpy()
+        #         compressed_actions.append(action)
+        #         log_probs.append(log_prob)
+        #
+        #         # Initialize masks
+        #         if key == 'func_id':
+        #             head_masks[key] = torch.ones_like(log_softmax)
+        #         else:
+        #             head_masks[key] = torch.zeros_like(log_softmax)
+        #
+        #     log_probs = torch.cat(log_probs, dim=1)
+        #     compressed_actions = torch.cat(compressed_actions, dim=1)
+        #
+        #     self.__mask_sc2_actions_(obs, actions, head_masks)
+        #
+        #     head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+        #     log_probs = log_probs * head_masks
+        #
+        # self.exp_cache.write_forward(
+        #     log_prob_of_action=log_probs,
+        #     sampled_action=compressed_actions
+        # )
+        # self.internals = internals
+        # return actions
+        raise NotImplementedError()
 
     def __mask_sc2_actions_(self, obs, actions, head_masks):
         # Mask invalid actions with NOOP and fill masks with ones
@@ -221,6 +222,9 @@ class ActorCriticVtrace(Agent):
 
         self.internals = internals
         return actions
+
+    def _act_eval_sc2(self):
+        raise NotImplementedError()
 
     def act_on_host(self, obs, next_obs, terminal_masks, sampled_actions, internals):
         """
