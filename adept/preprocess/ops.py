@@ -29,13 +29,13 @@ cv2.ocl.setUseOpenCL(False)
 
 
 class BaseOp(abc.ABC):
-    def __init__(self, filter_names=set(), filter_ranks=set()):
+    def __init__(self, filter_names=frozenset(), filter_ranks=frozenset()):
         if filter_names:
-            self.filters = set(filter_names)
+            self.filters = frozenset(filter_names)
         elif filter_ranks:
-            self.filters = set(filter_ranks)
+            self.filters = frozenset(filter_ranks)
         else:
-            self.filters = set()
+            self.filters = frozenset()
 
     def filter(self, name, rank):
         if self.filters:
@@ -143,6 +143,7 @@ class FrameStack(BaseOp):
     def reset(self):
         self.frames = deque([], maxlen=self.nb_frame)
 
+
 class FlattenSpace(BaseOp):
     def __init__(self, filter_names=set()):
         super(FlattenSpace, self).__init__(filter_names)
@@ -152,6 +153,7 @@ class FlattenSpace(BaseOp):
 
     def update_obs(self, obs):
         return obs.view(-1)
+
 
 class FromNumpy(BaseOp):
     def __init__(self, filter_names=set()):
