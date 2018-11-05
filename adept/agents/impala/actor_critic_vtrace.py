@@ -311,8 +311,8 @@ class ActorCriticVtrace(Agent):
         # rollouts here are a list of [seq, nb_env]
         # cat along the 1 dim gives [seq, batch = nb_env*nb_batches]
         # pull from rollout and convert to tensors of [seq, batch, ...]
-        from pudb.remote import set_trace
-        set_trace(term_size=(150,80))
+        # from pudb.remote import set_trace
+        # set_trace(term_size=(150,80))
         rewards = torch.cat(rollouts['rewards'], 1).to(self.device)
         terminals_mask = torch.cat(rollouts['terminals'], 1).to(self.device)
         discount_terminal_mask = self.discount * terminals_mask
