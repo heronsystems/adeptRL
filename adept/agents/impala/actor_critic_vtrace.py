@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 # Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py for reference
+from argparse import ArgumentParser
 from collections import OrderedDict
 import torch
 from torch.nn import functional as F
@@ -52,6 +53,16 @@ class ActorCriticVtrace(Agent):
         return cls(
             network, device, reward_normalizer, gpu_preprocessor, engine, action_space,
             args.nb_env, args.exp_length, args.discount
+        )
+
+    @classmethod
+    def add_args(cls, parser):
+        parser.add_argument(
+            '-ae',
+            '--exp-length',
+            type=int,
+            default=20,
+            help='Experience length (default: 20)'
         )
 
     @property
@@ -440,3 +451,5 @@ class ActorCriticVtrace(Agent):
 
         weighted_advantage = clamped_importance_pg * advantage
         return v_s, weighted_advantage, importance
+
+

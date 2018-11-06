@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
-from copy import deepcopy 
+from copy import deepcopy
 import torch
 from absl import flags
 from mpi4py import MPI as mpi
@@ -42,9 +42,10 @@ def main(args):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent,
-                                            args.vision_network + args.network_body,
-                                            timestamp)
+        log_id = make_log_id_from_timestamp(
+            args.tag, args.mode_name, args.agent,
+            args.network_vision + args.network_body, timestamp
+        )
         log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
         os.makedirs(log_id_dir)
         saver = SimpleModelSaver(log_id_dir)
@@ -54,15 +55,17 @@ def main(args):
     timestamp = comm.bcast(timestamp, root=0)
 
     if rank != 0:
-        log_id = make_log_id_from_timestamp(args.tag, args.mode_name, args.agent,
-                                            args.vision_network + args.network_body,
-                                            timestamp)
+        log_id = make_log_id_from_timestamp(
+            args.tag, args.mode_name, args.agent,
+            args.network_vision + args.network_body, timestamp
+        )
         log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     comm.Barrier()
 
     # construct env
-    seed = args.seed if rank == 0 else args.seed + (args.nb_env * (rank - 1))  # unique seed per process
+    # unique seed per process
+    seed = args.seed if rank == 0 else args.seed + args.nb_env * (rank - 1)
     # don't make a ton of envs if host
     if rank == 0:
         env_args = deepcopy(args)
@@ -76,19 +79,33 @@ def main(args):
     network_head_shapes = get_head_shapes(env.action_space, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
 
-    # sync network params
-    if rank == 0:
-        for v in network.parameters():
-            comm.Bcast(v.detach().cpu().numpy(), root=0)
-        print('Root variables synced')
+    # possibly load network
+    initial_step_count = 0
+    if args.load_network:
+        network.load_state_dict(
+            torch.load(
+                args.load_network, map_location=lambda storage, loc: storage
+            )
+        )
+        # get step count from network file
+        epoch_dir = os.path.split(args.load_network)[0]
+        initial_step_count = int(os.path.split(epoch_dir)[-1])
+        print('Reloaded network from {}'.format(args.load_network))
+
+    # only sync network params if not loading
     else:
-        # can just use the numpy buffers
-        variables = [v.detach().cpu().numpy() for v in network.parameters()]
-        for v in variables:
-            comm.Bcast(v, root=0)
-        for shared_v, model_v in zip(variables, network.parameters()):
-            model_v.data.copy_(torch.from_numpy(shared_v), non_blocking=True)
-        print('{} variables synced'.format(rank))
+        if rank == 0:
+            for v in network.parameters():
+                comm.Bcast(v.detach().cpu().numpy(), root=0)
+            print('Root variables synced')
+        else:
+            # can just use the numpy buffers
+            variables = [v.detach().cpu().numpy() for v in network.parameters()]
+            for v in variables:
+                comm.Bcast(v, root=0)
+            for shared_v, model_v in zip(variables, network.parameters()):
+                model_v.data.copy_(torch.from_numpy(shared_v), non_blocking=True)
+            print('{} variables synced'.format(rank))
 
     # host is rank 0
     if rank != 0:
@@ -111,17 +128,22 @@ def main(args):
         agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
 
         # construct container
-        container = ToweredWorker(agent, env, args.nb_env, logger, summary_writer,
-                                  args.summary_frequency)
+        container = ToweredWorker(
+            agent, env, args.nb_env, logger, summary_writer, args.summary_frequency
+        )
 
         # Run the container
         try:
-            container.run()
+            # distribute global step count evenly to workers
+            container.run(initial_count=initial_step_count // (size - 1))
         finally:
             env.close()
     # host
     else:
-        logger = make_logger('ToweredHost', os.path.join(log_id_dir, 'train_log_rank{}.txt'.format(rank)))
+        logger = make_logger(
+            'ToweredHost',
+            os.path.join(log_id_dir, 'train_log_rank{}.txt'.format(rank))
+        )
         log_args(logger, args)
         write_args_file(log_id_dir, args)
         logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
@@ -131,10 +153,21 @@ def main(args):
 
         # Construct the optimizer
         def make_optimizer(params):
-            opt = torch.optim.RMSprop(params, lr=args.learning_rate, eps=1e-5, alpha=0.99)
+            opt = torch.optim.RMSprop(
+                params, lr=args.learning_rate, eps=1e-5, alpha=0.99
+            )
+            if args.load_optimizer:
+                opt.load_state_dict(
+                    torch.load(
+                        args.load_optimizer, map_location=lambda storage, loc: storage
+                    )
+                )
             return opt
 
-        container = ToweredHost(comm, args.num_grads_to_drop, network, make_optimizer, saver, args.epoch_len, logger)
+        container = ToweredHost(
+            comm, args.num_grads_to_drop, network, make_optimizer, saver,
+            args.epoch_len, logger
+        )
 
         # Run the container
         if args.profile:
@@ -148,44 +181,35 @@ def main(args):
             profiler.stop()
             print(profiler.output_text(unicode=True, color=True))
         else:
-            container.run(args.max_train_steps)
+            container.run(args.max_train_steps, initial_step_count=initial_step_count)
 
 
 if __name__ == '__main__':
     import argparse
     from adept.utils.script_helpers import add_base_args, parse_bool
 
-    parser = argparse.ArgumentParser(description='AdeptRL Towered Mode')
-    parser = add_base_args(parser)
-    parser.add_argument('--gpu-id', type=int, nargs='+', default=0, help='Which GPU(s) to use for training (default: 0)')
-    parser.add_argument(
-        '-vn', '--vision-network', default='FourConv',
-        help='name of preset network (default: FourConv)'
-    )
-    parser.add_argument(
-        '-dn', '--discrete-network', default='Identity',
-    )
-    parser.add_argument(
-        '-nb', '--network-body', default='LSTM',
-    )
-    parser.add_argument(
-        '--profile', type=parse_bool, nargs='?', const=True, default=False,
-        help='displays profiling tree after 10e3 steps (default: False)'
-    )
-    parser.add_argument(
-        '--agent', default='ActorCritic',
-        help='name of preset agent (default: ActorCritic)'
-    )
-    parser.add_argument(
-        '--debug', type=parse_bool, nargs='?', const=True, default=False,
-        help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
-    )
-    parser.add_argument(
-        '--num-grads-to-drop', type=int, default=0,
-        help='The number of gradient receives to drop in a round. https://arxiv.org/abs/1604.00981 recommends dropping'
-             ' 10 percent of gradients for maximum speed (default: 0)'
-    )
-    args = parser.parse_args()
+    base_parser = argparse.ArgumentParser(description='AdeptRL Towered Mode')
+
+    def add_args(parser):
+        parser = parser.add_argument_group('Towered Mode Args')
+        parser.add_argument(
+            '--gpu-id',
+            type=int,
+            nargs='+',
+            default=0,
+            help='Which GPU(s) to use for training (default: 0)'
+        )
+        parser.add_argument(
+            '--num-grads-to-drop',
+            type=int,
+            default=0,
+            help=
+            'The number of gradient receives to drop in a round. https://arxiv.org/abs/1604.00981 recommends dropping'
+            ' 10 percent of gradients for maximum speed (default: 0)'
+        )
+
+    add_base_args(base_parser, add_args)
+    args = base_parser.parse_args()
 
     if args.debug:
         args.nb_env = 3

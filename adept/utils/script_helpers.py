@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
+from argparse import ArgumentParser  # for type hinting
 
 from adept.agents import AGENTS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
@@ -55,7 +56,6 @@ def atari_from_args(args, seed, subprocess=True):
                 args.env_id,
                 args.skip_rate,
                 args.max_episode_length,
-                args.zscore_norm_env,
                 do_frame_stack,
                 seed + i
             ) for i in range(args.nb_env)
@@ -79,11 +79,11 @@ def make_network(
     for rank, names in nbr.items():
         for name in names:
             if rank == 1:
-                pathways_by_name[name] = c_networks[args.discrete_network].from_args(ebn[name].shape, args)
+                pathways_by_name[name] = c_networks[args.network_discrete].from_args(ebn[name].shape, args)
             elif rank == 2:
                 raise NotImplementedError('Rank 2 inputs not implemented')
             elif rank == 3:
-                pathways_by_name[name] = chw_networks[args.vision_network].from_args(ebn[name].shape, args)
+                pathways_by_name[name] = chw_networks[args.network_vision].from_args(ebn[name].shape, args)
             elif rank == 4:
                 raise NotImplementedError('Rank 4 inputs not implemented')
             else:
@@ -110,106 +110,132 @@ def get_head_shapes(action_space, agent_name):
     Agent = AGENTS[agent_name]
     return Agent.output_shape(action_space)
 
-
-def add_base_args(parser):
-    """
-    Common Arguments
-    """
+def _add_common_agent_args(parser: ArgumentParser):
     parser.add_argument(
-        '--learning-rate', '-lr', type=float, default=7e-4, metavar='LR',
+        '-al', '--learning-rate', type=float, default=7e-4,
         help='learning rate (default: 7e-4)'
     )
     parser.add_argument(
-        '--discount', type=float, default=0.99, metavar='D',
+        '-ad', '--discount', type=float, default=0.99,
         help='discount factor for rewards (default: 0.99)'
     )
-    parser.add_argument(
-        '-s', '--seed', type=int, default=0, metavar='S',
-        help='random seed (default: 0)'
+
+def _add_agent_args(subparser: ArgumentParser):
+    agent_parsers = []
+    for agent_name, agent_class in AGENTS.items():
+        parser_agent = subparser.add_parser(agent_name)
+        agent_group = parser_agent.add_argument_group('Agent Args')
+        _add_common_agent_args(agent_group)
+        agent_class.add_args(agent_group)
+        agent_parsers.append(parser_agent)
+    return agent_parsers
+
+def _add_network_args(parser: ArgumentParser):
+    subparser = parser.add_argument_group('Network Args')
+    subparser.add_argument(
+        '-nv', '--network-vision', default='FourConv'
     )
-    parser.add_argument(
-        '-n', '--nb-env', type=int, default=32, metavar='N',
-        help='number of envs to run in parallel (default: 32)'
+    subparser.add_argument(
+        '-nd', '--network-discrete', default='Identity'
     )
-    parser.add_argument(
-        '-mel', '--max-episode-length', type=int, default=10000, metavar='MEL',
-        help='maximum length of an episode (default: 10000)'
+    subparser.add_argument(
+        '-nb', '--network-body', default='LSTM'
     )
-    parser.add_argument(
-        '--env-id', default='PongNoFrameskip-v4',
+    subparser.add_argument(
+        '--normalize', type=parse_bool, nargs='?', const=True, default=True,
+        help='Applies batch norm between linear/convolutional layers and layer norm for LSTMs (default: True)'
+    )
+
+def _add_reload_args(parser: ArgumentParser):
+    subparser = parser.add_argument_group('Reload Args')
+    # Reload from save
+    subparser.add_argument(
+        '-ln', '--load-network', default='',
+        help='Load network from this path. Sets initial step count'
+    )
+    subparser.add_argument(
+        '-lo', '--load-optimizer', default='',
+        help='Load optimizer from this path'
+    )
+
+def _add_env_args(parser: ArgumentParser):
+    subparser = parser.add_argument_group('Environment Args')
+    subparser.add_argument(
+        '-e', '--env-id', default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)'
     )
-    parser.add_argument(
-        '--log-dir', default='/tmp/adept_logs/',
-        help='folder to save logs. (default: /tmp/adept_logs)'
+    subparser.add_argument(
+        '-ne', '--nb-env', type=int, default=32,
+        help='number of envs to run in parallel (default: 32)'
     )
-    parser.add_argument(
-        '-mts', '--max-train-steps', type=int, default=10e6, metavar='MTS',
-        help='number of steps to train for (default: 10e6)'
-    )
-    parser.add_argument(
-        '--nb-top-model', type=int, default=3, metavar='N',
-        help='number of top models to save per epoch'
-    )
-    parser.add_argument(
-        '--epoch-len', type=int, default=1e6, metavar='FREQ',
-        help='save top models every FREQ steps'
-    )
-    parser.add_argument(
-        '-sf', '--summary-frequency', default=10, metavar='FREQ',
-        help='write tensorboard summaries every FREQ seconds'
-    )
-    parser.add_argument(
-        '-t', '--tag', default='',
-        help='identify your experiment with a tag that gets prepended to experiment log directory'
-    )
-
-    """
-    Env Arguments
-    """
-    # Atari
-    parser.add_argument(
-        '--zscore-norm-env', type=parse_bool, nargs='?', const=True, default=False,
-        help='Normalize the environment using running statistics'
-    )
-    parser.add_argument(
-        '--skip-rate', type=int, default=4,
+    subparser.add_argument(
+        '-es', '--skip-rate', type=int, default=4,
         help='frame skip rate (default: 4)'
     )
-
-    """
-    Agent Arguments
-    """
-    parser.add_argument(
-        '-na', '--normalize-advantage', type=parse_bool, nargs='?', const=True, default=False,
-        help='normalize the advantage'
-    )
-    parser.add_argument(
-        '-gae', '--generalized-advantage-estimation', type=parse_bool, nargs='?', const=True, default=True,
-        help='use generalized advantage estimation'
-    )
-    parser.add_argument(
-        '--tau', type=float, default=1.00,
-        help='parameter for GAE (default: 1.00)'
-    )
-    # Actor Critic
-    parser.add_argument(
-        '--exp-length', '--nb-rollout', type=int, default=20,
-        help='number of rollouts or size of experience replay'
+    subparser.add_argument(
+        '-em', '--max-episode-length', type=int, default=10000, metavar='MEL',
+        help='maximum length of an episode (default: 10000)'
     )
 
+def _add_common_args(parser: ArgumentParser):
+    _add_env_args(parser)
+    _add_network_args(parser)
+    _add_reload_args(parser)
     """
-    Network Arguments
+    Common Arguments
     """
-    parser.add_argument(
-        '--normalize', type=parse_bool, nargs='?', const=True, default=True,
-        help='applies batch norm between linear/convolutional layers and layer norm for LSTMs'
+    subparser = parser.add_argument_group('Common Args')
+    subparser.add_argument(
+        '-cl', '--log-dir', default='/tmp/adept_logs/',
+        help='Folder to save logs. (default: /tmp/adept_logs)'
+    )
+    subparser.add_argument(
+        '-ct', '--tag', default='',
+        help='Identify your experiment with a tag that gets prepended to the experiment log directory'
+    )
+    subparser.add_argument(
+        '-cm', '--max-train-steps', type=int, default=10e6,
+        help='Number of steps to train for (default: 10e6)'
+    )
+    subparser.add_argument(
+        '-ce', '--epoch-len', type=int, default=1e6, metavar='FREQ',
+        help='Save models every FREQ steps'
+    )
+    subparser.add_argument(
+        '-cf', '--summary-frequency', default=10,
+        help='Write tensorboard summaries every FREQ seconds'
+    )
+    subparser.add_argument(
+        '--seed', type=int, default=0,
+        help='Random seed (default: 0)'
+    )
+    subparser.add_argument(
+        '--profile',
+        type=parse_bool,
+        nargs='?',
+        const=True,
+        default=False,
+        help='displays profiling tree after 10e3 steps (default: False)'
+    )
+    subparser.add_argument(
+        '--debug',
+        type=parse_bool,
+        nargs='?',
+        const=True,
+        default=False,
+        help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
     )
 
-    # Attention
-    parser.add_argument(
-        '--nb-head', type=int, default=1,
-        help='number of attention heads. unused if no attention in network.'
-    )
+def _add_args_to_parsers(arg_fn, parsers):
+    return [arg_fn(x) for x in parsers]
+
+def add_base_args(parser: ArgumentParser, additional_args_fn=None):
+    # TODO: there must be a better way of adding args to subparsers while keeping the help message
+    # TODO: some agents may not run in certain modes not sure the best way to handle this
+    subparser_agent = parser.add_subparsers(title='Agents', dest='agent')
+    subparser_agent.required = True
+    agent_parsers = _add_agent_args(subparser_agent)
+    _add_args_to_parsers(_add_common_args, agent_parsers)
+    _add_args_to_parsers(additional_args_fn, agent_parsers)
 
     return parser

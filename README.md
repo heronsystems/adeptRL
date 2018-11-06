@@ -66,15 +66,15 @@ The log directory contains the tensorboard file, saved models, and other metadat
 ```
 # Local Mode (A2C)
 # We recommend 4GB+ GPU memory, 8GB+ RAM, 4+ Cores
-python -m adept.scripts.local --env-id BeamRiderNoFrameskip-v4
+python -m adept.scripts.local ActorCritic --env-id BeamRiderNoFrameskip-v4
 
 # Towered Mode (A3C Variant, requires mpi4py)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-python -m adept.scripts.towered --env-id BeamRiderNoFrameskip-v4
+python -m adept.scripts.towered ActorCritic --env-id BeamRiderNoFrameskip-v4
 
 # IMPALA (requires mpi4py and is resource intensive)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-mpiexec -n 3 python -m adept.scripts.impala --env-id BeamRiderNoFrameskip-v4
+mpiexec -n 3 python -m adept.scripts.impala ActorCriticVtrace --env-id BeamRiderNoFrameskip-v4
 
 # StarCraft 2 (IMPALA not supported yet)
 # Warning: much more resource intensive than Atari

@@ -27,14 +27,14 @@ from ._base import BaseEnvironment, Spaces
 import numpy as np
 
 
-def make_atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed):
+def make_atari_env(env_id, skip_rate, max_ep_length, do_frame_stack, seed):
     def _f():
-        env = atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed)
+        env = atari_env(env_id, skip_rate, max_ep_length, do_frame_stack, seed)
         return env
     return _f
 
 
-def atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed):
+def atari_env(env_id, skip_rate, max_ep_length, do_frame_stack, seed):
     env = gym.make(env_id)
     if hasattr(env.unwrapped, 'ale'):
         if 'FIRE' in env.unwrapped.get_action_meanings():

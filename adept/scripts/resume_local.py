@@ -43,7 +43,7 @@ def main(args):
         args = dotdict(json.load(args_file))
 
     print_ascii_logo()
-    log_id = make_log_id(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body)
+    log_id = make_log_id(args.tag, args.mode_name, args.agent, args.network_vision + args.network_body)
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     os.makedirs(log_id_dir)

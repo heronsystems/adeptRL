@@ -34,7 +34,9 @@ FLAGS(['local.py'])
 def main(args):
     # construct logging objects
     print_ascii_logo()
-    log_id = make_log_id(args.tag, args.mode_name, args.agent, args.vision_network + args.network_body)
+    log_id = make_log_id(
+        args.tag, args.mode_name, args.agent, args.network_vision + args.network_body
+    )
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     os.makedirs(log_id_dir)
@@ -52,6 +54,18 @@ def main(args):
     torch.manual_seed(args.seed)
     network_head_shapes = get_head_shapes(env.action_space, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
+    # possibly load network
+    initial_step_count = 0
+    if args.load_network:
+        network.load_state_dict(
+            torch.load(
+                args.load_network, map_location=lambda storage, loc: storage
+            )
+        )
+        # get step count from network file
+        epoch_dir = os.path.split(args.load_network)[0]
+        initial_step_count = int(os.path.split(epoch_dir)[-1])
+        print('Reloaded network from {}'.format(args.load_network))
     logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
     # construct agent
@@ -63,18 +77,17 @@ def main(args):
     # Construct the Container
     def make_optimizer(params):
         opt = torch.optim.RMSprop(params, lr=args.learning_rate, eps=1e-5, alpha=0.99)
+        if args.load_optimizer:
+            opt.load_state_dict(
+                torch.load(
+                    args.load_optimizer, map_location=lambda storage, loc: storage
+                )
+            )
         return opt
 
     container = Local(
-        agent,
-        env,
-        make_optimizer,
-        args.epoch_len,
-        args.nb_env,
-        logger,
-        summary_writer,
-        args.summary_frequency,
-        saver
+        agent, env, make_optimizer, args.epoch_len, args.nb_env, logger, summary_writer,
+        args.summary_frequency, saver
     )
 
     # if running an eval thread create eval env, agent, & logger
@@ -86,8 +99,12 @@ def main(args):
         # env and agent
         eval_args.nb_env = args.nb_eval_env
         eval_env = make_env(eval_args, eval_args.seed)
-        eval_net = make_network(eval_env.observation_space, network_head_shapes, eval_args)
-        eval_agent = make_agent(eval_net, device, eval_env.gpu_preprocessor, eval_env.engine, eval_env.action_space, eval_args)
+        eval_net = make_network(
+            eval_env.observation_space, network_head_shapes, eval_args
+        )
+        eval_agent = make_agent(
+            eval_net, device, eval_env.gpu_preprocessor, eval_env.engine, env.action_space, eval_args
+        )
         eval_net.load_state_dict(network.state_dict())
 
         # logger
@@ -101,7 +118,8 @@ def main(args):
             eval_logger,
             summary_writer,
             args.eval_step_rate,
-            override_step_count_fn=lambda: container.local_step_count  # wire local containers step count into eval
+            override_step_count_fn=
+            lambda: container.local_step_count  # wire local containers step count into eval
         )
         evaluation_container.start()
 
@@ -117,7 +135,7 @@ def main(args):
         profiler.stop()
         print(profiler.output_text(unicode=True, color=True))
     else:
-        container.run(args.max_train_steps)
+        container.run(args.max_train_steps, initial_count=initial_step_count)
     env.close()
 
     if args.nb_eval_env > 0:
@@ -129,42 +147,34 @@ if __name__ == '__main__':
     import argparse
     from adept.utils.script_helpers import add_base_args, parse_bool
 
-    parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
-    parser = add_base_args(parser)
-    parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
-    parser.add_argument(
-        '-vn', '--vision-network', default='FourConv',
-        help='name of preset network (default: FourConv)'
-    )
-    parser.add_argument(
-        '-dn', '--discrete-network', default='Identity',
-    )
-    parser.add_argument(
-        '-nb', '--network-body', default='LSTM',
-    )
-    parser.add_argument(
-        '--agent', default='ActorCritic',
-        help='name of preset agent (default: ActorCritic)'
-    )
-    parser.add_argument(
-        '--nb-eval-env', default=1, type=int,
-        help='Number of eval environments to run [in a separate thread] each with a different seed. '
-             'Creates a copy of the network. Disable by setting to 0. (default: 1)'
-    )
-    parser.add_argument(
-        '--eval-step-rate', default=0, type=int,
-        help='Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 to disable (default: 0)'
-    )
-    parser.add_argument(
-        '--profile', type=parse_bool, nargs='?', const=True, default=False,
-        help='displays profiling tree after 10e3 steps (default: False)'
-    )
-    parser.add_argument(
-        '--debug', type=parse_bool, nargs='?', const=True, default=False,
-        help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
-    )
+    base_parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
 
-    args = parser.parse_args()
+    def add_args(parser):
+        parser = parser.add_argument_group('Local Mode Args')
+        parser.add_argument(
+            '--gpu-id',
+            type=int,
+            default=0,
+            help='Which GPU to use for training (default: 0)'
+        )
+        parser.add_argument(
+            '--nb-eval-env',
+            default=1,
+            type=int,
+            help=
+            'Number of eval environments to run [in a separate thread] each with a different seed. '
+            'Creates a copy of the network. Disable by setting to 0. (default: 1)'
+        )
+        parser.add_argument(
+            '--eval-step-rate',
+            default=0,
+            type=int,
+            help=
+            'Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 is unlimited (default: 0)'
+        )
+
+    add_base_args(base_parser, add_args)
+    args = base_parser.parse_args()
 
     if args.debug:
         args.nb_env = 3
