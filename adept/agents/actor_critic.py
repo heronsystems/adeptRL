@@ -171,7 +171,7 @@ class ActorCritic(Agent):
         # Mask invalid actions with NOOP and fill masks with ones
         for batch_idx, action in enumerate(actions['func_id']):
             # convert unavailable actions to NOOP
-            if action not in obs['available_actions'][batch_idx]:
+            if obs['available_actions'][batch_idx][action] == 0:
                 actions['func_id'][batch_idx] = 0
 
             # build SC2 action masks

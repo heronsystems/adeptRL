@@ -141,59 +141,57 @@ class ActorCriticVtrace(Agent):
             This is the method called on each worker so it does not require grads and must
             keep track of it's internals. IMPALA only needs log_probs(a) and the sampled action from the worker
         """
-        # with torch.no_grad():
-        #     predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-        #
-        #     # reduce feature dim, build action_key dim
-        #     actions = OrderedDict()
-        #     head_masks = OrderedDict()
-        #     log_probs = []
-        #     compressed_actions = []
-        #     # TODO support multi-dimensional action spaces?
-        #     for key in self._action_keys:
-        #         logit = predictions[key]
-        #         prob = F.softmax(logit, dim=1)
-        #         log_softmax = F.log_softmax(logit, dim=1)
-        #
-        #         action = prob.multinomial(1)
-        #         log_prob = log_softmax.gather(1, action)
-        #         print(log_prob.shape, 'lp shape')
-        #
-        #         actions[key] = action.squeeze(1).cpu().numpy()
-        #         compressed_actions.append(action)
-        #         log_probs.append(log_prob)
-        #
-        #         # Initialize masks
-        #         if key == 'func_id':
-        #             head_masks[key] = torch.ones_like(log_softmax)
-        #         else:
-        #             head_masks[key] = torch.zeros_like(log_softmax)
-        #
-        #     log_probs = torch.cat(log_probs, dim=1)
-        #     compressed_actions = torch.cat(compressed_actions, dim=1)
-        #
-        #     self.__mask_sc2_actions_(obs, actions, head_masks)
-        #
-        #     head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
-        #     log_probs = log_probs * head_masks
-        #
-        # self.exp_cache.write_forward(
-        #     log_prob_of_action=log_probs,
-        #     sampled_action=compressed_actions
-        # )
-        # self.internals = internals
-        # return actions
-        raise NotImplementedError()
+        with torch.no_grad():
+            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
 
-    def __mask_sc2_actions_(self, obs, actions, head_masks):
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            head_masks = OrderedDict()
+            log_probs = []
+            compressed_actions = []
+            # TODO support multi-dimensional action spaces?
+            for key in self._action_keys:
+                logit = predictions[key]
+                prob = F.softmax(logit, dim=1)
+                log_softmax = F.log_softmax(logit, dim=1)
+
+                action = prob.multinomial(1)
+                log_prob = log_softmax.gather(1, action)
+
+                actions[key] = action.squeeze(1).cpu().numpy()
+                compressed_actions.append(action)
+                log_probs.append(log_prob)
+
+                # Initialize masks
+                if key == 'func_id':
+                    head_masks[key] = torch.ones_like(log_prob)
+                else:
+                    head_masks[key] = torch.zeros_like(log_prob)
+
+            log_probs = torch.cat(log_probs, dim=1)
+            compressed_actions = torch.cat(compressed_actions, dim=1)
+
+            self.__mask_sc2_actions_(obs['available_actions'], actions['func_id'], head_masks)
+
+            head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+            log_probs = log_probs * head_masks
+
+        self.exp_cache.write_forward(
+            log_prob_of_action=log_probs,
+            sampled_action=compressed_actions
+        )
+        self.internals = internals
+        return actions
+
+    def __mask_sc2_actions_(self, avaiable_actions, actions_func_id, head_masks):
         # Mask invalid actions with NOOP and fill masks with ones
-        for batch_idx, action in enumerate(actions['func_id']):
+        for batch_idx, action in enumerate(actions_func_id):
             # convert unavailable actions to NOOP
-            if action not in obs['available_actions'][batch_idx]:
-                actions['func_id'][batch_idx] = 0
+            if avaiable_actions[batch_idx][action] == 0:
+                actions_func_id[batch_idx] = 0
 
             # build SC2 action masks
-            func_id = actions['func_id'][batch_idx]
+            func_id = actions_func_id[batch_idx]
             # TODO this can be vectorized via gather
             for headname in self._func_id_to_headnames[func_id].keys():
                 head_masks[headname][batch_idx] = 1.
@@ -267,7 +265,7 @@ class ActorCriticVtrace(Agent):
         for seq_ind in range(terminal_masks.shape[0]):
             results, internals = result_fn(seq_ind, internals)
             logits_seq = {k: v for k, v in results.items() if k != 'critic'}
-            log_probs_action_seq, entropies_seq = self.__predictions_to_logprobs_ents_host(logits_seq, sampled_actions[seq_ind])
+            log_probs_action_seq, entropies_seq = self._predictions_to_logprobs_ents_host(seq_ind, obs, logits_seq, sampled_actions[seq_ind])
             # seq lists
             values.append(results['critic'].squeeze(1))
             log_probs_of_action.append(log_probs_action_seq)
@@ -287,7 +285,13 @@ class ActorCriticVtrace(Agent):
 
         return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
 
-    def __predictions_to_logprobs_ents_host(self, predictions, actions_taken):
+    def _predictions_to_logprobs_ents_host(self, seq_ind, obs, predictions, actions_taken):
+        if self.engine == Engines.GYM:
+            return self.__predictions_to_logprobs_ents_host_gym(predictions, actions_taken)
+        if self.engine == Engines.SC2:
+            return self.__predictions_to_logprobs_ents_host_sc2(seq_ind, obs, predictions, actions_taken)
+
+    def __predictions_to_logprobs_ents_host_gym(self, predictions, actions_taken):
         log_probs = []
         entropies = []
         # TODO support multi-dimensional action spaces?
@@ -307,12 +311,46 @@ class ActorCriticVtrace(Agent):
 
         return log_probs, entropies
 
+    def __predictions_to_logprobs_ents_host_sc2(self, seq_ind, obs, predictions, actions_taken):
+        log_probs = []
+        entropies = []
+        head_masks = OrderedDict()
+        # TODO support multi-dimensional action spaces?
+        for key_ind, key in enumerate(self._action_keys):
+            logit = predictions[key]
+            prob = F.softmax(logit, dim=1)
+            log_softmax = F.log_softmax(logit, dim=1)
+            # actions taken is batch, num_actions
+            log_prob = log_softmax.gather(1, actions_taken[:, key_ind].unsqueeze(1))
+            entropy = -(log_softmax * prob).sum(1, keepdim=True)
+
+            # Initialize masks
+            if key == 'func_id':
+                head_masks[key] = torch.ones_like(log_prob)
+            else:
+                head_masks[key] = torch.zeros_like(log_prob)
+
+            log_probs.append(log_prob)
+            entropies.append(entropy)
+
+        log_probs = torch.cat(log_probs, dim=1)
+        entropies = torch.cat(entropies, dim=1)
+
+        # obs is seq x batch
+        avail_actions = obs['available_actions'][seq_ind]
+        func_id_ind = self._action_keys.index('func_id')
+        actions_func_id = actions_taken[:, func_id_ind].cpu().numpy()
+        self.__mask_sc2_actions_(avail_actions, actions_func_id, head_masks)
+
+        head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+        log_probs = log_probs * head_masks
+        entropies = entropies * head_masks
+        return log_probs, entropies
+
     def compute_loss(self, rollouts):
         # rollouts here are a list of [seq, nb_env]
         # cat along the 1 dim gives [seq, batch = nb_env*nb_batches]
         # pull from rollout and convert to tensors of [seq, batch, ...]
-        # from pudb.remote import set_trace
-        # set_trace(term_size=(150,80))
         rewards = torch.cat(rollouts['rewards'], 1).to(self.device)
         terminals_mask = torch.cat(rollouts['terminals'], 1).to(self.device)
         discount_terminal_mask = self.discount * terminals_mask

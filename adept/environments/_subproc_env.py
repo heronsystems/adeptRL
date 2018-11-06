@@ -53,10 +53,12 @@ def worker(remote, parent_remote, env_fn_wrapper):
 
     ebn = env.cpu_preprocessor.observation_space.entries_by_name
     shared_memory = {}
-    for name, entry in ebn.items(): 
+    for name, entry in ebn.items():
         if None not in entry.shape:
             if entry.dtype == np.uint8:
                 tensor = torch.ByteTensor(*entry.shape)
+            elif entry.dtype == np.int16 or entry.dtype == np.int32 or entry.dtype == np.int64:
+                tensor = torch.LongTensor(*entry.shape)
             # TODO: support more datatypes
             else:
                 tensor = torch.FloatTensor(*entry.shape)
