@@ -84,7 +84,7 @@ class AdeptGymEnv(BaseEnvironment):
         return self._gpu_preprocessor
 
     def step(self, action):
-        obs, reward, done, info = self.gym_env.step(action)
+        obs, reward, done, info = self.gym_env.step(self._wrap_action(action))
         return self._wrap_observation(obs), reward, done, info
 
     def reset(self, **kwargs):
@@ -120,3 +120,6 @@ class AdeptGymEnv(BaseEnvironment):
             return self.cpu_preprocessor({idx: torch.from_numpy(obs) for idx, obs in enumerate(observation)})
         else:
             raise NotImplementedError
+
+    def _wrap_action(self, action):
+        return action['Discrete']

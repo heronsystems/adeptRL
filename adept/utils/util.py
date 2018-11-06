@@ -17,10 +17,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import argparse
 import json
 import heapq
+from collections import OrderedDict
 
 
 def listd_to_dlist(list_of_dicts):
-    new_dict = {}
+    new_dict = OrderedDict()
     for d in list_of_dicts:
         for k, v in d.items():
             if k not in new_dict:
@@ -35,7 +36,7 @@ def dlist_to_listd(dict_of_lists):
     list_len = len(dict_of_lists[next(iter(keys))])
     new_list = []
     for i in range(list_len):
-        temp_d = {}
+        temp_d = OrderedDict()
         for k in keys:
             temp_d[k] = dict_of_lists[k][i]
         new_list.append(temp_d)

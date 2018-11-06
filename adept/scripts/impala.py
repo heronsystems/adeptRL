@@ -65,7 +65,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
+    network_head_shapes = get_head_shapes(env.action_space, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
 
     # sync network params
@@ -99,7 +99,7 @@ def main(args):
         cudnn = False
 
     torch.backends.cudnn.benchmark = cudnn
-    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
+    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
 
     # workers
     if rank != 0:

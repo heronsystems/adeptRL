@@ -16,9 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 from collections import OrderedDict
 from functools import reduce
-from itertools import chain
 
-import gym
 import numpy as np
 import torch
 from pysc2.env import environment
@@ -29,7 +27,6 @@ from pysc2.lib.actions import FunctionCall
 from pysc2.lib.features import parse_agent_interface_format, SCREEN_FEATURES, MINIMAP_FEATURES
 from pysc2.lib.static_data import UNIT_TYPES
 
-from adept.agents import EnvBase
 from adept.environments._base import BaseEnvironment, Spaces, Space
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import BaseOp, CastToFloat, FlattenSpace
@@ -103,11 +100,13 @@ class AdeptSC2Env(BaseEnvironment):
         )
 
         self._gpu_preprocessor = SC2RemoveAvailableActions(
-            [CastToFloat(), SC2ScaleChannels(24)],
+            # [CastToFloat(), SC2ScaleChannels(24)],
+            [SC2OneHot()],
             self._cpu_preprocessor.observation_space
         )
         self._observation_space = self._gpu_preprocessor.observation_space
         self._action_space = Spaces(act_entries_by_name)
+        self._func_id_to_headnames = SC2ActionLookup()
 
     @property
     def observation_space(self):
@@ -130,8 +129,7 @@ class AdeptSC2Env(BaseEnvironment):
         :param action_by_name: Dict{.}[headname: action/arg]
         :return:
         """
-        timesteps = self.sc2_env.step([action])
-        assert len(timesteps) == 1
+        timesteps = self.sc2_env.step(self._wrap_action(action))
         # pysc2 returns a tuple of timesteps, with one timestep inside
         # get first timestep
         pysc2_step = timesteps[0]
@@ -159,6 +157,21 @@ class AdeptSC2Env(BaseEnvironment):
         obs['control_groups'] = torch.from_numpy(observation['control_groups'])
         obs['available_actions'] = frozenset(observation['available_actions'])
         return obs
+
+    def _wrap_action(self, action):
+        func_id = action['func_id']
+        required_heads = self._func_id_to_headnames[func_id]
+        args = []
+
+        for headname in required_heads.keys():
+            if '_y' in headname:
+                continue
+            elif '_x' in headname:
+                args.append([action[headname], action[headname[:-2] + '_y']])
+            else:
+                args.append([action[headname]])
+
+        return [FunctionCall(func_id, args)]
 
 
 class SC2RemoveFeatures(BaseOp):
@@ -210,11 +223,19 @@ class SC2OneHot(BaseOp):
                 else:
                     self._ranges_by_feature_idx[i] = list(range(feat.scale))
 
+        scales = []
+        for i, feat in enumerate(feats):
+            if feat.type == features.FeatureType.SCALAR:
+                scales.append(feat.scale)
+        self._scales = 1. / torch.tensor(scales).float()
+
     def update_space(self, old_space):
         new_shape = (len(self._scalar_idxs) + len(reduce(lambda prev, cur: prev + cur, self._ranges_by_feature_idx.values())),) + old_space.shape[1:]
         return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
 
     def update_obs(self, obs):
+        if self._scales.device != obs.device:
+            self._scales = self._scales.to(obs.device)
         # warning, this is really slow
         if obs.dim() == 3:
             one_hot_channels = []
@@ -226,8 +247,12 @@ class SC2OneHot(BaseOp):
             result = torch.cat([obs, one_hot_channels.to(one_hot_channels.device, dtype=torch.int32)])
             return result
         elif obs.dim() == 4:
-            # TODO
-            raise NotImplementedError
+            one_hot_channels = []
+            for i, rngs in self._ranges_by_feature_idx.items():
+                for rng in rngs:
+                    one_hot_channels.append(obs[:, i, :, :] == rng)
+            one_hot_channels = torch.stack(one_hot_channels, dim=1)
+            return torch.cat([obs[:, self._scalar_idxs, :, :].float() * self._scales.view(1, -1, 1, 1), one_hot_channels.float()], dim=1)
         else:
             raise ValueError('Cannot convert {}-dimensional tensor to one-hot'.format(obs.dim()))
 
@@ -235,7 +260,6 @@ class SC2OneHot(BaseOp):
 class SC2ScaleChannels(BaseOp):
     def __init__(self, nb_channel, feats=SCREEN_FEATURES + MINIMAP_FEATURES, mode='all'):
         """
-
         :param nb_channel:
         :param feats:
         :param mode: 'all' or 'scalar' to decide which type of features to scale
@@ -279,100 +303,27 @@ class SC2RemoveAvailableActions(ObsPreprocessor):
         return {k: v for k, v in result.items() if k != 'available_actions'}
 
 
-def lookup_headnames_by_id(func_id):
-    argnames = lookup_argnames_by_id(func_id)
-    headnames = []
-    for argname in argnames:
-        if argname == 'screen':
-            headnames.extend(['screen_x', 'screen_y'])
-        elif argname == 'minimap':
-            headnames.extend(['minimap_x', 'minimap_y'])
-        elif argname == 'screen2':
-            headnames.extend(['screen2_x', 'screen2_y'])
-        else:
-            headnames.append(argname)
-    # OrderedDict for constant time membership test while preserving order
-    return OrderedDict.fromkeys(headnames)
+class SC2ActionLookup(dict):
+    def __init__(self):
+        super().__init__()
+        for func in FUNCTIONS:
+            func_id = func.id
+            arg_names = [arg.name for arg in FUNCTION_TYPES[func.function_type]]
+            self[func_id] = self._arg_names_to_head_names(arg_names)
 
-
-def lookup_argnames_by_id(func_id):
-    """
-    :param func_id: int
-    :return: argument_names: List{.}[arg_name]
-    """
-    func = FUNCTIONS[func_id]
-    required_args = FUNCTION_TYPES[func.function_type]
-    argument_names = []
-    for arg in required_args:
-        argument_names.append(arg.name)
-    return argument_names
-
-
-class SC2AgentOverrides(EnvBase):
-    def preprocess_logits(self, logits):
-        return logits
-
-    def process_logits(self, logits, obs, deterministic):
-        """
-        The SC2 environment requires special logic to mask out unused network outputs.
-        :param logits:
-        :return:
-        """
-        available_actions = obs['available_actions']
-        actions, log_probs, entropies, head_masks = OrderedDict(), OrderedDict(), OrderedDict(), OrderedDict()
-        headnames = logits.keys()
-
-        for headname in headnames:
-            actions[headname], log_probs[headname], entropies[headname] = super().process_logits(logits[headname], obs, deterministic)
-            if headname == 'func_id':
-                head_masks[headname] = torch.ones_like(entropies[headname])
+    def _arg_names_to_head_names(self, arg_names):
+        headnames = []
+        for argname in arg_names:
+            if argname == 'screen':
+                headnames.extend(['screen_x', 'screen_y'])
+            elif argname == 'minimap':
+                headnames.extend(['minimap_x', 'minimap_y'])
+            elif argname == 'screen2':
+                headnames.extend(['screen2_x', 'screen2_y'])
             else:
-                head_masks[headname] = torch.zeros_like(entropies[headname])
-
-        function_calls = []
-        # iterate over batch dimension
-        for i in range(actions['func_id'].shape[0]):
-            # force a no op if action is unavailable
-            if actions['func_id'][i] not in available_actions[i]:
-                function_calls.append(FunctionCall(0, []))
-                continue
-
-            # build the masks and the FunctionCall's in the same loop
-            args = []
-            func_id = actions['func_id'][i]
-            required_heads = lookup_headnames_by_id(func_id)
-            for headname in required_heads.keys():
-                # toggle mask to 1 if the head is required
-                head_masks[headname][i] = 1.
-
-                # skip y's
-                if '_y' in headname:
-                    continue
-                # if x, build the argument
-                elif '_x' in headname:
-                    args.append([actions[headname][i], actions[headname[:-2] + '_y'][i]])
-                else:
-                    args.append([actions[headname][i]])
-            function_calls.append(FunctionCall(func_id, args))
-
-        # apply masks to log_probs and entropies
-        for headname in headnames:
-            log_probs[headname] = log_probs[headname] * head_masks[headname]
-            entropies[headname] = entropies[headname] * head_masks[headname]
-
-        log_probs = torch.stack(tuple(v for v in log_probs.values()), dim=1)
-        entropies = torch.stack(tuple(v for v in entropies.values()), dim=1)
-        return function_calls, log_probs, entropies
+                headnames.append(argname)
+        # OrderedDict for constant time membership test while preserving order
+        # TODO make an OrderedSet in utils
+        return OrderedDict.fromkeys(headnames)
 
 
-if __name__ == '__main__':
-    from absl import flags
-    # import sys
-    # FLAGS = flags.FLAGS
-    # FLAGS(sys.argv)
-    FLAGS = flags.FLAGS
-    FLAGS(['sc2.py'])
-
-    env = sc2_feature_env('MoveToBeacon', 1, None)
-    env.reset()
-    print()

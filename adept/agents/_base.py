@@ -19,24 +19,14 @@ import abc
 import torch
 
 
-class EnvBase(abc.ABC):
-    @abc.abstractmethod
-    def preprocess_logits(self, logits):
-        """
-        Do any last-minute processing on logits before process_logits does anything
-        :param logits:
-        :return:
-        """
-        raise NotImplementedError
-
-    def process_logits(self, logits, obs, deterministic):
-        raise NotImplementedError
-
-
 class Agent(abc.ABC):
     """
     An Agent interacts with the environment and accumulates experience.
     """
+    @abc.abstractclassmethod
+    def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
+        raise NotImplementedError
+
     @property
     @abc.abstractmethod
     def exp_cache(self):
