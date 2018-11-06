@@ -36,17 +36,17 @@ def make_atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_st
 
 def atari_env(env_id, skip_rate, max_ep_length, do_zscore_norm, do_frame_stack, seed):
     env = gym.make(env_id)
+    if hasattr(env.unwrapped, 'ale'):
+        if 'FIRE' in env.unwrapped.get_action_meanings():
+            env = FireResetEnv(env)
+        env = NoopResetEnv(env, noop_max=30)
+        env = EpisodicLifeEnv(env)
     if 'NoFrameskip' in env_id:
         assert 'NoFrameskip' in env.spec.id
         env._max_episode_steps = max_ep_length * skip_rate
-        env = NoopResetEnv(env, noop_max=30)
         env = MaxAndSkipEnv(env, skip=skip_rate)
     else:
         env._max_episode_steps = max_ep_length
-    if hasattr(env.unwrapped, 'ale'):
-        env = EpisodicLifeEnv(env)
-        if 'FIRE' in env.unwrapped.get_action_meanings():
-            env = FireResetEnv(env)
     env.seed(seed)
     env = AdeptGymEnv(env, do_frame_stack)
     return env
