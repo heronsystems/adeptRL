@@ -63,6 +63,7 @@ def sc2_feature_env(env_id, seed, replay_dir, render):
 class AdeptSC2Env(BaseEnvironment):
     def __init__(self, env):
         self.sc2_env = env
+        self._max_num_actions = len(FUNCTIONS)
         obs_entries_by_name = {
             # 'single_select': Space((1, 7), 0., 1., np.float32),
             # 'multi_select': Space(),
@@ -72,7 +73,7 @@ class AdeptSC2Env(BaseEnvironment):
             'vision': Space((24, 84, 84), None, None, None),
             # 'player': Space((11,), None, None, None),
             'control_groups': Space((10, 2), None, None, None),
-            'available_actions': Space((None,), None, None, None)
+            'available_actions': Space((self._max_num_actions,), 0., 1., np.int32)
         }
         act_entries_by_name = {
             'func_id': Space((524,), 0., 1., np.float32),
@@ -155,7 +156,9 @@ class AdeptSC2Env(BaseEnvironment):
             torch.from_numpy(observation['feature_minimap'])
         ])
         obs['control_groups'] = torch.from_numpy(observation['control_groups'])
-        obs['available_actions'] = frozenset(observation['available_actions'])
+        avail_actions_one_hot = np.zeros(self._max_num_actions, dtype=np.int64)
+        avail_actions_one_hot[observation['available_actions']] = 1
+        obs['available_actions'] = torch.from_numpy(avail_actions_one_hot)
         return obs
 
     def _wrap_action(self, action):
@@ -236,7 +239,7 @@ class SC2OneHot(BaseOp):
     def update_obs(self, obs):
         if self._scales.device != obs.device:
             self._scales = self._scales.to(obs.device)
-        # warning, this is really slow
+        # TODO: warning, this is really slow
         if obs.dim() == 3:
             one_hot_channels = []
             for i, rngs in self._ranges_by_feature_idx.items():
@@ -253,6 +256,13 @@ class SC2OneHot(BaseOp):
                     one_hot_channels.append(obs[:, i, :, :] == rng)
             one_hot_channels = torch.stack(one_hot_channels, dim=1)
             return torch.cat([obs[:, self._scalar_idxs, :, :].float() * self._scales.view(1, -1, 1, 1), one_hot_channels.float()], dim=1)
+        elif obs.dim() == 5:  # seq, batch, channel, x, y
+            one_hot_channels = []
+            for i, rngs in self._ranges_by_feature_idx.items():
+                for rng in rngs:
+                    one_hot_channels.append(obs[:, :, i, :, :] == rng)
+            one_hot_channels = torch.stack(one_hot_channels, dim=2)
+            return torch.cat([obs[:, :, self._scalar_idxs, :, :].float() * self._scales.view(1, 1, -1, 1, 1), one_hot_channels.float()], dim=2)
         else:
             raise ValueError('Cannot convert {}-dimensional tensor to one-hot'.format(obs.dim()))
 
