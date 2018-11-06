@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 from argparse import ArgumentParser  # for type hinting
 
-from adept.agents import AGENTS, AGENT_ARGS, AGENT_ARG_PARSE
+from adept.agents import AGENTS
 from adept.environments import SubProcEnv, SC2_ENVS, Engines, DummyVecEnv
 from adept.environments import reward_normalizer_by_env_id
 from adept.environments.atari import make_atari_env
@@ -41,9 +41,9 @@ def make_env(args, seed, subprocess=True, render=False):
 
 def sc2_from_args(args, seed, subprocess=True, render=False):
     if subprocess:
-        return SubProcEnv([make_sc2_env(args.env_id, seed + i) for i in range(args.env_nb)], Engines.SC2)
+        return SubProcEnv([make_sc2_env(args.env_id, seed + i) for i in range(args.nb_env)], Engines.SC2)
     else:
-        return DummyVecEnv([make_sc2_env(args.env_id, seed + i, render=render) for i in range(args.env_nb)], Engines.SC2)
+        return DummyVecEnv([make_sc2_env(args.env_id, seed + i, render=render) for i in range(args.nb_env)], Engines.SC2)
 
 
 def atari_from_args(args, seed, subprocess=True):
@@ -56,10 +56,9 @@ def atari_from_args(args, seed, subprocess=True):
                 args.env_id,
                 args.skip_rate,
                 args.max_episode_length,
-                args.env_zscore,
                 do_frame_stack,
                 seed + i
-            ) for i in range(args.env_nb)
+            ) for i in range(args.nb_env)
         ], Engines.GYM
     )
     return envs
@@ -101,23 +100,15 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def get_agent_class(agent_name, engine):
-    if engine == Engines.SC2:
-        agent_class = type(agent_name, (SC2AgentOverrides, AGENTS[agent_name]), {})
-    else:
-        agent_class = AGENTS[agent_name]
-    return agent_class
-
-
-def make_agent(network, device, engine, gpu_preprocessor, args):
-    agent_class = get_agent_class(args.agent, engine)
+def make_agent(network, device, gpu_preprocessor, engine, action_space, args):
+    Agent = AGENTS[args.agent]
     reward_normalizer = reward_normalizer_by_env_id(args.env_id)
-    return agent_class(network, device, reward_normalizer, gpu_preprocessor, *AGENT_ARGS[args.agent](args))
+    return Agent.from_args(network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args)
 
 
-def get_head_shapes(action_space, engine, agent_name):
-    agent_class = get_agent_class(agent_name, engine)
-    return agent_class.output_shape(action_space)
+def get_head_shapes(action_space, agent_name):
+    Agent = AGENTS[agent_name]
+    return Agent.output_shape(action_space)
 
 def _add_common_agent_args(parser: ArgumentParser):
     parser.add_argument(
@@ -131,11 +122,11 @@ def _add_common_agent_args(parser: ArgumentParser):
 
 def _add_agent_args(subparser: ArgumentParser):
     agent_parsers = []
-    for agent, agent_parser_fn in AGENT_ARG_PARSE.items():
-        parser_agent = subparser.add_parser(agent)
+    for agent_name, agent_class in AGENTS.items():
+        parser_agent = subparser.add_parser(agent_name)
         agent_group = parser_agent.add_argument_group('Agent Args')
         _add_common_agent_args(agent_group)
-        agent_parser_fn(agent_group)
+        agent_class.add_args(agent_group)
         agent_parsers.append(parser_agent)
     return agent_parsers
 
@@ -174,7 +165,7 @@ def _add_env_args(parser: ArgumentParser):
         help='environment to train on (default: PongNoFrameskip-v4)'
     )
     subparser.add_argument(
-        '-en', '--env-nb', type=int, default=32,
+        '-ne', '--nb-env', type=int, default=32,
         help='number of envs to run in parallel (default: 32)'
     )
     subparser.add_argument(
@@ -184,10 +175,6 @@ def _add_env_args(parser: ArgumentParser):
     subparser.add_argument(
         '-em', '--max-episode-length', type=int, default=10000, metavar='MEL',
         help='maximum length of an episode (default: 10000)'
-    )
-    subparser.add_argument(
-        '-ez', '--env-zscore', type=parse_bool, nargs='?', const=True, default=False,
-        help='Normalize the environment using running statistics'
     )
 
 def _add_common_args(parser: ArgumentParser):
@@ -236,8 +223,7 @@ def _add_common_args(parser: ArgumentParser):
         nargs='?',
         const=True,
         default=False,
-        help=
-        'debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
+        help='debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
     )
 
 def _add_args_to_parsers(arg_fn, parsers):

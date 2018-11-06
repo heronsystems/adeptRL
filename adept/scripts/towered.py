@@ -65,18 +65,18 @@ def main(args):
 
     # construct env
     # unique seed per process
-    seed = args.seed if rank == 0 else args.seed + args.env_nb * (rank - 1)
+    seed = args.seed if rank == 0 else args.seed + args.nb_env * (rank - 1)
     # don't make a ton of envs if host
     if rank == 0:
         env_args = deepcopy(args)
-        env_args.env_nb = 1
+        env_args.nb_env = 1
         env = make_env(env_args, seed)
     else:
         env = make_env(args, seed)
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
+    network_head_shapes = get_head_shapes(env.action_space, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
 
     # possibly load network
@@ -125,11 +125,11 @@ def main(args):
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         torch.backends.cudnn.benchmark = True
-        agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
+        agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
 
         # construct container
         container = ToweredWorker(
-            agent, env, args.env_nb, logger, summary_writer, args.summary_frequency
+            agent, env, args.nb_env, logger, summary_writer, args.summary_frequency
         )
 
         # Run the container
@@ -212,7 +212,7 @@ if __name__ == '__main__':
     args = base_parser.parse_args()
 
     if args.debug:
-        args.env_nb = 3
+        args.nb_env = 3
         args.log_dir = '/tmp/'
     args.mode_name = 'Towered'
 

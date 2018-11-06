@@ -33,7 +33,7 @@ def main(args):
 
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.env_nb = 1
+    train_args.nb_env = 1
 
     # construct env
     def env_fn(seed):
@@ -42,7 +42,7 @@ def main(args):
     env.close()
 
     # construct network
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, train_args.agent)
+    network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
     network = make_network(
         env.observation_space,
         network_head_shapes,
@@ -53,7 +53,7 @@ def main(args):
     # create an agent (add act_eval method)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, train_args)
+    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, train_args)
 
     # create a rendering container
     renderer = Renderer(agent, env_fn, device, args.seed)

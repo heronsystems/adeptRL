@@ -21,7 +21,6 @@ import torch
 from absl import flags
 from copy import deepcopy
 
-from adept.agents import AGENT_ARG_PARSE
 from adept.containers import Local, EvaluationThread
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
@@ -53,7 +52,7 @@ def main(args):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, env.engine, args.agent)
+    network_head_shapes = get_head_shapes(env.action_space, args.agent)
     network = make_network(env.observation_space, network_head_shapes, args)
     # possibly load network
     initial_step_count = 0
@@ -73,7 +72,7 @@ def main(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(network, device, env.engine, env.gpu_preprocessor, args)
+    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
 
     # Construct the Container
     def make_optimizer(params):
@@ -87,7 +86,7 @@ def main(args):
         return opt
 
     container = Local(
-        agent, env, make_optimizer, args.epoch_len, args.env_nb, logger, summary_writer,
+        agent, env, make_optimizer, args.epoch_len, args.nb_env, logger, summary_writer,
         args.summary_frequency, saver
     )
 
@@ -95,16 +94,16 @@ def main(args):
     if args.nb_eval_env > 0:
         # replace args num envs & seed
         eval_args = deepcopy(args)
-        eval_args.seed = args.seed + args.env_nb
+        eval_args.seed = args.seed + args.nb_env
 
         # env and agent
-        eval_args.env_nb = args.nb_eval_env
+        eval_args.nb_env = args.nb_eval_env
         eval_env = make_env(eval_args, eval_args.seed)
         eval_net = make_network(
             eval_env.observation_space, network_head_shapes, eval_args
         )
         eval_agent = make_agent(
-            eval_net, device, eval_env.engine, eval_env.gpu_preprocessor, eval_args
+            eval_net, device, eval_env.gpu_preprocessor, eval_env.engine, env.action_space, eval_args
         )
         eval_net.load_state_dict(network.state_dict())
 
@@ -178,7 +177,7 @@ if __name__ == '__main__':
     args = base_parser.parse_args()
 
     if args.debug:
-        args.env_nb = 3
+        args.nb_env = 3
         args.log_dir = '/tmp/'
 
     args.mode_name = 'Local'

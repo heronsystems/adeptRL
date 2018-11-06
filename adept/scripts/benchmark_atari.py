@@ -54,7 +54,7 @@ if __name__ == '__main__':
         help='Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 to disable (default: 0)'
     )
 
-    args = parser.parse_args()
+    args = parser.add_args()
 
     args.mode_name = 'Local'
 

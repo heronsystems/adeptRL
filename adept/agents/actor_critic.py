@@ -14,27 +14,99 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
+from argparse import ArgumentParser
+from collections import OrderedDict
+
 import torch
+from adept.environments import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
-from adept.utils.util import listd_to_dlist
-from ._base import Agent, EnvBase
+from adept.utils.util import listd_to_dlist, parse_bool
+from ._base import Agent
 
 
-class ActorCritic(Agent, EnvBase):
-    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, nb_env, nb_rollout,
-                 discount, gae, tau, normalize_advantage, entropy_weight=0.01):
+class ActorCritic(Agent):
+    def __init__(
+            self,
+            network,
+            device,
+            reward_normalizer,
+            gpu_preprocessor,
+            engine,
+            action_space,
+            nb_env,
+            nb_rollout,
+            discount,
+            gae,
+            tau,
+            normalize_advantage,
+            entropy_weight=0.01
+    ):
         self.discount, self.gae, self.tau = discount, gae, tau
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
         self.gpu_preprocessor = gpu_preprocessor
+        self.engine = engine
 
         self._network = network.to(device)
         self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['values', 'log_probs', 'entropies'])
         self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
         self._device = device
-        self.network.train()
+        self.action_space = action_space
+        self._action_keys = list(sorted(action_space.entries_by_name.keys()))
+        self._func_id_to_headnames = None
+        if self.engine == Engines.SC2:
+            from adept.environments.sc2 import SC2ActionLookup
+            self._func_id_to_headnames = SC2ActionLookup()
+
+    @classmethod
+    def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
+        return cls(
+            network, device, reward_normalizer, gpu_preprocessor, engine, action_space,
+            args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau, args.normalize_advantage
+        )
+
+    @classmethod
+    def add_args(cls, parser: ArgumentParser):
+        parser.add_argument(
+            '-ae',
+            '--exp-length',
+            type=int,
+            default=20,
+            help='Experience length (default: 20)'
+        )
+        parser.add_argument(
+            '-ag',
+            '--generalized-advantage-estimation',
+            type=parse_bool,
+            nargs='?',
+            const=True,
+            default=True,
+            help='Use generalized advantage estimation for the policy loss. (default: True)'
+        )
+        parser.add_argument(
+            '-at',
+            '--tau',
+            type=float,
+            default=1.00,
+            help='parameter for GAE (default: 1.00)'
+        )
+        parser.add_argument(
+            '--entropy-weight',
+            type=float,
+            default=0.01,
+            help='Entropy penalty (default: 0.01)'
+        )
+        parser.add_argument(
+            '--normalize-advantage',
+            type=parse_bool,
+            nargs='?',
+            const=True,
+            default=False,
+            help='Normalize the advantage when calculating policy loss. (default: False)'
+        )
+
 
     @property
     def exp_cache(self):
@@ -65,12 +137,94 @@ class ActorCritic(Agent, EnvBase):
 
     def act(self, obs):
         self.network.train()
-        results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-        values = results['critic'].squeeze(1)
-        logits = {k: v for k, v in results.items() if k != 'critic'}
 
-        logits = self.preprocess_logits(logits)
-        actions, log_probs, entropies = self.process_logits(logits, obs, deterministic=False)
+        if self.engine == Engines.GYM:
+            return self._act_gym(obs)
+        elif self.engine == Engines.SC2:
+            return self._act_sc2(obs)
+        else:
+            raise NotImplementedError()
+
+    def _act_gym(self, obs):
+        predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        values = predictions['critic'].squeeze(1)
+
+        # reduce feature dim, build action_key dim
+        actions = OrderedDict()
+        log_probs = []
+        entropies = []
+        # TODO support multi-dimensional action spaces?
+        for key in self._action_keys:
+            logit = predictions[key]
+            prob = F.softmax(logit, dim=1)
+            log_prob = F.log_softmax(logit, dim=1)
+            entropy = -(log_prob * prob).sum(1, keepdim=True)
+
+            action = prob.multinomial(1)
+            log_prob = log_prob.gather(1, action)
+
+            actions[key] = action.squeeze(1).cpu().numpy()
+            log_probs.append(log_prob)
+            entropies.append(entropy)
+
+        log_probs = torch.cat(log_probs, dim=1)
+        entropies = torch.cat(entropies, dim=1)
+
+        self.exp_cache.write_forward(
+            values=values,
+            log_probs=log_probs,
+            entropies=entropies
+        )
+        self.internals = internals
+        return actions
+
+    def _act_sc2(self, obs):
+        predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        values = predictions['critic'].squeeze(1)
+
+        # reduce feature dim, build action_key dim
+        actions = OrderedDict()
+        head_masks = OrderedDict()
+        log_probs = []
+        entropies = []
+        # TODO support multi-dimensional action spaces?
+        for key in self._action_keys:
+            logit = predictions[key]
+            prob = F.softmax(logit, dim=1)
+            log_prob = F.log_softmax(logit, dim=1)
+            entropy = -(log_prob * prob).sum(1, keepdim=True)
+
+            action = prob.multinomial(1)
+            log_prob = log_prob.gather(1, action)
+
+            actions[key] = action.squeeze(1).cpu().numpy()
+            log_probs.append(log_prob)
+            entropies.append(entropy)
+
+            # Initialize masks
+            if key == 'func_id':
+                head_masks[key] = torch.ones_like(entropy)
+            else:
+                head_masks[key] = torch.zeros_like(entropy)
+
+        log_probs = torch.cat(log_probs, dim=1)
+        entropies = torch.cat(entropies, dim=1)
+
+        # Mask invalid actions with NOOP and fill masks with ones
+        for batch_idx, action in enumerate(actions['func_id']):
+            # convert unavailable actions to NOOP
+            if action not in obs['available_actions'][batch_idx]:
+                actions['func_id'][batch_idx] = 0
+
+            # build SC2 action masks
+            func_id = actions['func_id'][batch_idx]
+            # TODO this can be vectorized via gather
+            for headname in self._func_id_to_headnames[func_id].keys():
+                head_masks[headname][batch_idx] = 1.
+
+        head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+        log_probs = log_probs * head_masks
+        entropies = entropies * head_masks
 
         self.exp_cache.write_forward(
             values=values,
@@ -82,29 +236,48 @@ class ActorCritic(Agent, EnvBase):
 
     def act_eval(self, obs):
         self.network.eval()
-        with torch.no_grad():
-            results, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
-            logits = {k: v for k, v in results.items() if k != 'critic'}
 
-            logits = self.preprocess_logits(logits)
-            actions, _, _ = self.process_logits(logits, obs, deterministic=True)
+        if self.engine == Engines.GYM:
+            return self._act_eval_gym(obs)
+        elif self.engine == Engines.SC2:
+            return self._act_eval_sc2(obs)
+        else:
+            raise NotImplementedError()
+
+    def _act_eval_gym(self, obs):
+        with torch.no_grad():
+            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            for key in self._action_keys:
+                logit = predictions[key]
+                prob = F.softmax(logit, dim=1)
+                action = torch.argmax(prob, 1)
+                actions[key] = action.cpu().numpy()
+
         self.internals = internals
         return actions
 
-    def preprocess_logits(self, logits):
-        return logits['Discrete']
+    def _act_eval_sc2(self, obs):
+        with torch.no_grad():
+            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
 
-    def process_logits(self, logits, obs, deterministic):
-        prob = F.softmax(logits, dim=1)
-        log_probs = F.log_softmax(logits, dim=1)
-        entropies = -(log_probs * prob).sum(1)
-        if not deterministic:
-            actions = prob.multinomial(1)
-        else:
-            actions = torch.argmax(prob, 1, keepdim=True)
-        log_probs = log_probs.gather(1, actions)
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            for key in self._action_keys:
+                logit = predictions[key]
+                prob = F.softmax(logit, dim=1)
+                action = torch.argmax(prob, 1)
+                actions[key] = action.cpu().numpy()
 
-        return actions.squeeze(1).cpu().numpy(), log_probs.squeeze(1), entropies
+        for batch_idx, action in enumerate(actions['func_id']):
+            # convert unavailable actions to NOOP
+            if action not in obs['available_actions'][batch_idx]:
+                actions['func_id'][batch_idx] = 0
+
+        self.internals = internals
+        return actions
 
     def compute_loss(self, rollouts, next_obs):
         # estimate value of next state
@@ -113,12 +286,10 @@ class ActorCritic(Agent, EnvBase):
             results, _ = self.network(next_obs_on_device, self.internals)
             last_values = results['critic'].squeeze(1).data
 
-        r = rollouts
-
         # compute nstep return and advantage over batch
-        batch_values = torch.stack(r.values)
+        batch_values = torch.stack(rollouts.values)
         value_targets, batch_advantages = self._compute_returns_advantages(batch_values, last_values,
-                                                                          r.rewards, r.terminals)
+                                                                          rollouts.rewards, rollouts.terminals)
 
         # batched value loss
         value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
@@ -130,26 +301,20 @@ class ActorCritic(Agent, EnvBase):
         policy_loss = 0.
         entropy_loss = 0.
 
-        rollout_len = len(r.rewards)
+        rollout_len = len(rollouts.rewards)
         for i in range(rollout_len):
-            log_probs = r.log_probs[i]
-            entropies = r.entropies[i]
+            log_probs = rollouts.log_probs[i]
+            entropies = rollouts.entropies[i]
 
-            if isinstance(log_probs, dict):
-                for k in log_probs.keys():
-                    policy_loss = policy_loss - (log_probs[k] * batch_advantages[i].data)
-                    entropy_loss = entropy_loss - self.entropy_weight * entropies[k]
-            else:
-                # expand gae dim for broadcasting if there are multiple channels of log_probs / entropies (SC2)
-                if log_probs.dim() == 2:
-                    policy_loss = policy_loss - (log_probs * batch_advantages[i].unsqueeze(1).data).sum(1)
-                    entropy_loss = entropy_loss - (self.entropy_weight * entropies).sum(1)
-                else:
-                    policy_loss = policy_loss - log_probs * batch_advantages[i].data
-                    entropy_loss = entropy_loss - self.entropy_weight * entropies
+            policy_loss = policy_loss - (log_probs * batch_advantages[i].unsqueeze(1).data).sum(1)
+            entropy_loss = entropy_loss - (self.entropy_weight * entropies).sum(1)
 
-        policy_loss = torch.mean(policy_loss / rollout_len)
-        entropy_loss = torch.mean(entropy_loss / rollout_len)
+        batch_size = policy_loss.shape[0]
+        nb_action = log_probs.shape[1]
+
+        policy_loss = policy_loss.sum(0) / (batch_size * rollout_len * nb_action)
+        entropy_loss = entropy_loss.sum(0) / (batch_size * rollout_len * nb_action)
+
         losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
         metrics = {}
         return losses, metrics
