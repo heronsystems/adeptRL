@@ -60,9 +60,8 @@ if __name__ == '__main__':
         "--script", type=str,
         help="The full path of the script to be launched"
     )
-    parser.add_argument("--script-args", nargs=REMAINDER)
 
-    args = parser.parse_args()
+    args, script_args = parser.parse_known_args()
     if isinstance(args.gpu_ids, int):
         args.gpu_ids = [args.gpu_ids]
 
@@ -77,8 +76,8 @@ if __name__ == '__main__':
     global_rank = 0
     for gpu_id in args.gpu_ids:
         os_env["RANK"] = gpu_id
-        cmd = ["python", args.script, "--gpu-id {}".format(gpu_id)] + \
-              args.script_args
+        cmd = ["python", args.script, "--gpu-id {}".format(gpu_id)] \
+              + args.script_args
 
         process = subprocess.Popen(cmd, env=os_env)
         processes.append(process)
