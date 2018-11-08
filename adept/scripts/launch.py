@@ -77,7 +77,7 @@ if __name__ == '__main__':
     for gpu_id in args.gpu_ids:
         os_env["RANK"] = gpu_id
         cmd = ["python", args.script, "--gpu-id {}".format(gpu_id)] \
-              + args.script_args
+              + script_args
 
         process = subprocess.Popen(cmd, env=os_env)
         processes.append(process)
