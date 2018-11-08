@@ -336,4 +336,3 @@ class SC2ActionLookup(dict):
         # TODO make an OrderedSet in utils
         return OrderedDict.fromkeys(headnames)
 
-
