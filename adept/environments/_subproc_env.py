@@ -111,7 +111,7 @@ class SubProcEnv(BaseEnvironment):
     """
     def __init__(self, env_fns, engine):
         # TODO: sharing cuda tensors requires spawn or forkserver but these do not work with mpi
-        # mp.set_start_method('spawn')
+        mp.set_start_method('spawn')
         self.engine = engine
 
         self.waiting = False
