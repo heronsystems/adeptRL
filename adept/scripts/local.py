@@ -21,7 +21,7 @@ import torch
 from absl import flags
 from copy import deepcopy
 
-from adept.containers import Local, EvaluationThread
+from adept.containers import Local
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
 from tensorboardX import SummaryWriter
@@ -89,39 +89,6 @@ def main(args):
         agent, env, make_optimizer, args.epoch_len, args.nb_env, logger, summary_writer,
         args.summary_frequency, saver
     )
-
-    # if running an eval thread create eval env, agent, & logger
-    if args.nb_eval_env > 0:
-        # replace args num envs & seed
-        eval_args = deepcopy(args)
-        eval_args.seed = args.seed + args.nb_env
-
-        # env and agent
-        eval_args.nb_env = args.nb_eval_env
-        eval_env = make_env(eval_args, eval_args.seed)
-        eval_net = make_network(
-            eval_env.observation_space, network_head_shapes, eval_args
-        )
-        eval_agent = make_agent(
-            eval_net, device, eval_env.gpu_preprocessor, eval_env.engine, env.action_space, eval_args
-        )
-        eval_net.load_state_dict(network.state_dict())
-
-        # logger
-        eval_logger = make_logger('LocalEval', os.path.join(log_id_dir, 'eval_log.txt'))
-
-        evaluation_container = EvaluationThread(
-            network,
-            eval_agent,
-            eval_env,
-            args.nb_eval_env,
-            eval_logger,
-            summary_writer,
-            args.eval_step_rate,
-            override_step_count_fn=
-            lambda: container.local_step_count  # wire local containers step count into eval
-        )
-        evaluation_container.start()
 
     # Run the container
     if args.profile:
