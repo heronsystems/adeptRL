@@ -20,7 +20,7 @@ import pickle
 import cloudpickle
 import numpy as np
 import torch
-from torch import multiprocessing as mp
+from torch import multiprocessing
 
 from adept.environments._base import BaseEnvironment
 from adept.utils.util import listd_to_dlist, dlist_to_listd
@@ -111,15 +111,17 @@ class SubProcEnv(BaseEnvironment):
     """
     def __init__(self, env_fns, engine):
         # TODO: sharing cuda tensors requires spawn or forkserver but these do not work with mpi
-        mp.set_start_method('spawn')
+        ctx = multiprocessing.get_context('spawn')
         self.engine = engine
 
         self.waiting = False
         self.closed = False
         self.nb_env = len(env_fns)
 
-        self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(self.nb_env)])
-        self.ps = [mp.Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
+        self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(
+            self.nb_env)])
+        self.ps = [ctx.Process(target=worker, args=(work_remote, remote,
+                                                  CloudpickleWrapper(env_fn)))
                    for (work_remote, remote, env_fn) in zip(self.work_remotes, self.remotes, env_fns)]
         for p in self.ps:
             p.daemon = True  # if the main process crashes, we should not cause things to hang
