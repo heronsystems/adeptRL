@@ -27,7 +27,8 @@ from pysc2.lib.actions import FunctionCall
 from pysc2.lib.features import parse_agent_interface_format, SCREEN_FEATURES, MINIMAP_FEATURES
 from pysc2.lib.static_data import UNIT_TYPES
 
-from adept.environments._base import BaseEnvironment, Spaces, Space
+from adept.environments._base import AdeptEnv
+from adept.environments._spaces import Space, Spaces
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import BaseOp, CastToFloat, FlattenSpace
 
@@ -60,7 +61,7 @@ def sc2_feature_env(env_id, seed, replay_dir, render):
     return env
 
 
-class AdeptSC2Env(BaseEnvironment):
+class AdeptSC2Env(AdeptEnv):
     def __init__(self, env):
         self.sc2_env = env
         self._max_num_actions = len(FUNCTIONS)

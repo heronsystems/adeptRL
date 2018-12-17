@@ -22,6 +22,7 @@ from absl import flags
 from copy import deepcopy
 
 from adept.containers import Local, EvaluationThread
+from adept.environments import ParallelEnvManager
 from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
 from tensorboardX import SummaryWriter
@@ -48,7 +49,7 @@ def main(args):
     write_args_file(log_id_dir, args)
 
     # construct env
-    env = make_env(args, args.seed)
+    env = ParallelEnvManager.from_args(args)
 
     # construct network
     torch.manual_seed(args.seed)
@@ -98,7 +99,7 @@ def main(args):
 
         # env and agent
         eval_args.nb_env = args.nb_eval_env
-        eval_env = make_env(eval_args, eval_args.seed)
+        eval_env = ParallelEnvManager.from_args(eval_args)
         eval_net = make_network(
             eval_env.observation_space, network_head_shapes, eval_args
         )

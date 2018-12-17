@@ -23,7 +23,7 @@ import numpy as np
 import torch
 from torch.nn.functional import upsample
 
-from adept.environments._base import Space
+from adept.environments._spaces import Space
 
 cv2.ocl.setUseOpenCL(False)
 

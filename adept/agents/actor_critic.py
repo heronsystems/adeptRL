@@ -18,7 +18,7 @@ from argparse import ArgumentParser
 from collections import OrderedDict
 
 import torch
-from adept.environments import Engines
+from adept.environments.registry import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
@@ -57,7 +57,7 @@ class ActorCritic(Agent):
         self._action_keys = list(sorted(action_space.entries_by_name.keys()))
         self._func_id_to_headnames = None
         if self.engine == Engines.SC2:
-            from adept.environments.sc2 import SC2ActionLookup
+            from adept.environments.deepmind_sc2 import SC2ActionLookup
             self._func_id_to_headnames = SC2ActionLookup()
 
     @classmethod

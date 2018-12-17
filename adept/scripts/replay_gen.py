@@ -22,8 +22,9 @@ import torch
 from absl import flags
 
 from adept.containers import ReplayGenerator
-from adept.environments import DummyVecEnv, Engines
-from adept.environments.sc2 import make_sc2_env
+from adept.environments import DebugEnvManager
+from adept.environments.registry import Engines
+from adept.environments.deepmind_sc2 import make_sc2_env
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
 from adept.utils.util import dotdict
 from adept.utils.logging import print_ascii_logo
@@ -44,7 +45,7 @@ def main(args):
     # construct env
     replay_dir = os.path.split(args.network_file)[0]
     def env_fn(seed):
-        return DummyVecEnv([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir, render=args.render)], Engines.SC2)
+        return DebugEnvManager([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir, render=args.render)], Engines.SC2)
     env = env_fn(args.seed)
     env.close()
 
