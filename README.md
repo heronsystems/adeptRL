@@ -30,9 +30,9 @@ We designed this library to be flexible and extensible. Plugging in novel resear
 
 ## Major Dependencies
 * gym
-* PyTorch 0.4.x (excluding 0.4.1 due to an [unbind bug](https://github.com/pytorch/pytorch/pull/9995))
+* PyTorch 1.x
 * Python 3.5+
-* We use CUDA 9.1, pytorch 0.4.0, python 3.6
+* We use CUDA 10, pytorch 1.0, python 3.6
 
 ## Installation
 If you just want to run the code, see the [docker instructions](./docker/), otherwise:
@@ -70,7 +70,7 @@ python -m adept.scripts.local ActorCritic --env-id BeamRiderNoFrameskip-v4
 
 # Towered Mode (A3C Variant, requires mpi4py)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-python -m adept.scripts.towered ActorCritic --env-id BeamRiderNoFrameskip-v4
+mpiexec -n 3 python -m adept.scripts.towered ActorCritic --env-id BeamRiderNoFrameskip-v4
 
 # IMPALA (requires mpi4py and is resource intensive)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores

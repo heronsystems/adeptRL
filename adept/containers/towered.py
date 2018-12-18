@@ -49,7 +49,7 @@ class ToweredHost(AppliesGrads):
 
         # vars for sending network buffers
         self.mpi_buffer_sender = MPIArraySend(mpi_comm, [tuple(x.shape) for x in 
-                                                         self.network._all_buffers()])
+                                                         self.network.buffers()])
 
         # workers will send name and shapes of gradients just check the order is the same
         for w_ind in range(1, mpi_comm.size):
@@ -169,7 +169,7 @@ class ToweredHost(AppliesGrads):
     def _saver_thread(self):
         workers = list(range(1, self.comm.Get_size()))
         # setup for receiving buffers
-        buffer_shapes = [tuple(x.shape) for x in self.network._all_buffers()]
+        buffer_shapes = [tuple(x.shape) for x in self.network.buffers()]
         buffer_flattener = ArrayFlattener(buffer_shapes)
         next_save_step = self.save_interval
         try:
@@ -200,7 +200,7 @@ class ToweredHost(AppliesGrads):
                     # can't divide here since numpy reduces from array to float on tensors with shape ()
                     all_buffer_params = [x for x in unflattened_buffer_params]
                     # set buffers
-                    for b, all_bp in zip(self.network._all_buffers(), all_buffer_params):
+                    for b, all_bp in zip(self.network.buffers(), all_buffer_params):
                         # mean over all workers
                         b.copy_(torch.from_numpy(all_bp)).div_(len(workers))
 
@@ -273,7 +273,7 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
         )
         self.mpi_buffer_request = self._create_mpi_buffer_request()
         self.mpi_buffer_sender = MPIArraySend(self._mpi_comm, [tuple(x.shape) for x in
-                                                               self.network._all_buffers()])
+                                                               self.network.buffers()])
         self.global_step = 0
 
     @property
@@ -348,7 +348,7 @@ class ToweredWorker(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizes
             self.global_step = self.local_step_count
         # host decides when it wants pytorch buffers
         if self.mpi_buffer_request.test()[0]:
-            buffer_list = [x.cpu().numpy() for x in self.network._all_buffers()]
+            buffer_list = [x.cpu().numpy() for x in self.network.buffers()]
             self.mpi_buffer_sender.Isend(buffer_list, dest=0, tag=MpiMessages.BUFFER_REQUEST)
             self.mpi_buffer_request = self._create_mpi_buffer_request()
 

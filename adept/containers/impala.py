@@ -253,13 +253,13 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
     def get_parameter_shapes(self):
         shapes = [tuple(x.shape) for x in self.network.parameters()]
         if not self.use_local_buffers:
-            shapes.extend([tuple(x.shape) for x in self.network._all_buffers()])
+            shapes.extend([tuple(x.shape) for x in self.network.buffers()])
         return shapes
 
     def get_parameters_numpy(self):
         params = [p.detach().cpu().numpy() for p in self.network.parameters()]
         if not self.use_local_buffers:
-            params.extend([b.cpu().numpy() for b in self.network._all_buffers()])
+            params.extend([b.cpu().numpy() for b in self.network.buffers()])
         return params
 
 
@@ -427,7 +427,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
     def set_parameters(self, parameters):
         local_params = list(self.network.parameters())
         if not self.use_local_buffers:
-            local_params.extend([b for b in self.network._all_buffers()])
+            local_params.extend([b for b in self.network.buffers()])
 
         for p, v in zip(local_params, parameters):
             p.data.copy_(v, non_blocking=True)
@@ -435,7 +435,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
     def get_parameter_shapes(self):
         shapes = [tuple(x.shape) for x in self.network.parameters()]
         if not self.use_local_buffers:
-            shapes.extend([tuple(x.shape) for x in self.network._all_buffers()])
+            shapes.extend([tuple(x.shape) for x in self.network.buffers()])
         return shapes
 
     def close(self):
