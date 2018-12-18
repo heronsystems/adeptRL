@@ -23,9 +23,10 @@ from mpi4py import MPI as mpi
 from tensorboardX import SummaryWriter
 
 from adept.containers import ToweredHost, ToweredWorker
+from adept.environments import ParallelEnvManager
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
 from datetime import datetime
 
 # hack to use argparse for SC2
@@ -70,9 +71,9 @@ def main(args):
     if rank == 0:
         env_args = deepcopy(args)
         env_args.nb_env = 1
-        env = make_env(env_args, seed)
+        env = ParallelEnvManager.from_args(env_args)
     else:
-        env = make_env(args, seed)
+        env = ParallelEnvManager.from_args(args)
 
     # construct network
     torch.manual_seed(args.seed)

@@ -23,7 +23,7 @@ from copy import deepcopy
 
 from adept.containers import Local, EvaluationThread
 from adept.environments import ParallelEnvManager
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
 from tensorboardX import SummaryWriter
 
