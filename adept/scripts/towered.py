@@ -71,8 +71,10 @@ def main(args):
     if rank == 0:
         env_args = deepcopy(args)
         env_args.nb_env = 1
+        env_args.seed = seed
         env = ParallelEnvManager.from_args(env_args)
     else:
+        args.seed = seed
         env = ParallelEnvManager.from_args(args)
 
     # construct network

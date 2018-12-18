@@ -21,7 +21,8 @@ from mpi4py import MPI as mpi
 import torch
 from absl import flags
 from adept.containers import ImpalaHost, ImpalaWorker
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
+from adept.environments import ParallelEnvManager
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
 from tensorboardX import SummaryWriter
@@ -67,9 +68,11 @@ def main(args):
     if rank == 0:
         env_args = deepcopy(args)
         env_args.nb_env = 1
-        env = make_env(env_args, seed)
+        env_args.seed = seed
+        env = ParallelEnvManager.from_args(env_args)
     else:
-        env = make_env(args, seed)
+        args.seed = seed
+        env = ParallelEnvManager.from_args(args)
 
     # construct network
     torch.manual_seed(args.seed)
