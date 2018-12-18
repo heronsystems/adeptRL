@@ -17,10 +17,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from argparse import ArgumentParser  # for type hinting
 
 from adept.agents import AGENTS
-from adept.environments import ParallelEnvManager, DebugEnvManager, SC2_ENVS
+from adept.environments import SubProcEnvManager, SimpleEnvManager, SC2_ENVS
 from adept.environments._base import reward_normalizer_by_env_id
 from adept.environments.registry import Engines
-from adept.environments.openai_gym import make_atari_env
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
 from adept.utils.util import parse_bool
@@ -41,15 +40,15 @@ def make_env(args, seed, subprocess=True, render=False):
 
 def sc2_from_args(args, seed, subprocess=True, render=False):
     if subprocess:
-        return ParallelEnvManager([make_sc2_env(args.env_id, seed + i) for i in range(args.nb_env)], Engines.SC2)
+        return SubProcEnvManager([make_sc2_env(args.env_id, seed + i) for i in range(args.nb_env)], Engines.SC2)
     else:
-        return DebugEnvManager([make_sc2_env(args.env_id, seed + i, render=render) for i in range(args.nb_env)], Engines.SC2)
+        return SimpleEnvManager([make_sc2_env(args.env_id, seed + i, render=render) for i in range(args.nb_env)], Engines.SC2)
 
 
 def atari_from_args(args, seed, subprocess=True):
     do_frame_stack = 'Linear' in args.network_body
 
-    env_wrapper_class = ParallelEnvManager if subprocess else DebugEnvManager
+    env_wrapper_class = SubProcEnvManager if subprocess else SimpleEnvManager
     envs = env_wrapper_class(
         [
             make_atari_env(

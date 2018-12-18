@@ -21,7 +21,8 @@ from mpi4py import MPI as mpi
 import torch
 from absl import flags
 from adept.containers import ImpalaHost, ImpalaWorker
-from adept.environments import ParallelEnvManager
+from adept.environments import SubProcEnvManager
+from adept.environments.registry import EnvPluginRegistry
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
@@ -65,14 +66,13 @@ def main(args):
     # unique seed per process
     seed = args.seed if rank == 0 else args.seed + args.nb_env * (rank - 1)
     # don't make a ton of envs if host
+    registry = EnvPluginRegistry()
     if rank == 0:
-        env_args = deepcopy(args)
-        env_args.nb_env = 1
-        env_args.seed = seed
-        env = ParallelEnvManager.from_args(env_args)
+        env_plugin_class = registry.lookup_env_class(args.env_id)
+        env = EnvMetaData(env_plugin_class, args)
     else:
         args.seed = seed
-        env = ParallelEnvManager.from_args(args)
+        env = SubProcEnvManager.from_args(args, registry)
 
     # construct network
     torch.manual_seed(args.seed)
@@ -153,9 +153,6 @@ def main(args):
         log_args(logger, args)
         write_args_file(log_id_dir, args)
         logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
-
-        # no need for the env anymore
-        env.close()
 
         # Construct the optimizer
         def make_optimizer(params):

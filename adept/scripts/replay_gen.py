@@ -22,12 +22,12 @@ import torch
 from absl import flags
 
 from adept.containers import ReplayGenerator
-from adept.environments import DebugEnvManager
-from adept.environments.registry import Engines
-from adept.environments.deepmind_sc2 import make_sc2_env
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
-from adept.utils.util import dotdict
+from adept.environments import SimpleEnvManager
+from adept.environments.registry import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
+from adept.utils.script_helpers import make_agent, make_network, \
+    get_head_shapes, parse_bool
+from adept.utils.util import dotdict
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -43,10 +43,20 @@ def main(args):
     train_args.nb_env = 1
 
     # construct env
-    replay_dir = os.path.split(args.network_file)[0]
-    def env_fn(seed):
-        return DebugEnvManager([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir, render=args.render)], Engines.SC2)
-    env = env_fn(args.seed)
+    registry = EnvPluginRegistry()
+    engine = registry.lookup_engine(args.env_id)
+    assert engine == Engines.SC2, "replay_gen.py is only for SC2."
+    env_class = registry.lookup_env_class(args.env_id)
+
+    def build_env_fn(seed):
+        return env_class.from_args(
+            args, seed,
+            sc2_save_replay=True,
+            sc2_render=args.render
+        )
+
+    # TODO make it so we don't need an environment just to get the properties
+    env = SimpleEnvManager([build_env_fn(args.seed)], engine)
     env.close()
 
     # construct network

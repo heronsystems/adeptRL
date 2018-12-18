@@ -30,13 +30,6 @@ from ._gym_wrappers import (
 )
 
 
-def make_atari_env(arguments, seed):
-    def _f():
-        env = AdeptGymEnv.from_args(arguments, seed)
-        return env
-    return _f
-
-
 class AdeptGymEnv(AdeptEnvPlugin):
     def __init__(self, env, do_frame_stack):
         # Define the preprocessing operations to be performed on observations
@@ -53,17 +46,16 @@ class AdeptGymEnv(AdeptEnvPlugin):
             cpu_preprocessor.observation_space
         )
 
-        observation_space = gpu_preprocessor.observation_space
         action_space = Spaces.from_gym(env.action_space)
 
-        super(AdeptGymEnv, self).__init__(observation_space, action_space,
-                                          cpu_preprocessor, gpu_preprocessor)
+        super(AdeptGymEnv, self).__init__(action_space, cpu_preprocessor,
+                                          gpu_preprocessor)
 
         self.gym_env = env
         self._gym_obs_space = env.observation_space
 
     @classmethod
-    def from_args(cls, args, seed):
+    def from_args(cls, args, seed, **kwargs):
         # TODO fix this hack
         do_frame_stack = 'Linear' in args.network_body
         env = gym.make(args.env_id)

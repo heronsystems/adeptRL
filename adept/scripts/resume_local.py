@@ -22,6 +22,7 @@ import torch
 from absl import flags
 
 from adept.containers import Local
+from adept.environments import SubProcEnvManager
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, make_env
 from adept.utils.util import dotdict
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, ModelSaver
@@ -56,7 +57,7 @@ def main(args):
     logger.info('Resuming training from {} epoch {}'.format(args_file_path, initial_count))
 
     # construct env
-    env = make_env(args, args.seed)
+    env = SubProcEnvManager.from_args(args)
 
     # construct network
     torch.manual_seed(args.seed)

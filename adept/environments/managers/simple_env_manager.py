@@ -1,20 +1,20 @@
 import torch
 
 from adept.environments._base import AdeptEnv
-from adept.environments.managers.parallel_env_manager import dummy_handle_ob
+from adept.environments.managers._base import AdeptEnvManager
+from adept.environments.managers.subproc_env_manager import dummy_handle_ob
 from adept.utils import listd_to_dlist
 
 
-class DebugEnvManager(AdeptEnv):
+class SimpleEnvManager(AdeptEnvManager):
     """
-    Modified.
-    MIT License
-    Copyright (c) 2017 OpenAI (http://openai.com)
+    Manages multiple environments in the same process. This is slower than a
+    SubProcEnvManager but allows debugging.
     """
     def __init__(self, env_fns, engine):
+        super(SimpleEnvManager, self).__init__(env_fns, engine)
         self.envs = [fn() for fn in env_fns]
         env = self.envs[0]
-        self.engine = engine
         self._observation_space, self._action_space = env.observation_space, env.action_space
         self._cpu_preprocessor, self._gpu_preprocessor = env.cpu_preprocessor, env.gpu_preprocessor
 

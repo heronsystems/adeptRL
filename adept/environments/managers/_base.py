@@ -1,7 +1,7 @@
 import abc
 
 from adept.environments._base import AdeptEnv
-from adept.environments.registry import EnvRegistry
+from adept.environments.registry import EnvPluginRegistry
 
 
 class AdeptEnvManager(AdeptEnv, metaclass=abc.ABCMeta):
@@ -18,13 +18,13 @@ class AdeptEnvManager(AdeptEnv, metaclass=abc.ABCMeta):
         return self._engine
 
     @classmethod
-    def from_args(cls, args, registry=EnvRegistry()):
+    def from_args(cls, args, registry=EnvPluginRegistry(), **kwargs):
         engine = registry.lookup_engine(args.env_id)
         env_class = registry.lookup_env_class(args.env_id)
 
         def build_env_fn(seed):
             def _f():
-                return env_class.from_args(args, seed)
+                return env_class.from_args(args, seed, **kwargs)
             return _f
 
         env_fns = []

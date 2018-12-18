@@ -1,5 +1,4 @@
 from enum import IntEnum
-from adept.environments.openai_gym import AdeptGymEnv
 
 
 class Engines(IntEnum):
@@ -88,16 +87,16 @@ ATARI_ENVS = [
 ]
 
 
-class EnvRegistry:
+class EnvPluginRegistry:
     """
-    Keeps track of supported environments.
+    Keeps track of supported environment plugins.
     """
     def __init__(self):
         self.engine_ids_by_env_id_set = {}
         self.plugin_class_by_engine_id = {}
 
         # TODO lazy imports
-
+        from adept.environments.openai_gym import AdeptGymEnv
         self.register_env(Engines.GYM, AdeptGymEnv, ATARI_ENVS)
         try:
             from adept.environments.deepmind_sc2 import AdeptSC2Env

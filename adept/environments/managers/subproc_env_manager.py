@@ -26,14 +26,14 @@ from adept.environments.managers._base import AdeptEnvManager
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 
-class ParallelEnvManager(AdeptEnvManager):
+class SubProcEnvManager(AdeptEnvManager):
     """
     Modified.
     MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
     def __init__(self, env_fns, engine):
-        super(ParallelEnvManager, self).__init__(env_fns, engine)
+        super(SubProcEnvManager, self).__init__(env_fns, engine)
         # TODO: sharing cuda tensors requires spawn or forkserver but these do not work with mpi
         # mp.set_start_method('spawn')
 

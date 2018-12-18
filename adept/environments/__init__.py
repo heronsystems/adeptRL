@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from adept.environments.managers.parallel_env_manager import ParallelEnvManager
-from adept.environments.managers.sync_env_manager import DebugEnvManager
+from adept.environments.managers.subproc_env_manager import SubProcEnvManager
+from adept.environments.managers.simple_env_manager import SimpleEnvManager
 from adept.environments.registry import SC2_ENVS, ATARI_6_ENVS, ATARI_ENVS
+from adept.environments._metadata import EnvMetaData
