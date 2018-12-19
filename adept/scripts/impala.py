@@ -16,18 +16,22 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
-from copy import deepcopy
-from mpi4py import MPI as mpi
+from datetime import datetime
+
 import torch
 from absl import flags
-from adept.containers import ImpalaHost, ImpalaWorker
-from adept.environments import SubProcEnvManager
-from adept.environments.registry import EnvPluginRegistry
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
-from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
-    SimpleModelSaver
+from mpi4py import MPI as mpi
 from tensorboardX import SummaryWriter
-from datetime import datetime
+
+from adept.containers import ImpalaHost, ImpalaWorker
+from adept.environments import SubProcEnvManager, EnvMetaData
+from adept.environments.registry import EnvPluginRegistry
+from adept.utils.logging import (
+    make_log_id_from_timestamp, make_logger,
+    print_ascii_logo, log_args, write_args_file, SimpleModelSaver
+)
+from adept.utils.script_helpers import make_agent, make_network, \
+    get_head_shapes, count_parameters
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -39,7 +43,7 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -65,14 +69,10 @@ def main(args):
     # construct env
     # unique seed per process
     seed = args.seed if rank == 0 else args.seed + args.nb_env * (rank - 1)
-    # don't make a ton of envs if host
-    registry = EnvPluginRegistry()
     if rank == 0:
-        env_plugin_class = registry.lookup_env_class(args.env_id)
-        env = EnvMetaData(env_plugin_class, args)
+        env = EnvMetaData.from_args(args, env_registry)
     else:
-        args.seed = seed
-        env = SubProcEnvManager.from_args(args, registry)
+        env = SubProcEnvManager.from_args(args, seed, env_registry)
 
     # construct network
     torch.manual_seed(args.seed)
@@ -123,7 +123,14 @@ def main(args):
         cudnn = False
 
     torch.backends.cudnn.benchmark = cudnn
-    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
+    agent = make_agent(
+        network,
+        device,
+        env.gpu_preprocessor,
+        env_registry.lookup_engine(args.env_id),
+        env.action_space,
+        args
+    )
 
     # workers
     if rank != 0:

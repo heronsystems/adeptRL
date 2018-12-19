@@ -1,7 +1,6 @@
 import torch
 
-from adept.environments._base import AdeptEnv
-from adept.environments.managers._base import AdeptEnvManager
+from adept.environments.managers._manager import AdeptEnvManager
 from adept.environments.managers.subproc_env_manager import dummy_handle_ob
 from adept.utils import listd_to_dlist
 
@@ -18,7 +17,6 @@ class SimpleEnvManager(AdeptEnvManager):
         self._observation_space, self._action_space = env.observation_space, env.action_space
         self._cpu_preprocessor, self._gpu_preprocessor = env.cpu_preprocessor, env.gpu_preprocessor
 
-        self.nb_env = len(env_fns)
         self.buf_obs = [None for _ in range(self.nb_env)]
         self.buf_dones = [None for _ in range(self.nb_env)]
         self.buf_rews = [None for _ in range(self.nb_env)]

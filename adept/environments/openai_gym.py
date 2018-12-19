@@ -24,13 +24,13 @@ from adept.preprocess.ops import (
     CastToFloat, GrayScaleAndMoveChannel,
     ResizeTo84x84, Divide255, FrameStack
 )
-from adept.environments._plugin import AdeptEnvPlugin
+from adept.environments._env_plugin import EnvPlugin
 from ._gym_wrappers import (
     NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv
 )
 
 
-class AdeptGymEnv(AdeptEnvPlugin):
+class AdeptGymEnv(EnvPlugin):
     def __init__(self, env, do_frame_stack):
         # Define the preprocessing operations to be performed on observations
         # CPU Ops

@@ -45,7 +45,7 @@ def main(args):
     # construct env
     registry = EnvPluginRegistry()
     engine = registry.lookup_engine(args.env_id)
-    assert engine == Engines.SC2, "replay_gen.py is only for SC2."
+    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
     env_class = registry.lookup_env_class(args.env_id)
 
     def build_env_fn(seed):

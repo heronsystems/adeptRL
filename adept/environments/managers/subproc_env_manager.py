@@ -22,7 +22,7 @@ import numpy as np
 import torch
 from torch import multiprocessing as mp
 
-from adept.environments.managers._base import AdeptEnvManager
+from adept.environments.managers._manager import AdeptEnvManager
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 
@@ -39,7 +39,6 @@ class SubProcEnvManager(AdeptEnvManager):
 
         self.waiting = False
         self.closed = False
-        self.nb_env = len(env_fns)
 
         self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(self.nb_env)])
         self.ps = [

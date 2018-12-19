@@ -1,9 +1,9 @@
 import abc
 
-from adept.environments._base import AdeptEnv
+from adept.environments._env import EnvBase
 
 
-class AdeptEnvPlugin(AdeptEnv, metaclass=abc.ABCMeta):
+class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     """
     Implement this class to add your custom environment.
     """
@@ -23,6 +23,12 @@ class AdeptEnvPlugin(AdeptEnv, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def from_args(cls, args, seed, **kwargs):
         raise NotImplementedError
+
+    @classmethod
+    def from_args_curry(cls, args, seed, **kwargs):
+        def _f():
+            return cls.from_args(args, seed, **kwargs)
+        return _f
 
     @property
     def observation_space(self):

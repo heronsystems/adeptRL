@@ -40,7 +40,7 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -66,16 +66,13 @@ def main(args):
     comm.Barrier()
 
     # construct env
-    # unique seed per process
+    # unique seed per manager
     seed = args.seed if rank == 0 else args.seed + args.nb_env * (rank - 1)
     # don't make a ton of envs if host
-    registry = EnvPluginRegistry()
     if rank == 0:
-        env_plugin_class = registry.lookup_env_class(args.env_id)
-        env = EnvMetaData(env_plugin_class, args)
+        env = EnvMetaData.from_args(args, env_registry)
     else:
-        args.seed = seed
-        env = SubProcEnvManager.from_args(args, registry)
+        env = SubProcEnvManager.from_args(args, seed, env_registry)
 
     # construct network
     torch.manual_seed(args.seed)

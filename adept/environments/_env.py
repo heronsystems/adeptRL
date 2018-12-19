@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
 
 
-class AdeptEnv(abc.ABC):
+class HasEnvMetaData(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def observation_space(self):
@@ -38,6 +38,8 @@ class AdeptEnv(abc.ABC):
     def gpu_preprocessor(self):
         raise NotImplementedError
 
+
+class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def step(self, action):
         raise NotImplementedError

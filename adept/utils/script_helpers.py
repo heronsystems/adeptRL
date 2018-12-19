@@ -18,7 +18,7 @@ from argparse import ArgumentParser  # for type hinting
 
 from adept.agents import AGENTS
 from adept.environments import SubProcEnvManager, SimpleEnvManager, SC2_ENVS
-from adept.environments._base import reward_normalizer_by_env_id
+from adept.environments._env import reward_normalizer_by_env_id
 from adept.environments.registry import Engines
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead

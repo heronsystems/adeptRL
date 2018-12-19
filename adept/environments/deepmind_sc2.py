@@ -31,13 +31,13 @@ from pysc2.lib.features import (
 )
 from pysc2.lib.static_data import UNIT_TYPES
 
-from adept.environments._plugin import AdeptEnvPlugin
+from adept.environments._env_plugin import EnvPlugin
 from adept.environments._spaces import Space, Spaces
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import BaseOp, FlattenSpace
 
 
-class AdeptSC2Env(AdeptEnvPlugin):
+class AdeptSC2Env(EnvPlugin):
     def __init__(self, env):
         self.sc2_env = env
         self._max_num_actions = len(FUNCTIONS)
