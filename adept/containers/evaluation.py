@@ -22,23 +22,19 @@ import numpy as np
 import time
 
 
-class EvalBase(HasAgent, abc.ABC):
-    def __init__(self, agent, env_fn, device, seed):
+class EvalBase(HasAgent, metaclass=abc.ABCMeta):
+    def __init__(self, agent, device):
         self._agent = agent
-        self._environment = env_fn(seed)
         self._device = device
+
+    @property
+    @abc.abstractmethod
+    def environment(self):
+        raise NotImplementedError
 
     @property
     def agent(self):
         return self._agent
-
-    @property
-    def environment(self):
-        return self._environment
-
-    @environment.setter
-    def environment(self, new_env):
-        self._environment = new_env
 
     @property
     def device(self):
@@ -47,8 +43,16 @@ class EvalBase(HasAgent, abc.ABC):
 
 class ReplayGenerator(EvalBase):
     """
-    Meant for SC2
+    Generates replays of agent interacting with SC2 environment.
     """
+    def __init__(self, agent, device, environment):
+        super(ReplayGenerator, self).__init__(agent, device)
+        self._environment = environment
+
+    @property
+    def environment(self):
+        return self._environment
+
     def run(self):
         next_obs = self.environment.reset()
         while True:
@@ -58,10 +62,18 @@ class ReplayGenerator(EvalBase):
             self.agent.reset_internals(terminals)
 
 
-class Renderer(EvalBase):
+class AtariRenderer(EvalBase):
     """
-    Atari Only
+    Renders agent interacting with Atari environment.
     """
+    def __init__(self, agent, device, environment):
+        super(AtariRenderer, self).__init__(agent, device)
+        self._environment = environment
+
+    @property
+    def environment(self):
+        return self._environment
+
     def run(self):
         next_obs = self.environment.reset()
         while True:
@@ -74,12 +86,23 @@ class Renderer(EvalBase):
 
 
 class Evaluation(EvalBase, CountsRewards):
-    def __init__(self, agent, env_fn, device, seed, render):
-        super().__init__(agent, env_fn, device, seed)
+    def __init__(self, agent, device, render, env_fn, seed_start):
+        super().__init__(agent, device)
         self._episode_count = 0
-        self.seed = seed
+        self.seed = seed_start
         self.env_fn = env_fn
         self.render = render
+        self._environment = self._hard_reset_env()
+
+    def _hard_reset_env(self):
+        self._environment.close()
+        self.seed += 1
+        self._environment = self.env_fn(self.seed)
+        return self._environment
+
+    @property
+    def environment(self):
+        return self._environment
 
     @property
     def nb_env(self):
@@ -99,9 +122,7 @@ class Evaluation(EvalBase, CountsRewards):
             episode_rewards, _ = self.update_buffers(rewards, terminals, infos)
             for reward in episode_rewards:
                 # remake and reseed env when episode finishes
-                self.environment.close()
-                self.seed += 1
-                self.environment = self.env_fn(self.seed)
+                self._hard_reset_env()
                 next_obs = self.environment.reset()
                 self._episode_count += 1
                 results.append(reward)

@@ -34,30 +34,25 @@ FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
+    engine = env_registry.lookup_engine(args.env_id)
+    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
+
     print_ascii_logo()
     print('Saving replays... Press Ctrl+C to stop.')
 
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.nb_env = 1
 
     # construct env
-    registry = EnvPluginRegistry()
-    engine = registry.lookup_engine(args.env_id)
-    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
-    env_class = registry.lookup_env_class(args.env_id)
-
-    def build_env_fn(seed):
-        return env_class.from_args(
-            args, seed,
-            sc2_save_replay=True,
-            sc2_render=args.render
-        )
-
-    # TODO make it so we don't need an environment just to get the properties
-    env = SimpleEnvManager([build_env_fn(args.seed)], engine)
-    env.close()
+    train_args.nb_env = 1
+    env = SimpleEnvManager.from_args(
+        train_args,
+        args.seed,
+        env_registry,
+        sc2_save_replay=True,
+        sc2_render=args.render
+    )
 
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
@@ -76,7 +71,7 @@ def main(args):
 
     # create a rendering container
     # TODO: could terminate after a configurable number of replays instead of running indefinitely
-    renderer = ReplayGenerator(agent, env_fn, device, args.seed)
+    renderer = ReplayGenerator(agent, device, env)
     try:
         renderer.run()
     finally:

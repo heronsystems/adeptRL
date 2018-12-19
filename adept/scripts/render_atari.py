@@ -20,26 +20,27 @@ import os
 
 import torch
 
-from adept.containers import Renderer
+from adept.containers import AtariRenderer
+from adept.environments import SimpleEnvManager
+from adept.environments.registry import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, atari_from_args
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
 from adept.utils.util import dotdict
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
+    engine = env_registry.lookup_engine(args.env_id)
+    assert engine == Engines.GYM, "render_atari.py is only for Atari."
+
     # construct logging objects
     print_ascii_logo()
     print('Rendering... Press Ctrl+C to stop.')
 
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.nb_env = 1
 
-    # construct env
-    def env_fn(seed):
-        return atari_from_args(train_args, seed, subprocess=False)
-    env = env_fn(args.seed)
-    env.close()
+    train_args.nb_env = 1
+    env = SimpleEnvManager.from_args(train_args, args.seed, env_registry)
 
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
@@ -48,7 +49,11 @@ def main(args):
         network_head_shapes,
         train_args
     )
-    network.load_state_dict(torch.load(args.network_file, map_location=lambda storage, loc: storage))
+    network.load_state_dict(
+        torch.load(
+            args.network_file, map_location=lambda storage, loc: storage
+        )
+    )
 
     # create an agent (add act_eval method)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
@@ -56,7 +61,7 @@ def main(args):
     agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, train_args)
 
     # create a rendering container
-    renderer = Renderer(agent, env_fn, device, args.seed)
+    renderer = AtariRenderer(agent, device, env)
     try:
         renderer.run()
     finally:
