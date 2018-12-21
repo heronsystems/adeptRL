@@ -40,7 +40,8 @@ def main(args, env_registry=EnvPluginRegistry()):
     assert engine == Engines.GYM, "render_atari.py is only for Atari."
 
     train_args.nb_env = 1
-    env = SimpleEnvManager.from_args(train_args, seed=args.seed,
+    env = SimpleEnvManager.from_args(train_args,
+                                     seed=args.seed,
                                      nb_env=1,
                                      registry=env_registry)
 

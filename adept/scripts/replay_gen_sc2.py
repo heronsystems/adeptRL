@@ -22,7 +22,7 @@ import torch
 from absl import flags
 
 from adept.containers import ReplayGenerator
-from adept.environments import SimpleEnvManager
+from adept.environments import SubProcEnvManager
 from adept.registries.environment import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import make_agent, make_network, \
@@ -48,12 +48,12 @@ def main(args, env_registry=EnvPluginRegistry()):
     assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
 
     # construct env
-    env = SimpleEnvManager.from_args(
+    env = SubProcEnvManager.from_args(
         train_args,
         seed=args.seed,
         nb_env=1,
-        env_registry=env_registry,
-        sc2_save_replay=True,
+        registry=env_registry,
+        sc2_replay_dir=os.path.split(args.network_file)[0],
         sc2_render=args.render
     )
 

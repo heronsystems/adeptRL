@@ -288,8 +288,9 @@ class ActorCritic(Agent):
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
-        value_targets, batch_advantages = self._compute_returns_advantages(batch_values, last_values,
-                                                                          rollouts.rewards, rollouts.terminals)
+        value_targets, batch_advantages = self._compute_returns_advantages(
+            batch_values, last_values, rollouts.rewards, rollouts.terminals
+        )
 
         # batched value loss
         value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))

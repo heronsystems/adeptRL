@@ -34,7 +34,7 @@ from pysc2.lib.static_data import UNIT_TYPES
 from adept.environments._env_plugin import EnvPlugin
 from adept.environments._spaces import Space, Spaces
 from adept.preprocess.observation import ObsPreprocessor
-from adept.preprocess.ops import BaseOp, FlattenSpace
+from adept.preprocess.ops import BaseOp, FlattenSpace, CastToFloat
 
 
 class AdeptSC2Env(EnvPlugin):
@@ -79,7 +79,7 @@ class AdeptSC2Env(EnvPlugin):
 
         gpu_preprocessor = SC2RemoveAvailableActions(
             # [CastToFloat(), SC2ScaleChannels(24)],
-            [SC2OneHot()],
+            [CastToFloat({'control_groups'}), SC2OneHot()],
             cpu_preprocessor.observation_space
         )
         action_space = Spaces(act_entries_by_name)
@@ -90,11 +90,9 @@ class AdeptSC2Env(EnvPlugin):
     @classmethod
     def from_args(
             cls, args, seed,
-            sc2_save_replay=None,
-            sc2_render=False
+            sc2_replay_dir=None,
+            sc2_render=False,
         ):
-        replay_dir = os.path.split(args.network_file)[0] if sc2_save_replay \
-            else None
         agent_interface_format = parse_agent_interface_format(
             feature_screen=84,
             feature_minimap=84,
@@ -107,8 +105,8 @@ class AdeptSC2Env(EnvPlugin):
             discount=0.99,
             agent_interface_format=agent_interface_format,
             random_seed=seed,
-            save_replay_episodes=1 if sc2_save_replay is not None else 0,
-            replay_dir=replay_dir,
+            save_replay_episodes=1 if sc2_replay_dir is not None else 0,
+            replay_dir=sc2_replay_dir,
             visualize=sc2_render
         )
         env = AdeptSC2Env(env)
