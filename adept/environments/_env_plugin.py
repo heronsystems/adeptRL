@@ -7,8 +7,7 @@ class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     """
     Implement this class to add your custom environment.
     """
-    def __init__(self, action_space, cpu_preprocessor,
-                 gpu_preprocessor):
+    def __init__(self, action_space, cpu_preprocessor, gpu_preprocessor):
         """
         :param observation_space: ._spaces.Spaces
         :param action_space: ._spaces.Spaces
@@ -23,6 +22,8 @@ class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def from_args(cls, args, seed, **kwargs):
         """
+        Construct from arguments. For convenience.
+
         :param args: Arguments object
         :param seed: Integer used to seed this environment.
         :param kwargs: Any custom arguments are passed through kwargs.

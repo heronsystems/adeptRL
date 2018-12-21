@@ -16,27 +16,34 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
+from copy import deepcopy
 
 import torch
 from absl import flags
-from copy import deepcopy
+from tensorboardX import SummaryWriter
 
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
-from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, SimpleModelSaver
-from tensorboardX import SummaryWriter
+from adept.registries.environment import EnvPluginRegistry
+from adept.utils.logging import (
+    make_log_id, make_logger, print_ascii_logo,
+    log_args, write_args_file, SimpleModelSaver
+)
+from adept.utils.script_helpers import (
+    make_agent, make_network, get_head_shapes, count_parameters
+)
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
     # construct logging objects
     print_ascii_logo()
     log_id = make_log_id(
-        args.tag, args.mode_name, args.agent, args.network_vision + args.network_body
+        args.tag, args.mode_name, args.agent,
+        args.network_vision + args.network_body
     )
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
@@ -49,7 +56,7 @@ def main(args):
     write_args_file(log_id_dir, args)
 
     # construct env
-    env = SubProcEnvManager.from_args(args)
+    env = SubProcEnvManager.from_args(args, registry=env_registry)
 
     # construct network
     torch.manual_seed(args.seed)
@@ -87,19 +94,22 @@ def main(args):
         return opt
 
     container = Local(
-        agent, env, make_optimizer, args.epoch_len, args.nb_env, logger, summary_writer,
-        args.summary_frequency, saver
+        agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
+        summary_writer, args.summary_frequency, saver
     )
 
     # if running an eval thread create eval env, agent, & logger
     if args.nb_eval_env > 0:
         # replace args num envs & seed
         eval_args = deepcopy(args)
-        eval_args.seed = args.seed + args.nb_env
 
         # env and agent
         eval_args.nb_env = args.nb_eval_env
-        eval_env = SubProcEnvManager.from_args(eval_args)
+        eval_env = SubProcEnvManager.from_args(
+            eval_args,
+            seed=args.seed + args.nb_env,
+            registry=env_registry
+        )
         eval_net = make_network(
             eval_env.observation_space, network_head_shapes, eval_args
         )
@@ -119,8 +129,8 @@ def main(args):
             eval_logger,
             summary_writer,
             args.eval_step_rate,
-            override_step_count_fn=
-            lambda: container.local_step_count  # wire local containers step count into eval
+            # wire local containers step count into eval
+            override_step_count_fn=lambda: container.local_step_count
         )
         evaluation_container.start()
 
@@ -146,7 +156,7 @@ def main(args):
 
 if __name__ == '__main__':
     import argparse
-    from adept.utils.script_helpers import add_base_args, parse_bool
+    from adept.utils.script_helpers import add_base_args
 
     base_parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
 
