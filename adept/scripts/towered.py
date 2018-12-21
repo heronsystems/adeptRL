@@ -16,16 +16,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
-from copy import deepcopy
 import torch
 from absl import flags
 from mpi4py import MPI as mpi
 from tensorboardX import SummaryWriter
 
 from adept.containers import ToweredHost, ToweredWorker
+from adept.environments import SubProcEnvManager, EnvMetaData
+from adept.registries.environment import EnvPluginRegistry
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, count_parameters
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
 from datetime import datetime
 
 # hack to use argparse for SC2
@@ -38,7 +39,7 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -64,15 +65,14 @@ def main(args):
     comm.Barrier()
 
     # construct env
-    # unique seed per process
+    # unique seed per manager
     seed = args.seed if rank == 0 else args.seed + args.nb_env * (rank - 1)
     # don't make a ton of envs if host
     if rank == 0:
-        env_args = deepcopy(args)
-        env_args.nb_env = 1
-        env = make_env(env_args, seed)
+        env = EnvMetaData.from_args(args, env_registry)
     else:
-        env = make_env(args, seed)
+        env = SubProcEnvManager.from_args(args, seed=seed,
+                                          registry=env_registry)
 
     # construct network
     torch.manual_seed(args.seed)
@@ -148,9 +148,6 @@ def main(args):
         write_args_file(log_id_dir, args)
         logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
-        # no need for the env anymore
-        env.close()
-
         # Construct the optimizer
         def make_optimizer(params):
             opt = torch.optim.RMSprop(
@@ -186,7 +183,7 @@ def main(args):
 
 if __name__ == '__main__':
     import argparse
-    from adept.utils.script_helpers import add_base_args, parse_bool
+    from adept.utils.script_helpers import add_base_args
 
     base_parser = argparse.ArgumentParser(description='AdeptRL Towered Mode')
 

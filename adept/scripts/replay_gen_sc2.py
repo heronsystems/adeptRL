@@ -22,31 +22,40 @@ import torch
 from absl import flags
 
 from adept.containers import ReplayGenerator
-from adept.environments import DummyVecEnv, Engines
-from adept.environments.sc2 import make_sc2_env
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
-from adept.utils.util import dotdict
+from adept.environments import SubProcEnvManager
+from adept.registries.environment import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
+from adept.utils.script_helpers import make_agent, make_network, \
+    get_head_shapes, parse_bool
+from adept.utils.util import dotdict
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
+
+
     print_ascii_logo()
     print('Saving replays... Press Ctrl+C to stop.')
 
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.nb_env = 1
+    train_args.nb_env = 1  # TODO remove
+
+    engine = env_registry.lookup_engine(train_args.env_id)
+    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
 
     # construct env
-    replay_dir = os.path.split(args.network_file)[0]
-    def env_fn(seed):
-        return DummyVecEnv([make_sc2_env(train_args.env_id, train_args.seed, replay_dir=replay_dir, render=args.render)], Engines.SC2)
-    env = env_fn(args.seed)
-    env.close()
+    env = SubProcEnvManager.from_args(
+        train_args,
+        seed=args.seed,
+        nb_env=1,
+        registry=env_registry,
+        sc2_replay_dir=os.path.split(args.network_file)[0],
+        sc2_render=args.render
+    )
 
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
@@ -65,7 +74,7 @@ def main(args):
 
     # create a rendering container
     # TODO: could terminate after a configurable number of replays instead of running indefinitely
-    renderer = ReplayGenerator(agent, env_fn, device, args.seed)
+    renderer = ReplayGenerator(agent, device, env)
     try:
         renderer.run()
     finally:

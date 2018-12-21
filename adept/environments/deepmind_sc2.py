@@ -17,50 +17,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import OrderedDict
 from functools import reduce
 
+import os
 import numpy as np
 import torch
 from pysc2.env import environment
 from pysc2.env.sc2_env import SC2Env
 from pysc2.lib import features
-from pysc2.lib.actions import FUNCTIONS, FUNCTION_TYPES
-from pysc2.lib.actions import FunctionCall
-from pysc2.lib.features import parse_agent_interface_format, SCREEN_FEATURES, MINIMAP_FEATURES
+from pysc2.lib.actions import FUNCTIONS, FUNCTION_TYPES, FunctionCall
+from pysc2.lib.features import (
+    parse_agent_interface_format,
+    SCREEN_FEATURES,
+    MINIMAP_FEATURES
+)
 from pysc2.lib.static_data import UNIT_TYPES
 
-from adept.environments._base import BaseEnvironment, Spaces, Space
+from adept.environments._env_plugin import EnvPlugin
+from adept.environments._spaces import Space, Spaces
 from adept.preprocess.observation import ObsPreprocessor
-from adept.preprocess.ops import BaseOp, CastToFloat, FlattenSpace
+from adept.preprocess.ops import BaseOp, FlattenSpace, CastToFloat
 
 
-def make_sc2_env(env_id, seed, replay_dir=None, render=False):
-    def _f():
-        env = sc2_feature_env(env_id, seed, replay_dir, render)
-        return env
-    return _f
-
-
-def sc2_feature_env(env_id, seed, replay_dir, render):
-    agent_interface_format = parse_agent_interface_format(
-        feature_screen=84,
-        feature_minimap=84,
-        action_space='FEATURES'
-    )
-    env = SC2Env(
-        map_name=env_id,
-        step_mul=8,
-        game_steps_per_episode=0,
-        discount=0.99,
-        agent_interface_format=agent_interface_format,
-        random_seed=seed,
-        save_replay_episodes=1 if replay_dir is not None else 0,
-        replay_dir=replay_dir,
-        visualize=render
-    )
-    env = AdeptSC2Env(env)
-    return env
-
-
-class AdeptSC2Env(BaseEnvironment):
+class AdeptSC2Env(EnvPlugin):
     def __init__(self, env):
         self.sc2_env = env
         self._max_num_actions = len(FUNCTIONS)
@@ -95,41 +72,47 @@ class AdeptSC2Env(BaseEnvironment):
             'build_queue_id': Space((10,), 0., 1., np.float32),
         }
         # remove_feat_op = SC2RemoveFeatures({'player_id'})
-        self._cpu_preprocessor = ObsPreprocessor(
+        cpu_preprocessor = ObsPreprocessor(
             [FlattenSpace({'control_groups'})],
             Spaces(obs_entries_by_name)
         )
 
-        self._gpu_preprocessor = SC2RemoveAvailableActions(
+        gpu_preprocessor = SC2RemoveAvailableActions(
             # [CastToFloat(), SC2ScaleChannels(24)],
-            [SC2OneHot()],
-            self._cpu_preprocessor.observation_space
+            [CastToFloat({'control_groups'}), SC2OneHot()],
+            cpu_preprocessor.observation_space
         )
-        self._observation_space = self._gpu_preprocessor.observation_space
-        self._action_space = Spaces(act_entries_by_name)
+        action_space = Spaces(act_entries_by_name)
         self._func_id_to_headnames = SC2ActionLookup()
+        super(AdeptSC2Env, self).__init__(action_space, cpu_preprocessor,
+                                          gpu_preprocessor)
 
-    @property
-    def observation_space(self):
-        return self._observation_space
-
-    @property
-    def action_space(self):
-        return self._action_space
-
-    @property
-    def cpu_preprocessor(self):
-        return self._cpu_preprocessor
-
-    @property
-    def gpu_preprocessor(self):
-        return self._gpu_preprocessor
+    @classmethod
+    def from_args(
+            cls, args, seed,
+            sc2_replay_dir=None,
+            sc2_render=False,
+        ):
+        agent_interface_format = parse_agent_interface_format(
+            feature_screen=84,
+            feature_minimap=84,
+            action_space='FEATURES'
+        )
+        env = SC2Env(
+            map_name=args.env_id,
+            step_mul=8,
+            game_steps_per_episode=0,
+            discount=0.99,
+            agent_interface_format=agent_interface_format,
+            random_seed=seed,
+            save_replay_episodes=1 if sc2_replay_dir is not None else 0,
+            replay_dir=sc2_replay_dir,
+            visualize=sc2_render
+        )
+        env = AdeptSC2Env(env)
+        return env
 
     def step(self, action):
-        """
-        :param action_by_name: Dict{.}[headname: action/arg]
-        :return:
-        """
         timesteps = self.sc2_env.step(self._wrap_action(action))
         # pysc2 returns a tuple of timesteps, with one timestep inside
         # get first timestep
@@ -335,5 +318,3 @@ class SC2ActionLookup(dict):
         # OrderedDict for constant time membership test while preserving order
         # TODO make an OrderedSet in utils
         return OrderedDict.fromkeys(headnames)
-
-

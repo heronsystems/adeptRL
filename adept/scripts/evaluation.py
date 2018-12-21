@@ -25,8 +25,10 @@ import torch
 from absl import flags
 
 from adept.containers import Evaluation
+from adept.environments import EnvMetaData, SimpleEnvManager
+from adept.registries.environment import EnvPluginRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, parse_bool
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
 from adept.utils.util import dotdict
 
 # hack to use argparse for SC2
@@ -38,7 +40,7 @@ Result = namedtuple('Result', ['epoch', 'mean', 'std_dev'])
 SelectedModel = namedtuple('SelectedModel', ['epoch', 'model_id'])
 
 
-def main(args):
+def main(args, env_registry=EnvPluginRegistry()):
     print_ascii_logo()
     logger = make_logger('Eval', os.path.join(args.log_id_dir, 'evaluation_log.txt'))
     log_args(logger, args)
@@ -56,10 +58,7 @@ def main(args):
     train_args.nb_env = 1
 
     # construct env
-    def env_fn(seed):
-        return make_env(train_args, seed, subprocess=False, render=args.render)
-    env = env_fn(args.seed)
-    env.close()
+    env = EnvMetaData.from_args(train_args, registry=env_registry)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
@@ -79,10 +78,24 @@ def main(args):
             network.load_state_dict(torch.load(network_file, map_location=lambda storage, loc: storage))
 
             # construct agent
-            agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, train_args)
+            agent = make_agent(network, device, env.gpu_preprocessor,
+                               env_registry.lookup_engine(train_args.env_id),
+                               env.action_space,
+                               train_args)
 
             # container
-            container = Evaluation(agent, env_fn, device, args.seed, args.render)
+            container = Evaluation(
+                agent,
+                device,
+                args.render,
+                lambda s: SimpleEnvManager.from_args(
+                    train_args,
+                    seed=s,
+                    nb_env=1,
+                    registry=env_registry
+                ),
+                args.seed
+            )
 
             # Run the container
             mean_reward, std_dev = container.run(args.nb_episode)

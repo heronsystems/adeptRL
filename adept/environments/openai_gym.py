@@ -18,70 +18,61 @@ import gym
 import torch
 from gym import spaces
 
-from adept.preprocess.ops import CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack
+from adept.environments._spaces import Spaces
 from adept.preprocess.observation import ObsPreprocessor
-from ._wrappers import (
+from adept.preprocess.ops import (
+    CastToFloat, GrayScaleAndMoveChannel,
+    ResizeTo84x84, Divide255, FrameStack
+)
+from adept.environments._env_plugin import EnvPlugin
+from ._gym_wrappers import (
     NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv
 )
-from ._base import BaseEnvironment, Spaces
-import numpy as np
 
 
-def make_atari_env(env_id, skip_rate, max_ep_length, do_frame_stack, seed):
-    def _f():
-        env = atari_env(env_id, skip_rate, max_ep_length, do_frame_stack, seed)
-        return env
-    return _f
-
-
-def atari_env(env_id, skip_rate, max_ep_length, do_frame_stack, seed):
-    env = gym.make(env_id)
-    if hasattr(env.unwrapped, 'ale'):
-        if 'FIRE' in env.unwrapped.get_action_meanings():
-            env = FireResetEnv(env)
-        env = NoopResetEnv(env, noop_max=30)
-        env = EpisodicLifeEnv(env)
-    if 'NoFrameskip' in env_id:
-        assert 'NoFrameskip' in env.spec.id
-        env._max_episode_steps = max_ep_length * skip_rate
-        env = MaxAndSkipEnv(env, skip=skip_rate)
-    else:
-        env._max_episode_steps = max_ep_length
-    env.seed(seed)
-    env = AdeptGymEnv(env, do_frame_stack)
-    return env
-
-
-class AdeptGymEnv(BaseEnvironment):
+class AdeptGymEnv(EnvPlugin):
     def __init__(self, env, do_frame_stack):
-        self.gym_env = env
+        # Define the preprocessing operations to be performed on observations
+        # CPU Ops
         cpu_ops = [GrayScaleAndMoveChannel(), ResizeTo84x84()]
         if do_frame_stack:
             cpu_ops.append(FrameStack(4))
-        self._cpu_preprocessor = ObsPreprocessor(cpu_ops, Spaces.from_gym(env.observation_space))
-        self._gpu_preprocessor = ObsPreprocessor(
+        cpu_preprocessor = ObsPreprocessor(cpu_ops, Spaces.from_gym(
+            env.observation_space))
+
+        # GPU Ops
+        gpu_preprocessor = ObsPreprocessor(
             [CastToFloat(), Divide255()],
-            self._cpu_preprocessor.observation_space
+            cpu_preprocessor.observation_space
         )
-        self._observation_space = self._gpu_preprocessor.observation_space
-        self._action_space = Spaces.from_gym(env.action_space)
+
+        action_space = Spaces.from_gym(env.action_space)
+
+        super(AdeptGymEnv, self).__init__(action_space, cpu_preprocessor,
+                                          gpu_preprocessor)
+
+        self.gym_env = env
         self._gym_obs_space = env.observation_space
 
-    @property
-    def observation_space(self):
-        return self._observation_space
-
-    @property
-    def action_space(self):
-        return self._action_space
-
-    @property
-    def cpu_preprocessor(self):
-        return self._cpu_preprocessor
-
-    @property
-    def gpu_preprocessor(self):
-        return self._gpu_preprocessor
+    @classmethod
+    def from_args(cls, args, seed, **kwargs):
+        # TODO fix this hack
+        do_frame_stack = 'Linear' in args.network_body
+        env = gym.make(args.env_id)
+        if hasattr(env.unwrapped, 'ale'):
+            if 'FIRE' in env.unwrapped.get_action_meanings():
+                env = FireResetEnv(env)
+            env = NoopResetEnv(env, noop_max=30)
+            env = EpisodicLifeEnv(env)
+        if 'NoFrameskip' in args.env_id:
+            assert 'NoFrameskip' in env.spec.id
+            env._max_episode_steps = args.max_episode_length * \
+                                     args.skip_rate
+            env = MaxAndSkipEnv(env, skip=args.skip_rate)
+        else:
+            env._max_episode_steps = args.max_episode_length
+        env.seed(seed)
+        return cls(env, do_frame_stack)
 
     def step(self, action):
         obs, reward, done, info = self.gym_env.step(self._wrap_action(action))
@@ -106,18 +97,27 @@ class AdeptGymEnv(BaseEnvironment):
             # one hot encode discrete inputs
             longs = torch.from_numpy(observation)
             if longs.dim() > 2:
-                raise ValueError('observation is not discrete, too many dims: ' + str(longs.dim()))
+                raise ValueError(
+                    'observation is not discrete, too many dims: '
+                    + str(longs.dim())
+                )
             elif len(longs.dim()) == 1:
                 longs = longs.unsqueeze(1)
             one_hot = torch.zeros(observation.size(0), space.n)
             one_hot.scatter_(1, longs, 1)
             return self.cpu_preprocessor({'Discrete': one_hot})
         elif isinstance(space, spaces.MultiBinary):
-            return self.cpu_preprocessor({'MultiBinary': torch.from_numpy(observation)})
+            return self.cpu_preprocessor(
+                {'MultiBinary': torch.from_numpy(observation)}
+            )
         elif isinstance(space, spaces.Dict):
-            return self.cpu_preprocessor({name: torch.from_numpy(obs) for name, obs in observation.items()})
+            return self.cpu_preprocessor({
+                name: torch.from_numpy(obs) for name, obs in observation.items()
+            })
         elif isinstance(space, spaces.Tuple):
-            return self.cpu_preprocessor({idx: torch.from_numpy(obs) for idx, obs in enumerate(observation)})
+            return self.cpu_preprocessor({
+                idx: torch.from_numpy(obs) for idx, obs in enumerate(observation)
+            })
         else:
             raise NotImplementedError
 

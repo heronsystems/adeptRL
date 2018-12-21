@@ -18,7 +18,7 @@ from argparse import ArgumentParser
 from collections import OrderedDict
 
 import torch
-from adept.environments import Engines
+from adept.registries.environment import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
@@ -57,7 +57,7 @@ class ActorCritic(Agent):
         self._action_keys = list(sorted(action_space.entries_by_name.keys()))
         self._func_id_to_headnames = None
         if self.engine == Engines.SC2:
-            from adept.environments.sc2 import SC2ActionLookup
+            from adept.environments.deepmind_sc2 import SC2ActionLookup
             self._func_id_to_headnames = SC2ActionLookup()
 
     @classmethod
@@ -288,8 +288,9 @@ class ActorCritic(Agent):
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
-        value_targets, batch_advantages = self._compute_returns_advantages(batch_values, last_values,
-                                                                          rollouts.rewards, rollouts.terminals)
+        value_targets, batch_advantages = self._compute_returns_advantages(
+            batch_values, last_values, rollouts.rewards, rollouts.terminals
+        )
 
         # batched value loss
         value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
