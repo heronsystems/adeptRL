@@ -17,5 +17,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from adept.environments.managers.subproc_env_manager import SubProcEnvManager
 from adept.environments.managers.simple_env_manager import SimpleEnvManager
-from adept.environments.registry import SC2_ENVS, ATARI_6_ENVS, ATARI_ENVS
 from adept.environments._metadata import EnvMetaData
+from adept.environments._env_plugin import EnvPlugin

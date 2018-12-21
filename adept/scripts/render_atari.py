@@ -22,7 +22,7 @@ import torch
 
 from adept.containers import AtariRenderer
 from adept.environments import SimpleEnvManager
-from adept.environments.registry import EnvPluginRegistry, Engines
+from adept.registries.environment import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
 from adept.utils.util import dotdict

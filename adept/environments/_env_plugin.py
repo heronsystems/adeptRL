@@ -22,6 +22,12 @@ class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     @classmethod
     @abc.abstractmethod
     def from_args(cls, args, seed, **kwargs):
+        """
+        :param args: Arguments object
+        :param seed: Integer used to seed this environment.
+        :param kwargs: Any custom arguments are passed through kwargs.
+        :return: EnvPlugin instance.
+        """
         raise NotImplementedError
 
     @classmethod

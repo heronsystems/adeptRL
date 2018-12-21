@@ -16,7 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import abc
 
-from adept.environments.registry import Engines
+from adept.registries.environment import Engines
 from ._base import HasAgent, CountsRewards
 import numpy as np
 import time

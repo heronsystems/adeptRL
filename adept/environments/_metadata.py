@@ -1,5 +1,5 @@
 from adept.environments._env import HasEnvMetaData
-from adept.environments.registry import EnvPluginRegistry
+from adept.registries.environment import EnvPluginRegistry
 
 
 class EnvMetaData(HasEnvMetaData):

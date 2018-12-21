@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import os
-from copy import deepcopy
 import torch
 from absl import flags
 from mpi4py import MPI as mpi
@@ -24,7 +23,7 @@ from tensorboardX import SummaryWriter
 
 from adept.containers import ToweredHost, ToweredWorker
 from adept.environments import SubProcEnvManager, EnvMetaData
-from adept.environments.registry import EnvPluginRegistry
+from adept.registries.environment import EnvPluginRegistry
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
@@ -183,7 +182,7 @@ def main(args, env_registry=EnvPluginRegistry()):
 
 if __name__ == '__main__':
     import argparse
-    from adept.utils.script_helpers import add_base_args, parse_bool
+    from adept.utils.script_helpers import add_base_args
 
     base_parser = argparse.ArgumentParser(description='AdeptRL Towered Mode')
 

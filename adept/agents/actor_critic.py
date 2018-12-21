@@ -18,7 +18,7 @@ from argparse import ArgumentParser
 from collections import OrderedDict
 
 import torch
-from adept.environments.registry import Engines
+from adept.registries.environment import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache

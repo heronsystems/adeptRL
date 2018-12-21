@@ -1,7 +1,7 @@
 import abc
 
 from adept.environments._env import EnvBase
-from adept.environments.registry import EnvPluginRegistry
+from adept.registries.environment import EnvPluginRegistry
 
 
 class AdeptEnvManager(EnvBase, metaclass=abc.ABCMeta):

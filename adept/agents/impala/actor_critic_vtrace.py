@@ -15,12 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 # Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py for reference
-from argparse import ArgumentParser
 from collections import OrderedDict
 import torch
 from torch.nn import functional as F
 
-from adept.environments.registry import Engines
+from adept.registries.environment import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
