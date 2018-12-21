@@ -37,17 +37,24 @@ class AdeptEnvManager(EnvBase, metaclass=abc.ABCMeta):
 
     @classmethod
     def from_args(
-        cls, args, seed_start=None, registry=EnvPluginRegistry(), **kwargs
+            cls,
+            args,
+            seed=None,
+            nb_env=None,
+            registry=EnvPluginRegistry(),
+            **kwargs
     ):
-        if seed_start is None:
-            seed_start = int(args.seed)
+        if seed is None:
+            seed = int(args.seed)
+        if nb_env is None:
+            nb_env = args.nb_env
 
         engine = registry.lookup_engine(args.env_id)
         env_class = registry.lookup_env_class(args.env_id)
 
         env_fns = []
-        for i in range(args.nb_env):
+        for i in range(nb_env):
             env_fns.append(
-                env_class.from_args_curry(args, seed_start + i, **kwargs)
+                env_class.from_args_curry(args, seed + i, **kwargs)
             )
         return cls(env_fns, engine)

@@ -71,7 +71,8 @@ def main(args, env_registry=EnvPluginRegistry()):
     if rank == 0:
         env = EnvMetaData.from_args(args, env_registry)
     else:
-        env = SubProcEnvManager.from_args(args, seed, env_registry)
+        env = SubProcEnvManager.from_args(args, seed=seed,
+                                          registry=env_registry)
 
     # construct network
     torch.manual_seed(args.seed)

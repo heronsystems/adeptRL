@@ -40,7 +40,9 @@ def main(args, env_registry=EnvPluginRegistry()):
         train_args = dotdict(json.load(args_file))
 
     train_args.nb_env = 1
-    env = SimpleEnvManager.from_args(train_args, args.seed, env_registry)
+    env = SimpleEnvManager.from_args(train_args, seed=args.seed,
+                                     nb_env=1,
+                                     registry=env_registry)
 
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)

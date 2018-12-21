@@ -45,11 +45,11 @@ def main(args, env_registry=EnvPluginRegistry()):
         train_args = dotdict(json.load(args_file))
 
     # construct env
-    train_args.nb_env = 1
     env = SimpleEnvManager.from_args(
         train_args,
-        args.seed,
-        env_registry,
+        seed=args.seed,
+        nb_env=1,
+        env_registry=env_registry,
         sc2_save_replay=True,
         sc2_render=args.render
     )

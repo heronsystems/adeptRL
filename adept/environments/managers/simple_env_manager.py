@@ -63,7 +63,7 @@ class SimpleEnvManager(AdeptEnvManager):
     def step_wait(self):
         obs = []
         for e in range(self.nb_env):
-            ob, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[e].step(self.actions[e])
+            ob, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[e].step(self.actions)
             if self.buf_dones[e]:
                 ob = self.envs[e].reset()
             obs.append(ob)

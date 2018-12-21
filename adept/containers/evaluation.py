@@ -92,17 +92,15 @@ class Evaluation(EvalBase, CountsRewards):
         self.seed = seed_start
         self.env_fn = env_fn
         self.render = render
-        self._environment = self._hard_reset_env()
-
-    def _hard_reset_env(self):
-        self._environment.close()
-        self.seed += 1
         self._environment = self.env_fn(self.seed)
-        return self._environment
 
     @property
     def environment(self):
         return self._environment
+
+    @environment.setter
+    def environment(self, env):
+        self._environment = env
 
     @property
     def nb_env(self):
@@ -122,8 +120,12 @@ class Evaluation(EvalBase, CountsRewards):
             episode_rewards, _ = self.update_buffers(rewards, terminals, infos)
             for reward in episode_rewards:
                 # remake and reseed env when episode finishes
-                self._hard_reset_env()
+                # hard reset
+                self.environment.close()
+                self.seed += 1
+                self.environment = self.env_fn(self.seed)
                 next_obs = self.environment.reset()
+
                 self._episode_count += 1
                 results.append(reward)
                 if len(results) == nb_episode:

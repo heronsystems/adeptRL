@@ -25,10 +25,10 @@ import torch
 from absl import flags
 
 from adept.containers import Evaluation
-from adept.environments import SubProcEnvManager, EnvMetaData
+from adept.environments import EnvMetaData, SimpleEnvManager
 from adept.registries.environment import EnvPluginRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.script_helpers import make_agent, make_network, make_env, get_head_shapes, parse_bool
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
 from adept.utils.util import dotdict
 
 # hack to use argparse for SC2
@@ -58,10 +58,7 @@ def main(args, env_registry=EnvPluginRegistry()):
     train_args.nb_env = 1
 
     # construct env
-    env = EnvMetaData.from_args(args, registry=env_registry)
-    def env_fn(seed):
-        return SubProcEnvManager.from_args(args, seed=seed,
-                                           registry=env_registry)
+    env = EnvMetaData.from_args(train_args, registry=env_registry)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
@@ -81,10 +78,24 @@ def main(args, env_registry=EnvPluginRegistry()):
             network.load_state_dict(torch.load(network_file, map_location=lambda storage, loc: storage))
 
             # construct agent
-            agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, train_args)
+            agent = make_agent(network, device, env.gpu_preprocessor,
+                               env_registry.lookup_engine(train_args.env_id),
+                               env.action_space,
+                               train_args)
 
             # container
-            container = Evaluation(agent, env_fn, device, args.seed, args.render)
+            container = Evaluation(
+                agent,
+                device,
+                args.render,
+                lambda s: SimpleEnvManager.from_args(
+                    train_args,
+                    seed=s,
+                    nb_env=1,
+                    registry=env_registry
+                ),
+                args.seed
+            )
 
             # Run the container
             mean_reward, std_dev = container.run(args.nb_episode)
