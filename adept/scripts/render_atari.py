@@ -29,15 +29,15 @@ from adept.utils.util import dotdict
 
 
 def main(args, env_registry=EnvPluginRegistry()):
-    engine = env_registry.lookup_engine(args.env_id)
-    assert engine == Engines.GYM, "render_atari.py is only for Atari."
-
     # construct logging objects
     print_ascii_logo()
     print('Rendering... Press Ctrl+C to stop.')
 
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
+
+    engine = env_registry.lookup_engine(train_args.env_id)
+    assert engine == Engines.GYM, "render_atari.py is only for Atari."
 
     train_args.nb_env = 1
     env = SimpleEnvManager.from_args(train_args, seed=args.seed,

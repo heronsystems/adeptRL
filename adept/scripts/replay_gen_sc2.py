@@ -35,14 +35,17 @@ FLAGS(['local.py'])
 
 
 def main(args, env_registry=EnvPluginRegistry()):
-    engine = env_registry.lookup_engine(args.env_id)
-    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
+
 
     print_ascii_logo()
     print('Saving replays... Press Ctrl+C to stop.')
 
     with open(args.args_file, 'r') as args_file:
         train_args = dotdict(json.load(args_file))
+    train_args.nb_env = 1  # TODO remove
+
+    engine = env_registry.lookup_engine(train_args.env_id)
+    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
 
     # construct env
     env = SimpleEnvManager.from_args(
