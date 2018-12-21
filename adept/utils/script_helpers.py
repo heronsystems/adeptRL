@@ -17,50 +17,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from argparse import ArgumentParser  # for type hinting
 
 from adept.agents import AGENTS
-from adept.environments import SubProcEnvManager, SimpleEnvManager, SC2_ENVS
 from adept.environments._env import reward_normalizer_by_env_id
-from adept.registries.environment import Engines
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
 from adept.utils.util import parse_bool
-
-try:
-    from adept.environments.deepmind_sc2 import make_sc2_env, SC2AgentOverrides
-except ImportError:
-    print('SC2 Environment not detected')
-
-
-def make_env(args, seed, subprocess=True, render=False):
-    if args.env_id in SC2_ENVS:
-        envs = sc2_from_args(args, seed, subprocess, render)
-    else:
-        envs = atari_from_args(args, seed, subprocess)
-    return envs
-
-
-def sc2_from_args(args, seed, subprocess=True, render=False):
-    if subprocess:
-        return SubProcEnvManager([make_sc2_env(args.env_id, seed + i) for i in range(args.nb_env)], Engines.SC2)
-    else:
-        return SimpleEnvManager([make_sc2_env(args.env_id, seed + i, render=render) for i in range(args.nb_env)], Engines.SC2)
-
-
-def atari_from_args(args, seed, subprocess=True):
-    do_frame_stack = 'Linear' in args.network_body
-
-    env_wrapper_class = SubProcEnvManager if subprocess else SimpleEnvManager
-    envs = env_wrapper_class(
-        [
-            make_atari_env(
-                args.env_id,
-                args.skip_rate,
-                args.max_episode_length,
-                do_frame_stack,
-                seed + i
-            ) for i in range(args.nb_env)
-        ], Engines.GYM
-    )
-    return envs
 
 
 def make_network(
