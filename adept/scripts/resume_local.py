@@ -23,9 +23,10 @@ from absl import flags
 
 from adept.containers import Local
 from adept.environments import SubProcEnvManager
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, make_env
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
 from adept.utils.util import dotdict
-from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, ModelSaver
+from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, \
+    SimpleModelSaver
 from tensorboardX import SummaryWriter
 
 # hack to use argparse for SC2
@@ -50,7 +51,7 @@ def main(args):
     os.makedirs(log_id_dir)
     logger = make_logger('Local', os.path.join(log_id_dir, 'train_log.txt'))
     summary_writer = SummaryWriter(log_id_dir)
-    saver = ModelSaver(args.nb_top_model, log_id_dir)
+    saver = SimpleModelSaver(log_id_dir)
 
     log_args(logger, args)
     write_args_file(log_id_dir, args)
