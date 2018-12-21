@@ -45,7 +45,7 @@ class BaseOp(abc.ABC):
 
     def reset(self):
         pass
-    
+
     @abc.abstractmethod
     def update_space(self, old_space):
         raise NotImplementedError
@@ -71,16 +71,23 @@ class GrayScaleAndMoveChannel(BaseOp):
         super(GrayScaleAndMoveChannel, self).__init__(filter_names, {3})
 
     def update_space(self, old_space):
-        return Space((1,) + old_space.shape[:-1], old_space.low, old_space.high, old_space.dtype)
+        return Space(
+            (1, ) + old_space.shape[:-1], old_space.low, old_space.high,
+            old_space.dtype
+        )
 
     def update_obs(self, obs):
         if obs.dim() == 3:
-            return torch.from_numpy(cv2.cvtColor(obs.numpy(), cv2.COLOR_RGB2GRAY)).unsqueeze(0)
+            return torch.from_numpy(
+                cv2.cvtColor(obs.numpy(), cv2.COLOR_RGB2GRAY)
+            ).unsqueeze(0)
             # return obs.mean(dim=2).unsqueeze(0)
         elif obs.dim() == 4:
             return obs.mean(dim=3).unsqueeze(1)
         else:
-            raise ValueError('cant grayscale a rank' + str(obs.dim()) + ' tensor')
+            raise ValueError(
+                'cant grayscale a rank' + str(obs.dim()) + ' tensor'
+            )
 
 
 class ResizeTo84x84(BaseOp):
@@ -88,17 +95,23 @@ class ResizeTo84x84(BaseOp):
         super().__init__(filter_names, {3})
 
     def update_space(self, old_space):
-        return Space((1, 84, 84), old_space.low, old_space.high, old_space.dtype)
+        return Space(
+            (1, 84, 84), old_space.low, old_space.high, old_space.dtype
+        )
 
     def update_obs(self, obs):
         if obs.dim() == 3:
-            obs = cv2.resize(obs.squeeze(0).numpy(), (84, 84), interpolation=cv2.INTER_AREA)
+            obs = cv2.resize(
+                obs.squeeze(0).numpy(), (84, 84), interpolation=cv2.INTER_AREA
+            )
             return torch.from_numpy(obs).unsqueeze(0)
             # return upsample(obs.unsqueeze(0), (84, 84), mode='bilinear').squeeze(0)
         elif obs.dim() == 4:
             return upsample(obs, (84, 84), mode='bilinear')
         else:
-            raise ValueError('cant resize a rank' + str(obs.dim()) + ' tensor to 84x84')
+            raise ValueError(
+                'cant resize a rank' + str(obs.dim()) + ' tensor to 84x84'
+            )
 
 
 class Divide255(BaseOp):
@@ -120,13 +133,8 @@ class FrameStack(BaseOp):
         self.frames = deque([], maxlen=nb_frame)
 
     def update_space(self, old_space):
-        new_shape = (old_space.shape[0] * self.nb_frame,) + old_space.shape[1:]
-        return Space(
-            new_shape,
-            old_space.low,
-            old_space.high,
-            old_space.dtype
-        )
+        new_shape = (old_space.shape[0] * self.nb_frame, ) + old_space.shape[1:]
+        return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
 
     def update_obs(self, obs):
         while len(self.frames) < self.nb_frame:
@@ -149,7 +157,10 @@ class FlattenSpace(BaseOp):
         super(FlattenSpace, self).__init__(filter_names)
 
     def update_space(self, old_space):
-        return Space((reduce(lambda prev, cur: prev * cur, old_space.shape),), old_space.low, old_space.high, old_space.dtype)
+        return Space(
+            (reduce(lambda prev, cur: prev * cur, old_space.shape), ),
+            old_space.low, old_space.high, old_space.dtype
+        )
 
     def update_obs(self, obs):
         return obs.view(-1)
@@ -160,7 +171,9 @@ class FromNumpy(BaseOp):
         super().__init__(filter_names)
 
     def update_space(self, old_space):
-        return Space(old_space.shape, old_space.low, old_space.high, old_space.dtype)
+        return Space(
+            old_space.shape, old_space.low, old_space.high, old_space.dtype
+        )
 
     def update_obs(self, obs):
         return torch.from_numpy(obs)

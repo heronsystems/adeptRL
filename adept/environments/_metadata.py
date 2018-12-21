@@ -23,6 +23,7 @@ class EnvMetaData(HasEnvMetaData):
     Networks need an action_space and observation_space
     Agents need an gpu_preprocessor, engine, and action_space
     """
+
     def __init__(self, env_plugin_class, args):
         dummy_env = env_plugin_class.from_args(args, 0)
         dummy_env.close()

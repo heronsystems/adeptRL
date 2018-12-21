@@ -38,8 +38,12 @@ class RolloutCache(dict, BaseExperience):
             self[k].append(v)
 
     def write_env(self, obs, rewards, terminals, infos):
-        rewards = torch.tensor([self.reward_normalizer(reward) for reward in rewards]).to(self.device)
-        terminals = (1. - torch.from_numpy(np.array(terminals, dtype=np.float32))).to(self.device)
+        rewards = torch.tensor(
+            [self.reward_normalizer(reward) for reward in rewards]
+        ).to(self.device)
+        terminals = (
+            1. - torch.from_numpy(np.array(terminals, dtype=np.float32))
+        ).to(self.device)
         self['states'].append(obs)
         self['rewards'].append(rewards)
         # TODO: rename as terminals_mask or don't mask here

@@ -18,7 +18,4 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from .actor_critic import ActorCritic
 from .impala import ActorCriticVtrace
 
-AGENTS = {
-    'ActorCritic': ActorCritic,
-    'ActorCriticVtrace': ActorCriticVtrace
-}
+AGENTS = {'ActorCritic': ActorCritic, 'ActorCriticVtrace': ActorCriticVtrace}

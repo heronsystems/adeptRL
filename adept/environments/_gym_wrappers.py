@@ -25,6 +25,7 @@ class NoopResetEnv(gym.Wrapper):
     The MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
+
     def __init__(self, env, noop_max=30):
         """Sample initial states by taking random number of no-ops on reset.
         No-op is assumed to be action 0.
@@ -60,6 +61,7 @@ class FireResetEnv(gym.Wrapper):
     The MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
+
     def __init__(self, env):
         """Take action on reset for environments that are fixed until firing."""
         gym.Wrapper.__init__(self, env)
@@ -86,6 +88,7 @@ class EpisodicLifeEnv(gym.Wrapper):
     The MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
+
     def __init__(self, env):
         """Make end-of-life == end-of-episode, but only reset on true game over.
         Done by DeepMind for the DQN and co. since it helps value estimation.
@@ -128,12 +131,14 @@ class MaxAndSkipEnv(gym.Wrapper):
     The MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
+
     def __init__(self, env, skip=4):
         """Return only every `skip`-th frame"""
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
         self._obs_buffer = np.zeros(
-            (2, ) + env.observation_space.shape, dtype=np.uint8)
+            (2, ) + env.observation_space.shape, dtype=np.uint8
+        )
         self._skip = skip
 
     def step(self, action):
@@ -142,8 +147,10 @@ class MaxAndSkipEnv(gym.Wrapper):
         done = None
         for i in range(self._skip):
             obs, reward, done, info = self.env.step(action)
-            if i == self._skip - 2: self._obs_buffer[0] = obs
-            if i == self._skip - 1: self._obs_buffer[1] = obs
+            if i == self._skip - 2:
+                self._obs_buffer[0] = obs
+            if i == self._skip - 1:
+                self._obs_buffer[1] = obs
             total_reward += reward
             if done:
                 break

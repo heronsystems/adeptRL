@@ -40,17 +40,14 @@ def main(args, env_registry=EnvPluginRegistry()):
     assert engine == Engines.GYM, "render_atari.py is only for Atari."
 
     train_args.nb_env = 1
-    env = SimpleEnvManager.from_args(train_args,
-                                     seed=args.seed,
-                                     nb_env=1,
-                                     registry=env_registry)
+    env = SimpleEnvManager.from_args(
+        train_args, seed=args.seed, nb_env=1, registry=env_registry
+    )
 
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
     network = make_network(
-        env.observation_space,
-        network_head_shapes,
-        train_args
+        env.observation_space, network_head_shapes, train_args
     )
     network.load_state_dict(
         torch.load(
@@ -61,7 +58,10 @@ def main(args, env_registry=EnvPluginRegistry()):
     # create an agent (add act_eval method)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, train_args)
+    agent = make_agent(
+        network, device, env.gpu_preprocessor, env.engine, env.action_space,
+        train_args
+    )
 
     # create a rendering container
     renderer = AtariRenderer(agent, device, env)
@@ -84,12 +84,16 @@ if __name__ == '__main__':
         help='path to args file (.../logs/<env-id>/<log-id>/args.json)'
     )
     parser.add_argument(
-        '-s', '--seed', type=int, default=32, metavar='S',
+        '-s',
+        '--seed',
+        type=int,
+        default=32,
+        metavar='S',
         help='random seed (default: 32)'
     )
+    parser.add_argument('--render')
     parser.add_argument(
-        '--render'
+        '--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)'
     )
-    parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)')
     args = parser.parse_args()
     main(args)

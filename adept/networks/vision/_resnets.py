@@ -19,13 +19,22 @@ from torch import nn
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+    return nn.Conv2d(
+        in_planes,
+        out_planes,
+        kernel_size=3,
+        stride=stride,
+        padding=1,
+        bias=False
+    )
 
 
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, nb_input_channel, nb_output_channel, stride=1, downsample=None):
+    def __init__(
+        self, nb_input_channel, nb_output_channel, stride=1, downsample=None
+    ):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(nb_input_channel, nb_output_channel, stride)
         self.bn1 = nn.BatchNorm2d(nb_output_channel)
@@ -57,7 +66,9 @@ class BasicBlock(nn.Module):
 class BasicBlockV2(nn.Module):
     expansion = 1
 
-    def __init__(self, nb_input_channel, nb_output_channel, stride=1, downsample=None):
+    def __init__(
+        self, nb_input_channel, nb_output_channel, stride=1, downsample=None
+    ):
         super(BasicBlockV2, self).__init__()
         self.relu = nn.ReLU()
 
@@ -92,15 +103,31 @@ class BasicBlockV2(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, nb_in_channel, nb_out_channel, stride=1, downsample=None):
+    def __init__(
+        self, nb_in_channel, nb_out_channel, stride=1, downsample=None
+    ):
         super(Bottleneck, self).__init__()
         self.relu = nn.ReLU()
 
-        self.conv1 = nn.Conv2d(nb_in_channel, nb_out_channel, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            nb_in_channel, nb_out_channel, kernel_size=1, bias=False
+        )
         self.bn1 = nn.BatchNorm2d(nb_out_channel)
-        self.conv2 = nn.Conv2d(nb_out_channel, nb_out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            nb_out_channel,
+            nb_out_channel,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            bias=False
+        )
         self.bn2 = nn.BatchNorm2d(nb_out_channel)
-        self.conv3 = nn.Conv2d(nb_out_channel, nb_out_channel * self.expansion, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            nb_out_channel,
+            nb_out_channel * self.expansion,
+            kernel_size=1,
+            bias=False
+        )
         self.bn3 = nn.BatchNorm2d(nb_out_channel * self.expansion)
 
         self.downsample = downsample
@@ -132,18 +159,34 @@ class Bottleneck(nn.Module):
 class BottleneckV2(nn.Module):
     expansion = 4
 
-    def __init__(self, nb_in_channel, nb_out_channel, stride=1, downsample=None):
+    def __init__(
+        self, nb_in_channel, nb_out_channel, stride=1, downsample=None
+    ):
         super(BottleneckV2, self).__init__()
         self.relu = nn.ReLU()
 
         self.bn1 = nn.BatchNorm2d(nb_in_channel)
-        self.conv1 = nn.Conv2d(nb_in_channel, nb_out_channel, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            nb_in_channel, nb_out_channel, kernel_size=1, bias=False
+        )
 
         self.bn2 = nn.BatchNorm2d(nb_out_channel)
-        self.conv2 = nn.Conv2d(nb_out_channel, nb_out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            nb_out_channel,
+            nb_out_channel,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            bias=False
+        )
 
         self.bn3 = nn.BatchNorm2d(nb_out_channel)
-        self.conv3 = nn.Conv2d(nb_out_channel, nb_out_channel * self.expansion, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            nb_out_channel,
+            nb_out_channel * self.expansion,
+            kernel_size=1,
+            bias=False
+        )
 
         self.downsample = downsample
         self.stride = stride
@@ -184,7 +227,9 @@ class ResNet(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.kaiming_normal_(
+                    m.weight, mode='fan_out', nonlinearity='relu'
+                )
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -193,8 +238,13 @@ class ResNet(nn.Module):
         downsample = None
         if stride != 1 or self.nb_input_channel != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.nb_input_channel, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(
+                    self.nb_input_channel,
+                    planes * block.expansion,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False
+                ),
                 nn.BatchNorm2d(planes * block.expansion),
             )
 

@@ -18,7 +18,6 @@ from ._base import BaseExperience
 
 
 class ExperienceReplay(BaseExperience):
-
     def write_forward(self, items):
         pass
 
@@ -33,7 +32,6 @@ class ExperienceReplay(BaseExperience):
 
 
 class PrioritizedExperienceReplay(BaseExperience):
-
     def write_forward(self, items):
         pass
 

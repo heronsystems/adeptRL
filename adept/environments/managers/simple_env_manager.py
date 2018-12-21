@@ -24,6 +24,7 @@ class SimpleEnvManager(AdeptEnvManager):
     Manages multiple environments in the same process. This is slower than a
     SubProcEnvManager but allows debugging.
     """
+
     def __init__(self, env_fns, engine):
         super(SimpleEnvManager, self).__init__(env_fns, engine)
         self.envs = [fn() for fn in env_fns]
@@ -63,7 +64,8 @@ class SimpleEnvManager(AdeptEnvManager):
     def step_wait(self):
         obs = []
         for e in range(self.nb_env):
-            ob, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[e].step(self.actions)
+            ob, self.buf_rews[e], self.buf_dones[e], self.buf_infos[
+                e] = self.envs[e].step(self.actions)
             if self.buf_dones[e]:
                 ob = self.envs[e].reset()
             obs.append(ob)

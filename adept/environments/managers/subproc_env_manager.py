@@ -32,6 +32,7 @@ class SubProcEnvManager(AdeptEnvManager):
     MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
+
     def __init__(self, env_fns, engine):
         super(SubProcEnvManager, self).__init__(env_fns, engine)
         # TODO: sharing cuda tensors requires spawn or forkserver but these do not work with mpi
@@ -40,13 +41,15 @@ class SubProcEnvManager(AdeptEnvManager):
         self.waiting = False
         self.closed = False
 
-        self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(self.nb_env)])
+        self.remotes, self.work_remotes = zip(
+            *[mp.Pipe() for _ in range(self.nb_env)]
+        )
         self.ps = [
             mp.Process(
                 target=worker,
                 args=(work_remote, remote, CloudpickleWrapper(env_fn))
-            ) for (work_remote, remote, env_fn) in zip(self.work_remotes,
-                                                       self.remotes, env_fns)
+            ) for (work_remote, remote,
+                   env_fn) in zip(self.work_remotes, self.remotes, env_fns)
         ]
         for p in self.ps:
             p.daemon = True
@@ -96,7 +99,10 @@ class SubProcEnvManager(AdeptEnvManager):
         self.waiting = False
         obs, rews, dones, infos = zip(*results)
         obs = listd_to_dlist(obs)
-        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
+        shared_mems = {
+            k: torch.stack(v)
+            for k, v in self.shared_memories.items()
+        }
         obs = {**obs, **shared_mems}
         return obs, rews, dones, infos
 
@@ -104,7 +110,10 @@ class SubProcEnvManager(AdeptEnvManager):
         for remote in self.remotes:
             remote.send(('reset', None))
         obs = listd_to_dlist([remote.recv() for remote in self.remotes])
-        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
+        shared_mems = {
+            k: torch.stack(v)
+            for k, v in self.shared_memories.items()
+        }
         obs = {**obs, **shared_mems}
         return obs
 
@@ -203,6 +212,7 @@ class CloudpickleWrapper(object):
     MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
+
     def __init__(self, x):
         self.x = x
 

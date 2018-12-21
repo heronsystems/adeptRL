@@ -29,7 +29,9 @@ class LSTMBody(NetworkBody):
         self._nb_output_channel = nb_out_channel
 
         if normalize:
-            self.lstm = LSTMCellLayerNorm(nb_input_channel, self._nb_output_channel)
+            self.lstm = LSTMCellLayerNorm(
+                nb_input_channel, self._nb_output_channel
+            )
         else:
             self.lstm = LSTMCell(nb_input_channel, self._nb_output_channel)
             self.lstm.bias_ih.data.fill_(0)
@@ -48,10 +50,12 @@ class LSTMBody(NetworkBody):
         cxs = torch.stack(internals['cx'])
         hxs, cxs = self.lstm(xs, (hxs, cxs))
 
-        return (hxs, {
-            'hx': list(torch.unbind(hxs, dim=0)),
-            'cx': list(torch.unbind(cxs, dim=0))
-        })
+        return (
+            hxs, {
+                'hx': list(torch.unbind(hxs, dim=0)),
+                'cx': list(torch.unbind(cxs, dim=0))
+            }
+        )
 
     def new_internals(self, device):
         return {
@@ -66,7 +70,9 @@ class LinearBody(NetworkBody):
         self._nb_output_channel = nb_output_channel
         bias = not normalize
 
-        self.linear = Linear(nb_input_channel, self._nb_output_channel, bias=bias)
+        self.linear = Linear(
+            nb_input_channel, self._nb_output_channel, bias=bias
+        )
         if normalize:
             self.bn_linear = BatchNorm1d(nb_output_channel)
         else:
@@ -95,7 +101,9 @@ class Mnih2013Linear(NetworkBody):
         self._nb_output_channel = 256
         bias = not normalize
 
-        self.linear = Linear(nb_input_channel, self._nb_output_channel, bias=bias)
+        self.linear = Linear(
+            nb_input_channel, self._nb_output_channel, bias=bias
+        )
         if normalize:
             self.bn_linear = BatchNorm1d(self._nb_output_channel)
         else:
@@ -125,11 +133,15 @@ class Mnih2013LSTM(NetworkBody):
         self.linear = Linear(2592, self._nb_output_channel)
 
         if normalize:
-            self.lstm = LSTMCellLayerNorm(self._nb_output_channel, self._nb_output_channel)  # hack for experiment
+            self.lstm = LSTMCellLayerNorm(
+                self._nb_output_channel, self._nb_output_channel
+            )  # hack for experiment
             self.bn_linear = BatchNorm1d(self._nb_output_channel)
         else:
             self.bn_linear = Identity()
-            self.lstm = LSTMCell(self._nb_output_channel, self._nb_output_channel)
+            self.lstm = LSTMCell(
+                self._nb_output_channel, self._nb_output_channel
+            )
             self.lstm.bias_ih.data.fill_(0)
             self.lstm.bias_hh.data.fill_(0)
 
@@ -147,10 +159,12 @@ class Mnih2013LSTM(NetworkBody):
         cxs = torch.stack(internals['cx'])
         hxs, cxs = self.lstm(xs, (hxs, cxs))
 
-        return (hxs, {
-            'hx': list(torch.unbind(hxs, dim=0)),
-            'cx': list(torch.unbind(cxs, dim=0))
-        })
+        return (
+            hxs, {
+                'hx': list(torch.unbind(hxs, dim=0)),
+                'cx': list(torch.unbind(cxs, dim=0))
+            }
+        )
 
     def new_internals(self, device):
         return {

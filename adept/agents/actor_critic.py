@@ -28,20 +28,20 @@ from ._base import Agent
 
 class ActorCritic(Agent):
     def __init__(
-            self,
-            network,
-            device,
-            reward_normalizer,
-            gpu_preprocessor,
-            engine,
-            action_space,
-            nb_env,
-            nb_rollout,
-            discount,
-            gae,
-            tau,
-            normalize_advantage,
-            entropy_weight=0.01
+        self,
+        network,
+        device,
+        reward_normalizer,
+        gpu_preprocessor,
+        engine,
+        action_space,
+        nb_env,
+        nb_rollout,
+        discount,
+        gae,
+        tau,
+        normalize_advantage,
+        entropy_weight=0.01
     ):
         self.discount, self.gae, self.tau = discount, gae, tau
         self.normalize_advantage = normalize_advantage
@@ -50,8 +50,13 @@ class ActorCritic(Agent):
         self.engine = engine
 
         self._network = network.to(device)
-        self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['values', 'log_probs', 'entropies'])
-        self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
+        self._exp_cache = RolloutCache(
+            nb_rollout, device, reward_normalizer,
+            ['values', 'log_probs', 'entropies']
+        )
+        self._internals = listd_to_dlist(
+            [self.network.new_internals(device) for _ in range(nb_env)]
+        )
         self._device = device
         self.action_space = action_space
         self._action_keys = list(sorted(action_space.entries_by_name.keys()))
@@ -61,10 +66,15 @@ class ActorCritic(Agent):
             self._func_id_to_headnames = SC2ActionLookup()
 
     @classmethod
-    def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
+    def from_args(
+        cls, network, device, reward_normalizer, gpu_preprocessor, engine,
+        action_space, args
+    ):
         return cls(
-            network, device, reward_normalizer, gpu_preprocessor, engine, action_space,
-            args.nb_env, args.exp_length, args.discount, args.generalized_advantage_estimation, args.tau, args.normalize_advantage
+            network, device, reward_normalizer, gpu_preprocessor, engine,
+            action_space, args.nb_env, args.exp_length, args.discount,
+            args.generalized_advantage_estimation, args.tau,
+            args.normalize_advantage
         )
 
     @classmethod
@@ -83,7 +93,8 @@ class ActorCritic(Agent):
             nargs='?',
             const=True,
             default=True,
-            help='Use generalized advantage estimation for the policy loss. (default: True)'
+            help=
+            'Use generalized advantage estimation for the policy loss. (default: True)'
         )
         parser.add_argument(
             '-at',
@@ -104,9 +115,9 @@ class ActorCritic(Agent):
             nargs='?',
             const=True,
             default=False,
-            help='Normalize the advantage when calculating policy loss. (default: False)'
+            help=
+            'Normalize the advantage when calculating policy loss. (default: False)'
         )
-
 
     @property
     def exp_cache(self):
@@ -146,7 +157,9 @@ class ActorCritic(Agent):
             raise NotImplementedError()
 
     def _act_gym(self, obs):
-        predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        predictions, internals = self.network(
+            self.gpu_preprocessor(obs, self.device), self.internals
+        )
         values = predictions['critic'].squeeze(1)
 
         # reduce feature dim, build action_key dim
@@ -171,15 +184,15 @@ class ActorCritic(Agent):
         entropies = torch.cat(entropies, dim=1)
 
         self.exp_cache.write_forward(
-            values=values,
-            log_probs=log_probs,
-            entropies=entropies
+            values=values, log_probs=log_probs, entropies=entropies
         )
         self.internals = internals
         return actions
 
     def _act_sc2(self, obs):
-        predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+        predictions, internals = self.network(
+            self.gpu_preprocessor(obs, self.device), self.internals
+        )
         values = predictions['critic'].squeeze(1)
 
         # reduce feature dim, build action_key dim
@@ -222,14 +235,14 @@ class ActorCritic(Agent):
             for headname in self._func_id_to_headnames[func_id].keys():
                 head_masks[headname][batch_idx] = 1.
 
-        head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+        head_masks = torch.cat(
+            [head_mask for head_mask in head_masks.values()], dim=1
+        )
         log_probs = log_probs * head_masks
         entropies = entropies * head_masks
 
         self.exp_cache.write_forward(
-            values=values,
-            log_probs=log_probs,
-            entropies=entropies
+            values=values, log_probs=log_probs, entropies=entropies
         )
         self.internals = internals
         return actions
@@ -246,7 +259,9 @@ class ActorCritic(Agent):
 
     def _act_eval_gym(self, obs):
         with torch.no_grad():
-            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+            predictions, internals = self.network(
+                self.gpu_preprocessor(obs, self.device), self.internals
+            )
 
             # reduce feature dim, build action_key dim
             actions = OrderedDict()
@@ -261,7 +276,9 @@ class ActorCritic(Agent):
 
     def _act_eval_sc2(self, obs):
         with torch.no_grad():
-            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+            predictions, internals = self.network(
+                self.gpu_preprocessor(obs, self.device), self.internals
+            )
 
             # reduce feature dim, build action_key dim
             actions = OrderedDict()
@@ -307,20 +324,32 @@ class ActorCritic(Agent):
             log_probs = rollouts.log_probs[i]
             entropies = rollouts.entropies[i]
 
-            policy_loss = policy_loss - (log_probs * batch_advantages[i].unsqueeze(1).data).sum(1)
-            entropy_loss = entropy_loss - (self.entropy_weight * entropies).sum(1)
+            policy_loss = policy_loss - (
+                log_probs * batch_advantages[i].unsqueeze(1).data
+            ).sum(1)
+            entropy_loss = entropy_loss - (self.entropy_weight *
+                                           entropies).sum(1)
 
         batch_size = policy_loss.shape[0]
         nb_action = log_probs.shape[1]
 
-        policy_loss = policy_loss.sum(0) / (batch_size * rollout_len * nb_action)
-        entropy_loss = entropy_loss.sum(0) / (batch_size * rollout_len * nb_action)
+        policy_loss = policy_loss.sum(0
+                                     ) / (batch_size * rollout_len * nb_action)
+        entropy_loss = entropy_loss.sum(0) / (
+            batch_size * rollout_len * nb_action
+        )
 
-        losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
+        losses = {
+            'value_loss': value_loss,
+            'policy_loss': policy_loss,
+            'entropy_loss': entropy_loss
+        }
         metrics = {}
         return losses, metrics
 
-    def _compute_returns_advantages(self, values, estimated_value, rewards, terminals):
+    def _compute_returns_advantages(
+        self, values, estimated_value, rewards, terminals
+    ):
         if self.gae:
             gae = 0.
             gae_advantages = []
@@ -340,13 +369,16 @@ class ActorCritic(Agent):
 
             # Generalized Advantage Estimation
             if self.gae:
-                delta_t = reward + self.discount * next_value * terminal - values[i].data
+                delta_t = reward + self.discount * next_value * terminal - values[
+                    i].data
                 gae = gae * self.discount * self.tau * terminal + delta_t
                 gae_advantages.append(gae)
                 next_value = values[i].data
 
         # reverse lists
-        nstep_target_returns = torch.stack(list(reversed(nstep_target_returns))).data
+        nstep_target_returns = torch.stack(
+            list(reversed(nstep_target_returns))
+        ).data
 
         if self.gae:
             advantages = torch.stack(list(reversed(gae_advantages))).data

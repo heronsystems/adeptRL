@@ -23,12 +23,7 @@ Space = namedtuple('Space', ['shape', 'low', 'high', 'dtype'])
 class Spaces:
     def __init__(self, entries_by_name):
         self.entries_by_name = entries_by_name
-        self.names_by_rank = {
-            1: [],
-            2: [],
-            3: [],
-            4: []
-        }
+        self.names_by_rank = {1: [], 2: [], 3: [], 4: []}
         for name, entry in entries_by_name.items():
             self.names_by_rank[len(entry.shape)].append(name)
 
@@ -46,8 +41,16 @@ class Spaces:
         elif isinstance(space, spaces.MultiBinary):
             return {'MultiBinary': Space([space.n], 0, 1, space.dtype)}
         elif isinstance(space, spaces.Box):
-            return {'Box': Space(space.shape, 0., 255., space.dtype)}  # TODO, is it okay to hardcode 0, 255
+            return {
+                'Box': Space(space.shape, 0., 255., space.dtype)
+            }  # TODO, is it okay to hardcode 0, 255
         elif isinstance(space, spaces.Dict):
-            return {name: list(Spaces._detect_gym_spaces(s).values())[0] for name, s in space.spaces.items()}
+            return {
+                name: list(Spaces._detect_gym_spaces(s).values())[0]
+                for name, s in space.spaces.items()
+            }
         elif isinstance(space, spaces.Tuple):
-            return {idx: list(Spaces._detect_gym_spaces(s).values())[0] for idx, s in enumerate(space.spaces)}
+            return {
+                idx: list(Spaces._detect_gym_spaces(s).values())[0]
+                for idx, s in enumerate(space.spaces)
+            }

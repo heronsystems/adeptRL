@@ -21,8 +21,7 @@ from gym import spaces
 from adept.environments._spaces import Spaces
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import (
-    CastToFloat, GrayScaleAndMoveChannel,
-    ResizeTo84x84, Divide255, FrameStack
+    CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack
 )
 from adept.environments._env_plugin import EnvPlugin
 from ._gym_wrappers import (
@@ -37,19 +36,19 @@ class AdeptGymEnv(EnvPlugin):
         cpu_ops = [GrayScaleAndMoveChannel(), ResizeTo84x84()]
         if do_frame_stack:
             cpu_ops.append(FrameStack(4))
-        cpu_preprocessor = ObsPreprocessor(cpu_ops, Spaces.from_gym(
-            env.observation_space))
+        cpu_preprocessor = ObsPreprocessor(
+            cpu_ops, Spaces.from_gym(env.observation_space)
+        )
 
         # GPU Ops
         gpu_preprocessor = ObsPreprocessor(
-            [CastToFloat(), Divide255()],
-            cpu_preprocessor.observation_space
+            [CastToFloat(), Divide255()], cpu_preprocessor.observation_space
         )
 
         action_space = Spaces.from_gym(env.action_space)
 
-        super(AdeptGymEnv, self).__init__(action_space, cpu_preprocessor,
-                                          gpu_preprocessor)
+        super(AdeptGymEnv,
+              self).__init__(action_space, cpu_preprocessor, gpu_preprocessor)
 
         self.gym_env = env
         self._gym_obs_space = env.observation_space
@@ -98,8 +97,8 @@ class AdeptGymEnv(EnvPlugin):
             longs = torch.from_numpy(observation)
             if longs.dim() > 2:
                 raise ValueError(
-                    'observation is not discrete, too many dims: '
-                    + str(longs.dim())
+                    'observation is not discrete, too many dims: ' +
+                    str(longs.dim())
                 )
             elif len(longs.dim()) == 1:
                 longs = longs.unsqueeze(1)
@@ -108,16 +107,24 @@ class AdeptGymEnv(EnvPlugin):
             return self.cpu_preprocessor({'Discrete': one_hot})
         elif isinstance(space, spaces.MultiBinary):
             return self.cpu_preprocessor(
-                {'MultiBinary': torch.from_numpy(observation)}
+                {
+                    'MultiBinary': torch.from_numpy(observation)
+                }
             )
         elif isinstance(space, spaces.Dict):
-            return self.cpu_preprocessor({
-                name: torch.from_numpy(obs) for name, obs in observation.items()
-            })
+            return self.cpu_preprocessor(
+                {
+                    name: torch.from_numpy(obs)
+                    for name, obs in observation.items()
+                }
+            )
         elif isinstance(space, spaces.Tuple):
-            return self.cpu_preprocessor({
-                idx: torch.from_numpy(obs) for idx, obs in enumerate(observation)
-            })
+            return self.cpu_preprocessor(
+                {
+                    idx: torch.from_numpy(obs)
+                    for idx, obs in enumerate(observation)
+                }
+            )
         else:
             raise NotImplementedError
 

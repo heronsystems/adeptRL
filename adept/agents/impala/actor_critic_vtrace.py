@@ -27,8 +27,21 @@ from .._base import Agent
 
 
 class ActorCriticVtrace(Agent):
-    def __init__(self, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, nb_env, nb_rollout, discount,
-                 minimum_importance_value=1.0, minimum_importance_policy=1.0, entropy_weight=0.01):
+    def __init__(
+        self,
+        network,
+        device,
+        reward_normalizer,
+        gpu_preprocessor,
+        engine,
+        action_space,
+        nb_env,
+        nb_rollout,
+        discount,
+        minimum_importance_value=1.0,
+        minimum_importance_policy=1.0,
+        entropy_weight=0.01
+    ):
         self.discount = discount
         self.gpu_preprocessor = gpu_preprocessor
         self.engine = engine
@@ -37,8 +50,13 @@ class ActorCriticVtrace(Agent):
         self.entropy_weight = entropy_weight
 
         self._network = network.to(device)
-        self._exp_cache = RolloutCache(nb_rollout, device, reward_normalizer, ['log_prob_of_action', 'sampled_action'])
-        self._internals = listd_to_dlist([self.network.new_internals(device) for _ in range(nb_env)])
+        self._exp_cache = RolloutCache(
+            nb_rollout, device, reward_normalizer,
+            ['log_prob_of_action', 'sampled_action']
+        )
+        self._internals = listd_to_dlist(
+            [self.network.new_internals(device) for _ in range(nb_env)]
+        )
         self._device = device
         self.action_space = action_space
         self._action_keys = list(sorted(action_space.entries_by_name.keys()))
@@ -48,10 +66,13 @@ class ActorCriticVtrace(Agent):
             self._func_id_to_headnames = SC2ActionLookup()
 
     @classmethod
-    def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
+    def from_args(
+        cls, network, device, reward_normalizer, gpu_preprocessor, engine,
+        action_space, args
+    ):
         return cls(
-            network, device, reward_normalizer, gpu_preprocessor, engine, action_space,
-            args.nb_env, args.exp_length, args.discount
+            network, device, reward_normalizer, gpu_preprocessor, engine,
+            action_space, args.nb_env, args.exp_length, args.discount
         )
 
     @classmethod
@@ -99,7 +120,7 @@ class ActorCriticVtrace(Agent):
         return dlist_to_listd(pathway_dict)
 
     def act(self, obs):
-        # TODO: set use_local_buffers flag in the agent 
+        # TODO: set use_local_buffers flag in the agent
         # The container currently sets network.eval() if batch norm modules are requested
         # to use the learned parameters instead of per batch stats
         # self.network.train()
@@ -117,7 +138,9 @@ class ActorCriticVtrace(Agent):
             keep track of it's internals. IMPALA only needs log_probs(a) and the sampled action from the worker
         """
         with torch.no_grad():
-            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+            predictions, internals = self.network(
+                self.gpu_preprocessor(obs, self.device), self.internals
+            )
 
             # reduce feature dim, build action_key dim
             actions = OrderedDict()
@@ -140,8 +163,7 @@ class ActorCriticVtrace(Agent):
             compressed_actions = torch.cat(compressed_actions, dim=1)
 
             self.exp_cache.write_forward(
-                log_prob_of_action=log_probs,
-                sampled_action=compressed_actions
+                log_prob_of_action=log_probs, sampled_action=compressed_actions
             )
             self.internals = internals
             return actions
@@ -152,7 +174,9 @@ class ActorCriticVtrace(Agent):
             keep track of it's internals. IMPALA only needs log_probs(a) and the sampled action from the worker
         """
         with torch.no_grad():
-            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+            predictions, internals = self.network(
+                self.gpu_preprocessor(obs, self.device), self.internals
+            )
 
             # reduce feature dim, build action_key dim
             actions = OrderedDict()
@@ -181,19 +205,24 @@ class ActorCriticVtrace(Agent):
             log_probs = torch.cat(log_probs, dim=1)
             compressed_actions = torch.cat(compressed_actions, dim=1)
 
-            self.__mask_sc2_actions_(obs['available_actions'], actions['func_id'], head_masks)
+            self.__mask_sc2_actions_(
+                obs['available_actions'], actions['func_id'], head_masks
+            )
 
-            head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+            head_masks = torch.cat(
+                [head_mask for head_mask in head_masks.values()], dim=1
+            )
             log_probs = log_probs * head_masks
 
         self.exp_cache.write_forward(
-            log_prob_of_action=log_probs,
-            sampled_action=compressed_actions
+            log_prob_of_action=log_probs, sampled_action=compressed_actions
         )
         self.internals = internals
         return actions
 
-    def __mask_sc2_actions_(self, avaiable_actions, actions_func_id, head_masks):
+    def __mask_sc2_actions_(
+        self, avaiable_actions, actions_func_id, head_masks
+    ):
         # Mask invalid actions with NOOP and fill masks with ones
         for batch_idx, action in enumerate(actions_func_id):
             # convert unavailable actions to NOOP
@@ -218,7 +247,9 @@ class ActorCriticVtrace(Agent):
 
     def _act_eval_gym(self, obs):
         with torch.no_grad():
-            predictions, internals = self.network(self.gpu_preprocessor(obs, self.device), self.internals)
+            predictions, internals = self.network(
+                self.gpu_preprocessor(obs, self.device), self.internals
+            )
 
             # reduce feature dim, build action_key dim
             actions = OrderedDict()
@@ -234,7 +265,9 @@ class ActorCriticVtrace(Agent):
     def _act_eval_sc2(self):
         raise NotImplementedError()
 
-    def act_on_host(self, obs, next_obs, terminal_masks, sampled_actions, internals):
+    def act_on_host(
+        self, obs, next_obs, terminal_masks, sampled_actions, internals
+    ):
         """
             This is the method to recompute the forward pass on the host, it must return log_probs, values and entropies
             Obs, sampled_actions, terminal_masks here are [seq, batch], internals must be reset if terminal
@@ -253,15 +286,23 @@ class ActorCriticVtrace(Agent):
             if isinstance(self.network, ModularNetwork):
                 pathway_dict = self.gpu_preprocessor(obs, self.device)
                 # flatten obs
-                flat_obs = {k: v.view(-1, *v.shape[2:]) for k, v in pathway_dict.items()}
+                flat_obs = {
+                    k: v.view(-1, *v.shape[2:])
+                    for k, v in pathway_dict.items()
+                }
                 embeddings = self.network.trunk.forward(flat_obs)
                 # add back in seq dim
-                seq_embeddings = embeddings.view(seq_len, batch_size, embeddings.shape[-1])
+                seq_embeddings = embeddings.view(
+                    seq_len, batch_size, embeddings.shape[-1]
+                )
 
                 def get_results(seq_ind, internals):
                     embedding = seq_embeddings[seq_ind]
-                    pre_result, internals = self.network.body.forward(embedding, internals)
+                    pre_result, internals = self.network.body.forward(
+                        embedding, internals
+                    )
                     return self.network.head.forward(pre_result, internals)
+
                 return get_results
             else:
                 obs_on_device = self.seq_obs_to_pathways(obs, self.device)
@@ -269,13 +310,16 @@ class ActorCriticVtrace(Agent):
                 def get_results(seq_ind, internals):
                     obs_of_seq_ind = obs_on_device[seq_ind]
                     return self.network(obs_of_seq_ind, internals)
+
                 return get_results
 
         result_fn = get_results_generator()
         for seq_ind in range(terminal_masks.shape[0]):
             results, internals = result_fn(seq_ind, internals)
             logits_seq = {k: v for k, v in results.items() if k != 'critic'}
-            log_probs_action_seq, entropies_seq = self._predictions_to_logprobs_ents_host(seq_ind, obs, logits_seq, sampled_actions[seq_ind])
+            log_probs_action_seq, entropies_seq = self._predictions_to_logprobs_ents_host(
+                seq_ind, obs, logits_seq, sampled_actions[seq_ind]
+            )
             # seq lists
             values.append(results['critic'].squeeze(1))
             log_probs_of_action.append(log_probs_action_seq)
@@ -293,15 +337,25 @@ class ActorCriticVtrace(Agent):
             results, _ = self.network(next_obs_on_device, internals)
             last_values = results['critic'].squeeze(1)
 
-        return torch.stack(log_probs_of_action), torch.stack(values), last_values, torch.stack(entropies)
+        return torch.stack(log_probs_of_action), torch.stack(
+            values
+        ), last_values, torch.stack(entropies)
 
-    def _predictions_to_logprobs_ents_host(self, seq_ind, obs, predictions, actions_taken):
+    def _predictions_to_logprobs_ents_host(
+        self, seq_ind, obs, predictions, actions_taken
+    ):
         if self.engine == Engines.GYM:
-            return self.__predictions_to_logprobs_ents_host_gym(predictions, actions_taken)
+            return self.__predictions_to_logprobs_ents_host_gym(
+                predictions, actions_taken
+            )
         if self.engine == Engines.SC2:
-            return self.__predictions_to_logprobs_ents_host_sc2(seq_ind, obs, predictions, actions_taken)
+            return self.__predictions_to_logprobs_ents_host_sc2(
+                seq_ind, obs, predictions, actions_taken
+            )
 
-    def __predictions_to_logprobs_ents_host_gym(self, predictions, actions_taken):
+    def __predictions_to_logprobs_ents_host_gym(
+        self, predictions, actions_taken
+    ):
         log_probs = []
         entropies = []
         # TODO support multi-dimensional action spaces?
@@ -310,7 +364,9 @@ class ActorCriticVtrace(Agent):
             prob = F.softmax(logit, dim=1)
             log_softmax = F.log_softmax(logit, dim=1)
             # actions taken is batch, num_actions
-            log_prob = log_softmax.gather(1, actions_taken[:, key_ind].unsqueeze(1))
+            log_prob = log_softmax.gather(
+                1, actions_taken[:, key_ind].unsqueeze(1)
+            )
             entropy = -(log_softmax * prob).sum(1, keepdim=True)
 
             log_probs.append(log_prob)
@@ -321,7 +377,9 @@ class ActorCriticVtrace(Agent):
 
         return log_probs, entropies
 
-    def __predictions_to_logprobs_ents_host_sc2(self, seq_ind, obs, predictions, actions_taken):
+    def __predictions_to_logprobs_ents_host_sc2(
+        self, seq_ind, obs, predictions, actions_taken
+    ):
         log_probs = []
         entropies = []
         head_masks = OrderedDict()
@@ -331,7 +389,9 @@ class ActorCriticVtrace(Agent):
             prob = F.softmax(logit, dim=1)
             log_softmax = F.log_softmax(logit, dim=1)
             # actions taken is batch, num_actions
-            log_prob = log_softmax.gather(1, actions_taken[:, key_ind].unsqueeze(1))
+            log_prob = log_softmax.gather(
+                1, actions_taken[:, key_ind].unsqueeze(1)
+            )
             entropy = -(log_softmax * prob).sum(1, keepdim=True)
 
             # Initialize masks
@@ -352,7 +412,9 @@ class ActorCriticVtrace(Agent):
         actions_func_id = actions_taken[:, func_id_ind].cpu().numpy()
         self.__mask_sc2_actions_(avail_actions, actions_func_id, head_masks)
 
-        head_masks = torch.cat([head_mask for head_mask in head_masks.values()], dim=1)
+        head_masks = torch.cat(
+            [head_mask for head_mask in head_masks.values()], dim=1
+        )
         log_probs = log_probs * head_masks
         entropies = entropies * head_masks
         return log_probs, entropies
@@ -369,59 +431,82 @@ class ActorCriticVtrace(Agent):
             for k, v in rollouts.items() if 'rollout_obs-' in k
         }
         next_states = {
-            k.split('-')[-1]: torch.cat(rollouts[k], 0)  # 0 dim here is batch since next obs has no seq
+            k.split('-')[-1]:
+            torch.cat(rollouts[k],
+                      0)  # 0 dim here is batch since next obs has no seq
             for k, v in rollouts.items() if 'next_obs-' in k
         }
-        behavior_log_prob_of_action = torch.cat(rollouts['log_prob_of_action'], 1).to(self.device)
-        behavior_sampled_action = torch.cat(rollouts['sampled_action'], 1).long().to(self.device)
+        behavior_log_prob_of_action = torch.cat(
+            rollouts['log_prob_of_action'], 1
+        ).to(self.device)
+        behavior_sampled_action = torch.cat(rollouts['sampled_action'],
+                                            1).long().to(self.device)
         # internals are prefixed like internals-
         # they are a list[]
         behavior_starting_internals = {
             # list flattening https://stackoverflow.com/questions/952914/making-a-flat-list-out-of-list-of-lists-in-python
-            k.split('-')[-1]: [item.to(self.device) for sublist in v for item in sublist]
+            k.split('-')[-1]:
+            [item.to(self.device) for sublist in v for item in sublist]
             for k, v in rollouts.items() if 'internals' in k
         }
 
         # compute current policy/critic forward
-        current_log_prob_of_action, current_values, estimated_value, current_entropies = self.act_on_host(states, next_states, terminals_mask,
-                                                                                                          behavior_sampled_action,
-                                                                                                          behavior_starting_internals)
+        current_log_prob_of_action, current_values, estimated_value, current_entropies = self.act_on_host(
+            states, next_states, terminals_mask, behavior_sampled_action,
+            behavior_starting_internals
+        )
 
         # compute target for current value and advantage
         with torch.no_grad():
             # create importance sampling
             log_diff_behavior_vs_current = current_log_prob_of_action - behavior_log_prob_of_action
-            value_trace_target, pg_advantage, importance = self._vtrace_returns(log_diff_behavior_vs_current, discount_terminal_mask, rewards,
-                                                                                current_values, estimated_value, self.minimum_importance_value,
-                                                                                self.minimum_importance_policy)
+            value_trace_target, pg_advantage, importance = self._vtrace_returns(
+                log_diff_behavior_vs_current, discount_terminal_mask, rewards,
+                current_values, estimated_value, self.minimum_importance_value,
+                self.minimum_importance_policy
+            )
 
         # using torch.no_grad so detach is unnecessary
-        value_loss = 0.5 * torch.mean((value_trace_target - current_values).pow(2))
+        value_loss = 0.5 * torch.mean(
+            (value_trace_target - current_values).pow(2)
+        )
         policy_loss = torch.mean(-current_log_prob_of_action * pg_advantage)
         entropy_loss = torch.mean(-current_entropies) * self.entropy_weight
 
-        losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss': entropy_loss}
+        losses = {
+            'value_loss': value_loss,
+            'policy_loss': policy_loss,
+            'entropy_loss': entropy_loss
+        }
         metrics = {'importance': importance.mean()}
         return losses, metrics
 
     @staticmethod
-    def _vtrace_returns(log_diff_behavior_vs_current, discount_terminal_mask, rewards, values, estimated_value,
-                        minimum_importance_value, minimum_importance_policy):
+    def _vtrace_returns(
+        log_diff_behavior_vs_current, discount_terminal_mask, rewards, values,
+        estimated_value, minimum_importance_value, minimum_importance_policy
+    ):
         """
             Args:
                 discount_terminal_mask: should be shape [seq, batch] of discount * (1 - terminal)
             Returns target for current critic and advantage for policy
         """
         importance = torch.exp(log_diff_behavior_vs_current)
-        clamped_importance_value = importance.clamp(max=minimum_importance_value)
+        clamped_importance_value = importance.clamp(
+            max=minimum_importance_value
+        )
         # if multiple actions take the average, (dim 3 is seq, batch, # actions)
         if clamped_importance_value.dim() == 3:
             clamped_importance_value = clamped_importance_value.mean(-1)
 
         # create nstep vtrace return
         # first create d_tV of function 1 in the paper
-        values_t_plus_1 = torch.cat((values[1:], estimated_value.unsqueeze(0)), 0)
-        diff_value_per_step = clamped_importance_value * (rewards + discount_terminal_mask * values_t_plus_1 - values)
+        values_t_plus_1 = torch.cat(
+            (values[1:], estimated_value.unsqueeze(0)), 0
+        )
+        diff_value_per_step = clamped_importance_value * (
+            rewards + discount_terminal_mask * values_t_plus_1 - values
+        )
 
         # reverse over the values to create the summed importance weighted return
         # everything on the right side of the plus in function 1 of the paper
@@ -429,7 +514,8 @@ class ActorCriticVtrace(Agent):
         nstep_v = 0.0
         # TODO: this uses a different clamping if != 1
         for i in reversed(range(diff_value_per_step.shape[0])):
-            nstep_v = diff_value_per_step[i] + discount_terminal_mask[i] * clamped_importance_value[i] * nstep_v
+            nstep_v = diff_value_per_step[i] + discount_terminal_mask[
+                i] * clamped_importance_value[i] * nstep_v
             vs_minus_v_xs.append(nstep_v)
         # reverse to a forward in time list
         vs_minus_v_xs = torch.stack(list(reversed(vs_minus_v_xs)))
@@ -450,5 +536,3 @@ class ActorCriticVtrace(Agent):
 
         weighted_advantage = clamped_importance_pg * advantage
         return v_s, weighted_advantage, importance
-
-

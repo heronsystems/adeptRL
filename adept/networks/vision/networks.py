@@ -21,15 +21,8 @@ from torch.nn import Conv2d, BatchNorm2d, init, functional as F, Linear
 
 from adept.modules import MultiHeadSelfAttention, Identity
 from ._resnets import (
-    resnet18,
-    resnet18v2,
-    resnet34,
-    resnet34v2,
-    resnet50v2,
-    resnet101,
-    resnet101v2,
-    resnet152,
-    resnet152v2
+    resnet18, resnet18v2, resnet34, resnet34v2, resnet50v2, resnet101,
+    resnet101v2, resnet152, resnet152v2
 )
 from .._base import InputNetwork
 
@@ -38,6 +31,7 @@ class Nature(InputNetwork):
     """
     https://web.stanford.edu/class/psych209/Readings/MnihEtAlHassibis15NatureControlDeepRL.pdf
     """
+
     def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
@@ -164,19 +158,28 @@ class FourConvSpatialAttention(InputNetwork):
     """
     https://arxiv.org/pdf/1806.01830.pdf
     """
+
     def __init__(self, in_shape, nb_head, normalize):
         self._nb_output_channel = 800
         super().__init__()
         self.normalize = normalize
         bias = not normalize
-        self.conv1 = Conv2d(in_shape[0], 32, kernel_size=3, stride=2, padding=1, bias=bias)
-        self.conv2 = Conv2d(32, 32, kernel_size=3, stride=2, padding=1, bias=bias)
+        self.conv1 = Conv2d(
+            in_shape[0], 32, kernel_size=3, stride=2, padding=1, bias=bias
+        )
+        self.conv2 = Conv2d(
+            32, 32, kernel_size=3, stride=2, padding=1, bias=bias
+        )
 
         self.attention = MultiHeadSelfAttention(20 * 20, 34, 34, nb_head)
         self.mlp = Linear(34, 34)
 
-        self.conv3 = Conv2d(34, 32, kernel_size=3, stride=2, padding=1, bias=bias)
-        self.conv4 = Conv2d(32, 32, kernel_size=3, stride=2, padding=1, bias=bias)
+        self.conv3 = Conv2d(
+            34, 32, kernel_size=3, stride=2, padding=1, bias=bias
+        )
+        self.conv4 = Conv2d(
+            32, 32, kernel_size=3, stride=2, padding=1, bias=bias
+        )
 
         if normalize:
             self.bn1 = BatchNorm2d(32)
@@ -207,8 +210,14 @@ class FourConvSpatialAttention(InputNetwork):
         x = F.relu(self.bn1(self.conv1(input)))
         x = F.relu(self.bn2(self.conv2(x)))
 
-        xs_chan = torch.linspace(-1, 1, 20).view(1, 1, 1, 20).expand(input.size(0), 1, 20, 20).to(input.device)
-        ys_chan = torch.linspace(-1, 1, 20).view(1, 1, 20, 1).expand(input.size(0), 1, 20, 20).to(input.device)
+        xs_chan = torch.linspace(-1, 1,
+                                 20).view(1, 1, 1,
+                                          20).expand(input.size(0), 1, 20,
+                                                     20).to(input.device)
+        ys_chan = torch.linspace(-1, 1,
+                                 20).view(1, 1, 20,
+                                          1).expand(input.size(0), 1, 20,
+                                                    20).to(input.device)
         x = torch.cat([x, xs_chan, ys_chan], dim=1)
         h = x.size(2)
         w = x.size(3)
@@ -277,7 +286,9 @@ class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
     def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
-        self.conv1 = Conv2d(in_shape[0], 64, 7, stride=2, padding=1, bias=bias)  # 40x40
+        self.conv1 = Conv2d(
+            in_shape[0], 64, 7, stride=2, padding=1, bias=bias
+        )  # 40x40
         relu_gain = init.calculate_gain('relu')
         self.conv1.weight.data.mul_(relu_gain)
 

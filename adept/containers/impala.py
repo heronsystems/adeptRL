@@ -24,7 +24,18 @@ from collections import OrderedDict
 
 
 class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
-    def __init__(self, agent, mpi_comm, make_optimizer, summary_writer, summary_frequency, saver, save_interval, summary_steps, use_local_buffers=False):
+    def __init__(
+        self,
+        agent,
+        mpi_comm,
+        make_optimizer,
+        summary_writer,
+        summary_frequency,
+        saver,
+        save_interval,
+        summary_steps,
+        use_local_buffers=False
+    ):
         """
             use_local_buffers: bool If true does not send the network's buffers to the workers (noisy batch norm)
         """
@@ -44,12 +55,16 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         for w_ind in range(1, mpi_comm.size):
             # TODO: sanity check that all workers return the same size
             # Workers should send an ordered dict of {'name': shape, ...}
-            self.rollout_sizes = self.comm.recv(source=w_ind, tag=MpiMessages.NAMES_AND_SHAPES)
+            self.rollout_sizes = self.comm.recv(
+                source=w_ind, tag=MpiMessages.NAMES_AND_SHAPES
+            )
             assert isinstance(self.rollout_sizes, OrderedDict)
 
         # create rollout flattener/unflattener
         self.sorted_keys = list(self.rollout_sizes.keys())
-        self.rollout_flattener = ArrayFlattener([v for v in self.rollout_sizes.values()] + [(1)])  # +1 for timestep
+        self.rollout_flattener = ArrayFlattener(
+            [v for v in self.rollout_sizes.values()] + [(1)]
+        )  # +1 for timestep
 
     @property
     def agent(self):
@@ -67,7 +82,10 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
     def summary_frequency(self):
         return self._summary_frequency
 
-    def _batch_add_thread(self, listen_source, worker_wait_time, worker_timestep, max_items_in_queue):
+    def _batch_add_thread(
+        self, listen_source, worker_wait_time, worker_timestep,
+        max_items_in_queue
+    ):
         """
             A thread that listens to a mpi worker and
             appends to the shared self.recieved_rollouts list
@@ -82,7 +100,9 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         # thread loop as long as master says we're not done
         while not self._threads_should_be_done:
             # possible wait if host is slow
-            while len(self.received_rollouts) > max_items_in_queue and not self._threads_should_be_done:
+            while len(
+                self.received_rollouts
+            ) > max_items_in_queue and not self._threads_should_be_done:
                 # random wait time to ensure that threads can uniformly add when max_queue size is reached
                 how_long_to_wait = float(np.random.uniform(0.1, 1))
                 time.sleep(how_long_to_wait)
@@ -93,24 +113,36 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
                 break
 
             # setup listener for rollout, Recv is blocking but okay on thread
-            self.comm.Recv(rollout_buffer, source=listen_source, tag=MpiMessages.SEND)
+            self.comm.Recv(
+                rollout_buffer, source=listen_source, tag=MpiMessages.SEND
+            )
 
             # rollout is in buffer, copy into individual parts
-            unflattened_rollout = self.rollout_flattener.unflatten(rollout_buffer)
+            unflattened_rollout = self.rollout_flattener.unflatten(
+                rollout_buffer
+            )
             recv_timestep = unflattened_rollout.pop()
 
             # to dict of tensors
-            rollout = {k: torch.from_numpy(v).to(self.agent.device) for k, v in zip(
-                self.sorted_keys,
-                unflattened_rollout  # timestep has been popped
+            rollout = {
+                k: torch.from_numpy(v).to(self.agent.device)
+                for k, v in zip(
+                    self.sorted_keys,
+                    unflattened_rollout  # timestep has been popped
                 )
             }
             self.received_rollouts.append(rollout)
 
-            worker_timestep.fill(recv_timestep[0])  # recv_timestep is a single value array
+            worker_timestep.fill(
+                recv_timestep[0]
+            )  # recv_timestep is a single value array
 
             # upon recieving batch, send ack
-            self.comm.isend(self._threaded_global_step(), dest=listen_source, tag=MpiMessages.SEND_ACK)
+            self.comm.isend(
+                self._threaded_global_step(),
+                dest=listen_source,
+                tag=MpiMessages.SEND_ACK
+            )
         print('Thread listening for {} exiting'.format(listen_source))
 
     def _threaded_global_step(self):
@@ -122,16 +154,31 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
             while not self._threads_should_be_done:
                 current_step = self._threaded_global_step()
                 if current_step > next_save_step:
-                    self.saver.save_state_dicts(self.network, int(current_step), optimizer=self.optimizer)
+                    self.saver.save_state_dicts(
+                        self.network,
+                        int(current_step),
+                        optimizer=self.optimizer
+                    )
                     next_save_step += self.save_interval
                 time.sleep(1)
         except Exception as e:
             print('Error saving', e)
 
         # final save
-        self.saver.save_state_dicts(self.network, int(self._threaded_global_step()), optimizer=self.optimizer)
+        self.saver.save_state_dicts(
+            self.network,
+            int(self._threaded_global_step()),
+            optimizer=self.optimizer
+        )
 
-    def run(self, num_rollouts_in_batch, max_items_in_queue, max_steps=float('inf'), dynamic=False, min_dynamic_batch=0):
+    def run(
+        self,
+        num_rollouts_in_batch,
+        max_items_in_queue,
+        max_steps=float('inf'),
+        dynamic=False,
+        min_dynamic_batch=0
+    ):
         from threading import Thread
         size = self.comm.Get_size()
 
@@ -143,8 +190,17 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         self._thread_steps = [np.ones((1)) for i in range(1, size)]
         self._thread_wait_times = [np.zeros((1)) for i in range(1, size)]
         # start batch adding threads
-        threads = [Thread(target=self._batch_add_thread, args=(i, self._thread_wait_times[i-1],
-                          self._thread_steps[i - 1], max_items_in_queue, )) for i in range(1, size)]
+        threads = [
+            Thread(
+                target=self._batch_add_thread,
+                args=(
+                    i,
+                    self._thread_wait_times[i - 1],
+                    self._thread_steps[i - 1],
+                    max_items_in_queue,
+                )
+            ) for i in range(1, size)
+        ]
         for t in threads:
             t.start()
 
@@ -154,7 +210,9 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
 
         # this runs a "busy" loop assuming that loss.backward takes longer than accumulating batches
         # removing the need for the threads to notify of new batches
-        variable_buffer = np.empty(self.variable_flattener.total_size, np.float32)
+        variable_buffer = np.empty(
+            self.variable_flattener.total_size, np.float32
+        )
         start_time = time.time()
         number_of_rollouts_waiting = 0
         while self._threaded_global_step() < max_steps:
@@ -165,7 +223,9 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
                 if dynamic:
                     do_batch = len_received_rollouts >= min_dynamic_batch
                     # limit batch size to max of num_rollouts_in_batch
-                    batch_slice = min((len_received_rollouts, num_rollouts_in_batch))
+                    batch_slice = min(
+                        (len_received_rollouts, num_rollouts_in_batch)
+                    )
                 else:
                     do_batch = len_received_rollouts >= num_rollouts_in_batch
                     batch_slice = num_rollouts_in_batch
@@ -177,32 +237,58 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
                         # pop everything from list starting first to last
                         popped_rollouts = self.received_rollouts[0:batch_slice]
                         # clear
-                        self.received_rollouts = self.received_rollouts[batch_slice:]
+                        self.received_rollouts = self.received_rollouts[
+                            batch_slice:]
 
                         # convert list of dict to dict of list
                         rollouts = listd_to_dlist(popped_rollouts)
 
-                        loss_dict, metric_dict = self.agent.compute_loss(rollouts)
-                        total_loss = torch.sum(torch.stack(tuple(loss for loss in loss_dict.values())))
+                        loss_dict, metric_dict = self.agent.compute_loss(
+                            rollouts
+                        )
+                        total_loss = torch.sum(
+                            torch.stack(
+                                tuple(loss for loss in loss_dict.values())
+                            )
+                        )
 
                         self.optimizer.zero_grad()
                         total_loss.backward()
                         self.optimizer.step()
 
                         # write summaries
-                        self.write_summaries(total_loss, loss_dict, metric_dict, self._threaded_global_step())
+                        self.write_summaries(
+                            total_loss, loss_dict, metric_dict,
+                            self._threaded_global_step()
+                        )
 
                         # send new variables
-                        new_variables_flat = self.variable_flattener.flatten(self.get_parameters_numpy(), buffer=variable_buffer)
+                        new_variables_flat = self.variable_flattener.flatten(
+                            self.get_parameters_numpy(), buffer=variable_buffer
+                        )
                         self.comm.Ibcast(new_variables_flat, root=0)
                         self.sent_parameters_count += 1
 
                         if self.sent_parameters_count % self.summary_steps == 0:
                             print('=' * 40)
-                            print('Train Per Second', self.sent_parameters_count / (time.time() - start_time))
-                            print('Avg Queue Length', number_of_rollouts_waiting / self.sent_parameters_count)
-                            print('Current Queue Length', len(self.received_rollouts))
-                            print('Thread wait times', ['{:.2f}'.format(x[0]) for x in self._thread_wait_times])
+                            print(
+                                'Train Per Second', self.sent_parameters_count /
+                                (time.time() - start_time)
+                            )
+                            print(
+                                'Avg Queue Length', number_of_rollouts_waiting /
+                                self.sent_parameters_count
+                            )
+                            print(
+                                'Current Queue Length',
+                                len(self.received_rollouts)
+                            )
+                            print(
+                                'Thread wait times', [
+                                    '{:.2f}'.format(x[0])
+                                    for x in self._thread_wait_times
+                                ]
+                            )
                             print('=' * 40)
                     except Exception as e:
                         import traceback
@@ -228,7 +314,10 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         for i in range(1, size):
             self.comm.isend(True, dest=i, tag=MpiMessages.STOP)
         print('Host waiting on recieving stops')
-        stops = [self.comm.irecv(source=i, tag=MpiMessages.STOPPED) for i in range(1, size)]
+        stops = [
+            self.comm.irecv(source=i, tag=MpiMessages.STOPPED)
+            for i in range(1, size)
+        ]
         threads_stoped = 0
         wait = [0] * (size - 1)
         while threads_stoped < size - 1:
@@ -243,7 +332,10 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
                     else:
                         wait[w_ind] += 1
                         if wait[w_ind] >= 5:
-                            print('Waited 5 times for {}, skipping'.format(worker))
+                            print(
+                                'Waited 5 times for {}, skipping'.
+                                format(worker)
+                            )
                             threads_stoped += 1
                         print('Still waiting on {} to finish'.format(worker))
                         time.sleep(0.1)
@@ -265,16 +357,16 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
 
 class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
     def __init__(
-            self,
-            agent,
-            environment,
-            nb_env,
-            logger,
-            summary_writer,
-            use_local_buffers=False,
-            max_parameter_skip=10,
-            send_warning_time=float('inf'),
-            recv_warning_time=0.1
+        self,
+        agent,
+        environment,
+        nb_env,
+        logger,
+        summary_writer,
+        use_local_buffers=False,
+        max_parameter_skip=10,
+        send_warning_time=float('inf'),
+        recv_warning_time=0.1
     ):
         super().__init__()
         self._agent = agent
@@ -328,8 +420,12 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
             self.agent.observe(copied_obs, rewards, terminals, infos)
 
             # Perform state updates
-            terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
-            self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count)
+            terminal_rewards, terminal_infos = self.update_buffers(
+                rewards, terminals, infos
+            )
+            self.log_episode_results(
+                terminal_rewards, terminal_infos, self.local_step_count
+            )
             self.write_reward_summaries(terminal_rewards, self.global_step)
 
             # Learn
@@ -368,8 +464,10 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
                 v = next_obs[k]
                 shapes['next_obs-' + k] = (len(v), ) + v[0].shape
             parameter_shapes = self.get_parameter_shapes()
-            self.mpi_helper = MPIHelper(shapes, parameter_shapes, 0, self.max_parameter_skip, self.send_warning_time, self.recv_warning_time,
-                                        float('inf'))  # workers wait on send which waits on queue len so no warnings for # of recv updates are needed
+            self.mpi_helper = MPIHelper(
+                shapes, parameter_shapes, 0, self.max_parameter_skip,
+                self.send_warning_time, self.recv_warning_time, float('inf')
+            )  # workers wait on send which waits on queue len so no warnings for # of recv updates are needed
 
         # TODO: mpi_helper send should accept list of lists of tensors
         # then don't have to torch stack
@@ -442,4 +540,5 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         self.mpi_helper.close()
 
     def should_stop(self):
-        return False if self.mpi_helper is None else self.mpi_helper.should_stop()
+        return False if self.mpi_helper is None else self.mpi_helper.should_stop(
+        )

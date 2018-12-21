@@ -45,6 +45,7 @@ class ReplayGenerator(EvalBase):
     """
     Generates replays of agent interacting with SC2 environment.
     """
+
     def __init__(self, agent, device, environment):
         super(ReplayGenerator, self).__init__(agent, device)
         self._environment = environment
@@ -66,6 +67,7 @@ class AtariRenderer(EvalBase):
     """
     Renders agent interacting with Atari environment.
     """
+
     def __init__(self, agent, device, environment):
         super(AtariRenderer, self).__init__(agent, device)
         self._environment = environment

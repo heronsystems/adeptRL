@@ -44,7 +44,7 @@ class ArrayFlattener:
         for ind, s in enumerate(self.shapes):
             val = values[ind]
             # reshape into buffer
-            buffer[curr_start:curr_start+self.sizes[ind]] = val.ravel()
+            buffer[curr_start:curr_start + self.sizes[ind]] = val.ravel()
             curr_start += self.sizes[ind]
         return buffer
 
@@ -53,7 +53,7 @@ class ArrayFlattener:
         curr_start = 0
         for ind, (shape, size) in enumerate(zip(self.shapes, self.sizes)):
             val = np.empty(size, dtype=self.src_dtype)
-            val[0:] = value[curr_start:curr_start+size]
+            val[0:] = value[curr_start:curr_start + size]
             values.append(val.reshape(shape))
             curr_start += size
         return values
@@ -75,8 +75,12 @@ class MPIArraySend:
         self.comm.Send(flattened, dest=dest, tag=tag)
 
     def Isend(self, list_of_arrays, dest, tag):
-        self._send_buffer = self.flattener.flatten(list_of_arrays, buffer=self._send_buffer)
-        self._current_msg = self.comm.Isend(self._send_buffer, dest=dest, tag=tag)
+        self._send_buffer = self.flattener.flatten(
+            list_of_arrays, buffer=self._send_buffer
+        )
+        self._current_msg = self.comm.Isend(
+            self._send_buffer, dest=dest, tag=tag
+        )
 
     def Wait(self):
         if self._current_msg is None:
@@ -87,7 +91,15 @@ class MPIArraySend:
 
 
 class VariableRecieverSingle:
-    def __init__(self, comm, variable_buffer, max_fail=5, root=0, warning_time=0.1, waiting_recv_warning=5):
+    def __init__(
+        self,
+        comm,
+        variable_buffer,
+        max_fail=5,
+        root=0,
+        warning_time=0.1,
+        waiting_recv_warning=5
+    ):
         self.mpi_comm = comm
         self.variable_buffer = variable_buffer
         self.root = root
@@ -107,10 +119,11 @@ class VariableRecieverSingle:
         got_something = self.get_latest(self.variable_buffer, wait)
         et = time.time()
         if et - st > self.warning_time:
-            print('WARNING {}: Long wait for variable updates. Waited {}'.format(
-                self.mpi_comm.Get_rank(),
-                et - st
-            ))
+            print(
+                'WARNING {}: Long wait for variable updates. Waited {}'.format(
+                    self.mpi_comm.Get_rank(), et - st
+                )
+            )
         if not got_something:
             self.curr_fail += 1
             return None
@@ -132,10 +145,10 @@ class VariableRecieverSingle:
             has_data = self.comms.Test()
             if not has_data:
                 if number_of_recvs >= self.waiting_recv_warning:
-                    print('WARNING {}: Worker had {} variable updates waiting. Worker is slow.'.format(
-                        self.mpi_comm.Get_rank(),
-                        number_of_recvs
-                    ))
+                    print(
+                        'WARNING {}: Worker had {} variable updates waiting. Worker is slow.'
+                        .format(self.mpi_comm.Get_rank(), number_of_recvs)
+                    )
 
                 return True  # we did get something
             else:

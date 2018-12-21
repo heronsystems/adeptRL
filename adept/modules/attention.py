@@ -30,11 +30,16 @@ class MultiHeadSelfAttention(torch.nn.Module):
     Reference implementation (Tensorflow):
     https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/layers/common_attention.py#L2674
     """
+
     def __init__(self, nb_embed, nb_qk_chan, nb_v_chan, nb_head, scale=False):
         super(MultiHeadSelfAttention, self).__init__()
         # [switch nx => n_state from Block to Attention to keep identical to TF implem]
         assert nb_qk_chan % nb_head == 0
-        self.register_buffer('b', torch.tril(torch.ones(nb_embed, nb_embed)).view(1, 1, nb_embed, nb_embed))
+        self.register_buffer(
+            'b',
+            torch.tril(torch.ones(nb_embed,
+                                  nb_embed)).view(1, 1, nb_embed, nb_embed)
+        )
         self.nb_head = nb_head
         self.split_size = nb_qk_chan
         self.scale = scale
@@ -45,13 +50,15 @@ class MultiHeadSelfAttention(torch.nn.Module):
         w = torch.matmul(q, k)
         if self.scale:
             w = w / math.sqrt(v.size(-1))
-        w = w * self.b + -1e9 * (1 - self.b)  # TF implem method: mask_attn_weights
+        w = w * self.b + -1e9 * (
+            1 - self.b
+        )  # TF implem method: mask_attn_weights
         w = Softmax(dim=-1)(w)
         return torch.matmul(w, v)
 
     def merge_heads(self, x):
         x = x.permute(0, 2, 1, 3).contiguous()
-        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
+        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1), )
         return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
 
     def split_heads(self, x, k=False):
@@ -90,6 +97,7 @@ class RMCCell(torch.nn.Module):
     Paper: https://arxiv.org/pdf/1806.01822.pdf
     Reference implementation: https://github.com/deepmind/sonnet/blob/master/sonnet/python/modules/relational_memory.py
     """
+
     def __init__(
         self,
         nb_input_embed,
@@ -118,12 +126,25 @@ class RMCCell(torch.nn.Module):
         self.ih.bias.data.fill_(0)
         self.hh.bias.data.fill_(0)
         # forget bias init
-        self.attention = MultiHeadSelfAttention(nb_input_embed + nb_memory_embed, nb_channel, nb_channel, 1, scale=True)
-        self.mlp = torch.nn.ModuleList(
-            [Linear(self._nb_total_mem_chan, self._nb_total_mem_chan) for _ in range(nb_mlp)]
+        self.attention = MultiHeadSelfAttention(
+            nb_input_embed + nb_memory_embed,
+            nb_channel,
+            nb_channel,
+            1,
+            scale=True
         )
-        self.ln1 = torch.nn.LayerNorm([nb_input_embed + nb_memory_embed, self._nb_total_mem_chan])
-        self.ln2 = torch.nn.LayerNorm([nb_input_embed + nb_memory_embed, self._nb_total_mem_chan])
+        self.mlp = torch.nn.ModuleList(
+            [
+                Linear(self._nb_total_mem_chan, self._nb_total_mem_chan)
+                for _ in range(nb_mlp)
+            ]
+        )
+        self.ln1 = torch.nn.LayerNorm(
+            [nb_input_embed + nb_memory_embed, self._nb_total_mem_chan]
+        )
+        self.ln2 = torch.nn.LayerNorm(
+            [nb_input_embed + nb_memory_embed, self._nb_total_mem_chan]
+        )
 
     def _attend(self, memory):
         for _ in range(self._nb_block):
@@ -149,7 +170,9 @@ class RMCCell(torch.nn.Module):
         # project the input channels to match memory channels
         input = self.input_linear(input)  # Tensor{B, Ei, Cm}
 
-        memory_plus_input = torch.cat([prev_memory, input], dim=1)  # Tensor{B, Ei + Em, Cm}
+        memory_plus_input = torch.cat(
+            [prev_memory, input], dim=1
+        )  # Tensor{B, Ei + Em, Cm}
         next_memory = self._attend(memory_plus_input)
         next_memory = next_memory[:, :-prev_memory.size(1), :]
 
@@ -176,12 +199,17 @@ class RelationalMHDPA(nn.Module):
     Reference implementation (Tensorflow):
     https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/layers/common_attention.py#L2674
     """
+
     def __init__(self, height, width, nb_channel, nb_head, scale=False):
         super(RelationalMHDPA, self).__init__()
         # [switch nx => n_state from Block to Attention to keep identical to TF implem]
         assert nb_channel % nb_head == 0
         seq_len = height * width
-        self.register_buffer('b', torch.tril(torch.ones(seq_len, seq_len)).view(1, 1, seq_len, seq_len))
+        self.register_buffer(
+            'b',
+            torch.tril(torch.ones(seq_len,
+                                  seq_len)).view(1, 1, seq_len, seq_len)
+        )
         self.nb_head = nb_head
         self.split_size = nb_channel
         self.scale = scale
@@ -193,13 +221,15 @@ class RelationalMHDPA(nn.Module):
         print('q', q.shape, 'k', k.shape, 'v', v.shape, 'w', w.shape)
         if self.scale:
             w = w / math.sqrt(v.size(-1))
-        w = w * self.b + -1e9 * (1 - self.b)  # TF implem method: mask_attn_weights
+        w = w * self.b + -1e9 * (
+            1 - self.b
+        )  # TF implem method: mask_attn_weights
         w = nn.Softmax(dim=-1)(w)
         return torch.matmul(w, v)
 
     def merge_heads(self, x):
         x = x.permute(0, 2, 1, 3).contiguous()
-        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
+        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1), )
         return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
 
     def split_heads(self, x, k=False):
@@ -218,7 +248,7 @@ class RelationalMHDPA(nn.Module):
         :param x: A tensor with a shape of [batch, seq_len, nb_channel]
         :return: A tensor with a shape of [batch, seq_len, nb_channel]
         """
-        size_out = x.size()[:-1] + (self.split_size * 3,)
+        size_out = x.size()[:-1] + (self.split_size * 3, )
         x = self.projection(x.view(-1, x.size(-1)))
         x = x.view(*size_out)
 
