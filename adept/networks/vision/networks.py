@@ -210,18 +210,19 @@ class FourConvSpatialAttention(InputNetwork):
         x = F.relu(self.bn1(self.conv1(input)))
         x = F.relu(self.bn2(self.conv2(x)))
 
-        xs_chan = torch.linspace(-1, 1,
-                                 20).view(1, 1, 1,
-                                          20).expand(input.size(0), 1, 20,
-                                                     20).to(input.device)
-        ys_chan = torch.linspace(-1, 1,
-                                 20).view(1, 1, 20,
-                                          1).expand(input.size(0), 1, 20,
-                                                    20).to(input.device)
+        xs_chan = torch.linspace(-1, 1, 20)\
+            .view(1, 1, 1, 20)\
+            .expand(input.size(0), 1, 20, 20)\
+            .to(input.device)
+        ys_chan = torch.linspace(-1, 1, 20)\
+            .view(1, 1, 20, 1)\
+            .expand(input.size(0), 1, 20, 20)\
+            .to(input.device)
         x = torch.cat([x, xs_chan, ys_chan], dim=1)
         h = x.size(2)
         w = x.size(3)
-        # need to transpose because attention expects attention dim before channel dim
+        # need to transpose because attention
+        # expects attention dim before channel dim
         x = x.view(x.size(0), x.size(1), h * w).transpose(1, 2)
 
         x = self.attention(x.contiguous())

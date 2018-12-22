@@ -73,17 +73,18 @@ class RMC(NetworkInterface):
 
         h = x.size(2)
         w = x.size(3)
-        xs_chan = torch.linspace(-1, 1,
-                                 w).view(1, 1, 1,
-                                         w).expand(input.size(0), 1, w,
-                                                   w).to(input.device)
-        ys_chan = torch.linspace(-1, 1,
-                                 h).view(1, 1, h,
-                                         1).expand(input.size(0), 1, h,
-                                                   h).to(input.device)
+        xs_chan = torch.linspace(-1, 1, w)\
+            .view(1, 1, 1, w)\
+            .expand(input.size(0), 1, w, w)\
+            .to(input.device)
+        ys_chan = torch.linspace(-1, 1, h)\
+            .view(1, 1, h, 1)\
+            .expand(input.size(0), 1, h, h)\
+            .to(input.device)
         x = torch.cat([x, xs_chan, ys_chan], dim=1)
 
-        # need to transpose because attention expects attention dim before channel dim
+        # need to transpose because attention expects
+        # attention dim before channel dim
         x = x.view(x.size(0), x.size(1), h * w).transpose(1, 2)
         prev_memories = torch.stack(prev_memories)
         x = next_memories = self.attention(x.contiguous(), prev_memories)

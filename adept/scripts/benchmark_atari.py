@@ -15,7 +15,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-from adept.environments import ATARI_6_ENVS
+from adept.registries.environment import ATARI_6_ENVS
 from adept.utils.util import parse_bool
 from .local import main
 
@@ -65,15 +65,17 @@ if __name__ == '__main__':
         default=1,
         type=int,
         help=
-        'Number of eval environments to run [in a separate thread] each with a different seed. '
-        'Creates a copy of the network. Disable by setting to 0. (default: 1)'
+        'Number of eval environments to run [in a separate thread]'
+        'each with a different seed. Creates a copy of the network. Disable '
+        'by setting to 0. (default: 1)'
     )
     parser.add_argument(
         '--eval-step-rate',
         default=0,
         type=int,
         help=
-        'Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 to disable (default: 0)'
+        'Number of eval steps allowed to run per second decreasing this'
+        'amount can improve training speed. 0 to disable (default: 0)'
     )
 
     args = parser.add_args()

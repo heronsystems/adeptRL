@@ -38,13 +38,13 @@ def make_network(
     for rank, names in nbr.items():
         for name in names:
             if rank == 1:
-                pathways_by_name[name] = c_networks[
-                    args.network_discrete].from_args(ebn[name].shape, args)
+                pathways_by_name[name] = c_networks[args.network_discrete]\
+                    .from_args(ebn[name].shape, args)
             elif rank == 2:
                 raise NotImplementedError('Rank 2 inputs not implemented')
             elif rank == 3:
-                pathways_by_name[name] = chw_networks[
-                    args.network_vision].from_args(ebn[name].shape, args)
+                pathways_by_name[name] = chw_networks[args.network_vision]\
+                    .from_args(ebn[name].shape, args)
             elif rank == 4:
                 raise NotImplementedError('Rank 4 inputs not implemented')
             else:
@@ -119,7 +119,8 @@ def _add_network_args(parser: ArgumentParser):
         const=True,
         default=True,
         help=
-        'Applies batch norm between linear/convolutional layers and layer norm for LSTMs (default: True)'
+        'Applies batch norm between linear/convolutional'
+        'layers and layer norm for LSTMs (default: True)'
     )
 
 
@@ -191,7 +192,8 @@ def _add_common_args(parser: ArgumentParser):
         '--tag',
         default='',
         help=
-        'Identify your experiment with a tag that gets prepended to the experiment log directory'
+        'Identify your experiment with a tag that'
+        'gets prepended to the experiment log directory'
     )
     subparser.add_argument(
         '-cm',
@@ -232,7 +234,8 @@ def _add_common_args(parser: ArgumentParser):
         const=True,
         default=False,
         help=
-        'debug mode sends the logs to /tmp/ and overrides number of workers to 3 (default: False)'
+        'debug mode sends the logs to /tmp/ and overrides'
+        'number of workers to 3 (default: False)'
     )
 
 
@@ -241,7 +244,8 @@ def _add_args_to_parsers(arg_fn, parsers):
 
 
 def add_base_args(parser: ArgumentParser, additional_args_fn=None):
-    # TODO: there must be a better way of adding args to subparsers while keeping the help message
+    # TODO: there must be a better way of adding
+    #  args to subparsers while keeping the help message
     # TODO: some agents may not run in certain modes not sure the best way to handle this
     subparser_agent = parser.add_subparsers(title='Agents', dest='agent')
     subparser_agent.required = True

@@ -107,17 +107,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
     parser.add_argument(
         '--network-file',
-        help='path to args file (.../logs/<env-id>/<log-id>/<epoch>/model.pth)'
+        help='path to network file'
+             '(.../logs/<env-id>/<log-id>/<epoch>/model.pth)'
     )
     parser.add_argument(
         '--args-file',
-        help='path to args file (.../logs/<env-id>/<log-id>/args.json)'
+        help='path to args file'
+             '(.../logs/<env-id>/<log-id>/args.json)'
     )
     parser.add_argument(
         '--optimizer-file',
         default=None,
-        help=
-        'path to args file (.../logs/<env-id>/<log-id>/<epoch>/optimizer.pth)'
+        help='path to optimizer file'
+             '(.../logs/<env-id>/<log-id>/<epoch>/optimizer.pth)'
     )
     parser.add_argument(
         '-mts',

@@ -113,7 +113,8 @@ def main(args, env_registry=EnvPluginRegistry()):
             print('{} variables synced'.format(rank))
 
     # construct agent
-    # host is always the first gpu, workers are distributed evenly across the rest
+    # host is always the first gpu,
+    # workers are distributed evenly across the rest
     if len(args.gpu_id) > 1:  # nargs is always a list
         if rank == 0:
             gpu_id = args.gpu_id[0]
@@ -260,45 +261,51 @@ if __name__ == '__main__':
             nargs='+',
             default=[0],
             help=
-            'Which GPU to use for training. The host will always be the first gpu, workers are distributed evenly across the rest (default: [0])'
+            'Which GPU to use for training. The host will always be the'
+            'first gpu, workers are distributed evenly across the rest'
+            '(default: [0])'
         )
         parser.add_argument(
             '--max-queue-length',
             type=int,
             default=(size - 1) * 2,
             help=
-            'Maximum rollout queue length. If above the max, workers will wait to append (default: (size - 1) * 2)'
+            'Maximum rollout queue length. If above the max, workers'
+            'will wait to append (default: (size - 1) * 2)'
         )
         parser.add_argument(
             '--num-rollouts-in-batch',
             type=int,
             default=(size - 1),
             help=
-            'The batch size in rollouts (so total batch is this number * nb_env * seq_len). '
-            + 'Not compatible with --dynamic-batch (default: (size - 1))'
+            'The batch size in rollouts'
+            '(so total batch is this number * nb_env * seq_len).'
+            'Not compatible with --dynamic-batch (default: (size - 1))'
         )
         parser.add_argument(
             '--max-dynamic-batch',
             type=int,
             default=0,
             help=
-            'When > 0 uses dynamic batching (disables cudnn and --num-rollouts-in-batch). '
-            +
-            'Limits the maximum rollouts in the batch to limit GPU memory usage. (default: 0 (False))'
+            'When > 0 uses dynamic batching (disables cudnn and '
+            '--num-rollouts-in-batch).  Limits the maximum rollouts in the '
+            'batch to limit GPU memory usage. (default: 0 (False))'
         )
         parser.add_argument(
             '--min-dynamic-batch',
             type=int,
             default=0,
             help=
-            'Guarantees a minimum number of rollouts in the batch when using dynamic batching. (default: 0)'
+            'Guarantees a minimum number of rollouts in the batch'
+            'when using dynamic batching. (default: 0)'
         )
         parser.add_argument(
             '--host-training-info-interval',
             type=int,
             default=100,
             help=
-            'The number of training steps before the host writes an info summary. (default: 100)'
+            'The number of training steps before the host'
+            'writes an info summary. (default: 100)'
         )
         parser.add_argument(
             '--use-local-buffers',
@@ -307,7 +314,8 @@ if __name__ == '__main__':
             const=True,
             default=False,
             help=
-            'If true all workers use their local network buffers (for batch norm: mean & var are not shared) (default: False)'
+            'If true all workers use their local network buffers'
+            '(for batch norm: mean & var are not shared) (default: False)'
         )
 
     add_base_args(base_parser, add_args)
