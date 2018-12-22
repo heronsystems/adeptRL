@@ -35,21 +35,22 @@ from adept.utils.util import dotdict
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
-
 Result = namedtuple('Result', ['epoch', 'mean', 'std_dev'])
 SelectedModel = namedtuple('SelectedModel', ['epoch', 'model_id'])
 
 
 def main(args, env_registry=EnvPluginRegistry()):
     print_ascii_logo()
-    logger = make_logger('Eval', os.path.join(args.log_id_dir, 'evaluation_log.txt'))
+    logger = make_logger(
+        'Eval', os.path.join(args.log_id_dir, 'evaluation_log.txt')
+    )
     log_args(logger, args)
 
     epoch_ids = sorted(
         [
-            int(dir)
-            for dir in os.listdir(args.log_id_dir)
-            if os.path.isdir(os.path.join(args.log_id_dir, dir)) and ('rank' not in dir)
+            int(dir) for dir in os.listdir(args.log_id_dir)
+            if os.path.isdir(os.path.join(args.log_id_dir, dir)) and
+            ('rank' not in dir)
         ]
     )
 
@@ -62,12 +63,16 @@ def main(args, env_registry=EnvPluginRegistry()):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
-    network = make_network(env.observation_space, network_head_shapes, train_args)
+    network = make_network(
+        env.observation_space, network_head_shapes, train_args
+    )
 
     results = []
     selected_models = []
     for epoch_id in epoch_ids:
-        network_path = os.path.join(args.log_id_dir, str(epoch_id), 'model*.pth')
+        network_path = os.path.join(
+            args.log_id_dir, str(epoch_id), 'model*.pth'
+        )
         network_files = glob(network_path)
 
         best_mean = -float('inf')
@@ -75,13 +80,18 @@ def main(args, env_registry=EnvPluginRegistry()):
         selected_model = None
         for network_file in network_files:
             # load new network
-            network.load_state_dict(torch.load(network_file, map_location=lambda storage, loc: storage))
+            network.load_state_dict(
+                torch.load(
+                    network_file, map_location=lambda storage, loc: storage
+                )
+            )
 
             # construct agent
-            agent = make_agent(network, device, env.gpu_preprocessor,
-                               env_registry.lookup_engine(train_args.env_id),
-                               env.action_space,
-                               train_args)
+            agent = make_agent(
+                network, device, env.gpu_preprocessor,
+                env_registry.lookup_engine(train_args.env_id), env.action_space,
+                train_args
+            )
 
             # container
             container = Evaluation(
@@ -113,7 +123,12 @@ def main(args, env_registry=EnvPluginRegistry()):
 
     # save results
     results = np.stack(results)
-    np.savetxt(os.path.join(args.log_id_dir, 'eval.csv'), results, delimiter=',', fmt=['%d', '%.3f', '%.3f'])
+    np.savetxt(
+        os.path.join(args.log_id_dir, 'eval.csv'),
+        results,
+        delimiter=',',
+        fmt=['%d', '%.3f', '%.3f']
+    )
 
     # save selected models
     with open(os.path.join(args.log_id_dir, 'selected_models.txt'), 'w') as f:
@@ -128,21 +143,33 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='AdeptRL Evaluation Mode')
     parser.add_argument(
-        '--log-id-dir',
-        help='path to args file (.../logs/<env-id>/<log-id>)'
+        '--log-id-dir', help='path to args file (.../logs/<env-id>/<log-id>)'
     )
     parser.add_argument(
-        '--nb-episode', type=int, default=30,
+        '--nb-episode',
+        type=int,
+        default=30,
         help='number of episodes to evaluate on. (default: 30)'
     )
     parser.add_argument(
-        '-s', '--seed', type=int, default=32, metavar='S',
+        '-s',
+        '--seed',
+        type=int,
+        default=32,
+        metavar='S',
         help='random seed (default: 32)'
     )
     parser.add_argument(
-        '-r', '--render', type=parse_bool, nargs='?', const=True, default=False,
+        '-r',
+        '--render',
+        type=parse_bool,
+        nargs='?',
+        const=True,
+        default=False,
         help='render the environment during eval. (default: False)'
     )
-    parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)')
+    parser.add_argument(
+        '--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)'
+    )
     args = parser.parse_args()
     main(args)

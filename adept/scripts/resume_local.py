@@ -45,7 +45,10 @@ def main(args):
         args = dotdict(json.load(args_file))
 
     print_ascii_logo()
-    log_id = make_log_id(args.tag, args.mode_name, args.agent, args.network_vision + args.network_body)
+    log_id = make_log_id(
+        args.tag, args.mode_name, args.agent,
+        args.network_vision + args.network_body
+    )
     log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
 
     os.makedirs(log_id_dir)
@@ -55,7 +58,11 @@ def main(args):
 
     log_args(logger, args)
     write_args_file(log_id_dir, args)
-    logger.info('Resuming training from {} epoch {}'.format(args_file_path, initial_count))
+    logger.info(
+        'Resuming training from {} epoch {}'.format(
+            args_file_path, initial_count
+        )
+    )
 
     # construct env
     env = SubProcEnvManager.from_args(args)
@@ -70,25 +77,23 @@ def main(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
+    agent = make_agent(
+        network, device, env.gpu_preprocessor, env.engine, env.action_space,
+        args
+    )
 
     # Construct the Container
     def make_optimizer(params):
-        opt = torch.optim.RMSprop(params, lr=args.learning_rate, eps=1e-5, alpha=0.99)
+        opt = torch.optim.RMSprop(
+            params, lr=args.learning_rate, eps=1e-5, alpha=0.99
+        )
         if args.optimizer_file is not None:
             opt.load_state_dict(torch.load(optimizer_file))
         return opt
 
     container = Local(
-        agent,
-        env,
-        make_optimizer,
-        args.epoch_len,
-        args.nb_env,
-        logger,
-        summary_writer,
-        args.summary_frequency,
-        saver
+        agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
+        summary_writer, args.summary_frequency, saver
     )
     try:
         container.run(mts + initial_count, initial_count)
@@ -102,18 +107,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
     parser.add_argument(
         '--network-file',
-        help='path to args file (.../logs/<env-id>/<log-id>/<epoch>/model.pth)'
+        required=True,
+        help='path to network file '
+             '(.../logs/<env-id>/<log-id>/<epoch>/model.pth)',
     )
     parser.add_argument(
         '--args-file',
-        help='path to args file (.../logs/<env-id>/<log-id>/args.json)'
+        required=True,
+        help='path to args file '
+             '(.../logs/<env-id>/<log-id>/args.json)'
     )
     parser.add_argument(
-        '--optimizer-file', default=None,
-        help='path to args file (.../logs/<env-id>/<log-id>/<epoch>/optimizer.pth)'
+        '--optimizer-file',
+        default=None,
+        help='path to optimizer file '
+             '(.../logs/<env-id>/<log-id>/<epoch>/optimizer.pth)'
     )
     parser.add_argument(
-        '-mts', '--max-train-steps', type=int, default=10e6, metavar='MTS',
+        '-mts',
+        '--max-train-steps',
+        type=int,
+        default=10e6,
+        metavar='MTS',
         help='number of steps to train for (default: 10e6)'
     )
     args = parser.parse_args()

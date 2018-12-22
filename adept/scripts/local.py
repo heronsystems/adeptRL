@@ -26,8 +26,8 @@ from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
 from adept.registries.environment import EnvPluginRegistry
 from adept.utils.logging import (
-    make_log_id, make_logger, print_ascii_logo,
-    log_args, write_args_file, SimpleModelSaver
+    make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
+    SimpleModelSaver
 )
 from adept.utils.script_helpers import (
     make_agent, make_network, get_head_shapes, count_parameters
@@ -80,15 +80,21 @@ def main(args, env_registry=EnvPluginRegistry()):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
+    agent = make_agent(
+        network, device, env.gpu_preprocessor, env.engine, env.action_space,
+        args
+    )
 
     # Construct the Container
     def make_optimizer(params):
-        opt = torch.optim.RMSprop(params, lr=args.learning_rate, eps=1e-5, alpha=0.99)
+        opt = torch.optim.RMSprop(
+            params, lr=args.learning_rate, eps=1e-5, alpha=0.99
+        )
         if args.load_optimizer:
             opt.load_state_dict(
                 torch.load(
-                    args.load_optimizer, map_location=lambda storage, loc: storage
+                    args.load_optimizer,
+                    map_location=lambda storage, loc: storage
                 )
             )
         return opt
@@ -106,20 +112,21 @@ def main(args, env_registry=EnvPluginRegistry()):
         # env and agent
         eval_args.nb_env = args.nb_eval_env
         eval_env = SubProcEnvManager.from_args(
-            eval_args,
-            seed=args.seed + args.nb_env,
-            registry=env_registry
+            eval_args, seed=args.seed + args.nb_env, registry=env_registry
         )
         eval_net = make_network(
             eval_env.observation_space, network_head_shapes, eval_args
         )
         eval_agent = make_agent(
-            eval_net, device, eval_env.gpu_preprocessor, eval_env.engine, env.action_space, eval_args
+            eval_net, device, eval_env.gpu_preprocessor, eval_env.engine,
+            env.action_space, eval_args
         )
         eval_net.load_state_dict(network.state_dict())
 
         # logger
-        eval_logger = make_logger('LocalEval', os.path.join(log_id_dir, 'eval_log.txt'))
+        eval_logger = make_logger(
+            'LocalEval', os.path.join(log_id_dir, 'eval_log.txt')
+        )
 
         evaluation_container = EvaluationThread(
             network,

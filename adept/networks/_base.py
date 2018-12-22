@@ -32,11 +32,17 @@ class NetworkInterface(Module, metaclass=abc.ABCMeta):
 
     @staticmethod
     def stack_internals(internals):
-        return {key: torch.stack(internal) for key, internal in internals.items()}
+        return {
+            key: torch.stack(internal)
+            for key, internal in internals.items()
+        }
 
     @staticmethod
     def unstack_internals(stacked_internals):
-        return {key: list(torch.unbind(stacked_internal)) for key, stacked_internal in stacked_internals.items()}
+        return {
+            key: list(torch.unbind(stacked_internal))
+            for key, stacked_internal in stacked_internals.items()
+        }
 
 
 class NetworkHead(Module):
@@ -47,10 +53,15 @@ class NetworkHead(Module):
         # Must be sorted for mpi methods so that the creation order is deterministic
         for head_name in sorted(head_dict.keys()):
             head_size = head_dict[head_name]
-            self.heads.add_module(head_name, torch.nn.Linear(nb_channel, head_size))
+            self.heads.add_module(
+                head_name, torch.nn.Linear(nb_channel, head_size)
+            )
 
     def forward(self, embedding, internals):
-        return {name: module(embedding) for name, module in self.heads.named_children()}, internals
+        return {
+            name: module(embedding)
+            for name, module in self.heads.named_children()
+        }, internals
 
 
 class ModularNetwork(NetworkInterface, metaclass=abc.ABCMeta):

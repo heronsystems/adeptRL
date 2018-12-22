@@ -36,7 +36,6 @@ FLAGS(['local.py'])
 
 def main(args, env_registry=EnvPluginRegistry()):
 
-
     print_ascii_logo()
     print('Saving replays... Press Ctrl+C to stop.')
 
@@ -60,9 +59,7 @@ def main(args, env_registry=EnvPluginRegistry()):
     # construct network
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
     network = make_network(
-        env.observation_space,
-        network_head_shapes,
-        train_args
+        env.observation_space, network_head_shapes, train_args
     )
     network.load_state_dict(torch.load(args.network_file))
 
@@ -70,7 +67,10 @@ def main(args, env_registry=EnvPluginRegistry()):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, train_args)
+    agent = make_agent(
+        network, device, env.gpu_preprocessor, env.engine, env.action_space,
+        train_args
+    )
 
     # create a rendering container
     # TODO: could terminate after a configurable number of replays instead of running indefinitely
@@ -94,13 +94,27 @@ if __name__ == '__main__':
         help='path to args file (.../logs/<env-id>/<log-id>/args.json)'
     )
     parser.add_argument(
-        '-s', '--seed', type=int, default=32, metavar='S',
+        '-s',
+        '--seed',
+        type=int,
+        default=32,
+        metavar='S',
         help='random seed (default: 32)'
     )
     parser.add_argument(
-        '-r', '--render', type=parse_bool, nargs='?', const=True, default=False,
+        '-r',
+        '--render',
+        type=parse_bool,
+        nargs='?',
+        const=True,
+        default=False,
         help='render the environment during eval. (default: False)'
     )
-    parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
+    parser.add_argument(
+        '--gpu-id',
+        type=int,
+        default=0,
+        help='Which GPU to use for training (default: 0)'
+    )
     args = parser.parse_args()
     main(args)

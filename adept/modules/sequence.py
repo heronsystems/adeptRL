@@ -24,6 +24,7 @@ class LSTMCellLayerNorm(Module):
     https://github.com/seba-1511/lstms.pth/blob/master/lstms/lstm.py for reference.
     Original License Apache 2.0
     """
+
     def __init__(self, input_size, hidden_size, bias=True, forget_bias=0):
         super().__init__()
         self.input_size = input_size

@@ -20,18 +20,13 @@ from time import time
 from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, LogsAndSummarizesRewards
 
 
-class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards, SavesModels):
+class Local(
+    HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
+    SavesModels
+):
     def __init__(
-        self,
-        agent,
-        environment,
-        make_optimizer,
-        epoch_len,
-        nb_env,
-        logger,
-        summary_writer,
-        summary_frequency,
-        saver
+        self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
+        summary_writer, summary_frequency, saver
     ):
         super().__init__()
         self._agent = agent
@@ -96,8 +91,13 @@ class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
             self.agent.observe(obs, rewards, terminals, infos)
 
             # Perform state updates
-            terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
-            self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count, initial_count)
+            terminal_rewards, terminal_infos = self.update_buffers(
+                rewards, terminals, infos
+            )
+            self.log_episode_results(
+                terminal_rewards, terminal_infos, self.local_step_count,
+                initial_count
+            )
             self.write_reward_summaries(terminal_rewards, self.local_step_count)
             self.possible_save_model(self.local_step_count)
 
@@ -106,8 +106,12 @@ class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
                 self.learn(next_obs)
 
     def learn(self, next_obs):
-        loss_dict, metric_dict = self.agent.compute_loss(self.exp_cache.read(), next_obs)
-        total_loss = torch.sum(torch.stack(tuple(loss for loss in loss_dict.values())))
+        loss_dict, metric_dict = self.agent.compute_loss(
+            self.exp_cache.read(), next_obs
+        )
+        total_loss = torch.sum(
+            torch.stack(tuple(loss for loss in loss_dict.values()))
+        )
 
         self.optimizer.zero_grad()
         total_loss.backward()
@@ -117,4 +121,6 @@ class Local(HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
         self.agent.detach_internals()
 
         # write summaries
-        self.write_summaries(total_loss, loss_dict, metric_dict, self.local_step_count)
+        self.write_summaries(
+            total_loss, loss_dict, metric_dict, self.local_step_count
+        )

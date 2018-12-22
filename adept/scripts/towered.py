@@ -71,8 +71,9 @@ def main(args, env_registry=EnvPluginRegistry()):
     if rank == 0:
         env = EnvMetaData.from_args(args, env_registry)
     else:
-        env = SubProcEnvManager.from_args(args, seed=seed,
-                                          registry=env_registry)
+        env = SubProcEnvManager.from_args(
+            args, seed=seed, registry=env_registry
+        )
 
     # construct network
     torch.manual_seed(args.seed)
@@ -104,7 +105,9 @@ def main(args, env_registry=EnvPluginRegistry()):
             for v in variables:
                 comm.Bcast(v, root=0)
             for shared_v, model_v in zip(variables, network.parameters()):
-                model_v.data.copy_(torch.from_numpy(shared_v), non_blocking=True)
+                model_v.data.copy_(
+                    torch.from_numpy(shared_v), non_blocking=True
+                )
             print('{} variables synced'.format(rank))
 
     # host is rank 0
@@ -114,7 +117,9 @@ def main(args, env_registry=EnvPluginRegistry()):
             'ToweredWorker{}'.format(rank),
             os.path.join(log_id_dir, 'train_log_rank{}.txt'.format(rank))
         )
-        summary_writer = SummaryWriter(os.path.join(log_id_dir, 'rank{}'.format(rank)))
+        summary_writer = SummaryWriter(
+            os.path.join(log_id_dir, 'rank{}'.format(rank))
+        )
 
         # construct agent
         # distribute evenly across gpus
@@ -125,11 +130,15 @@ def main(args, env_registry=EnvPluginRegistry()):
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         torch.backends.cudnn.benchmark = True
-        agent = make_agent(network, device, env.gpu_preprocessor, env.engine, env.action_space, args)
+        agent = make_agent(
+            network, device, env.gpu_preprocessor, env.engine, env.action_space,
+            args
+        )
 
         # construct container
         container = ToweredWorker(
-            agent, env, args.nb_env, logger, summary_writer, args.summary_frequency
+            agent, env, args.nb_env, logger, summary_writer,
+            args.summary_frequency
         )
 
         # Run the container
@@ -146,7 +155,9 @@ def main(args, env_registry=EnvPluginRegistry()):
         )
         log_args(logger, args)
         write_args_file(log_id_dir, args)
-        logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
+        logger.info(
+            'Network Parameter Count: {}'.format(count_parameters(network))
+        )
 
         # Construct the optimizer
         def make_optimizer(params):
@@ -156,7 +167,8 @@ def main(args, env_registry=EnvPluginRegistry()):
             if args.load_optimizer:
                 opt.load_state_dict(
                     torch.load(
-                        args.load_optimizer, map_location=lambda storage, loc: storage
+                        args.load_optimizer,
+                        map_location=lambda storage, loc: storage
                     )
                 )
             return opt
@@ -171,14 +183,18 @@ def main(args, env_registry=EnvPluginRegistry()):
             try:
                 from pyinstrument import Profiler
             except:
-                raise ImportError('You must install pyinstrument to use profiling.')
+                raise ImportError(
+                    'You must install pyinstrument to use profiling.'
+                )
             profiler = Profiler()
             profiler.start()
             container.run(10e3)
             profiler.stop()
             print(profiler.output_text(unicode=True, color=True))
         else:
-            container.run(args.max_train_steps, initial_step_count=initial_step_count)
+            container.run(
+                args.max_train_steps, initial_step_count=initial_step_count
+            )
 
 
 if __name__ == '__main__':

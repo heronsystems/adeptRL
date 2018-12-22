@@ -15,7 +15,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-from adept.environments import ATARI_6_ENVS
+from adept.registries.environment import ATARI_6_ENVS
 from adept.utils.util import parse_bool
 from .local import main
 
@@ -25,33 +25,57 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
     parser = add_base_args(parser)
-    parser.add_argument('--gpu-id', type=int, default=0, help='Which GPU to use for training (default: 0)')
     parser.add_argument(
-        '-vn', '--vision-network', default='Nature',
+        '--gpu-id',
+        type=int,
+        default=0,
+        help='Which GPU to use for training (default: 0)'
+    )
+    parser.add_argument(
+        '-vn',
+        '--vision-network',
+        default='Nature',
         help='name of preset network (default: Nature)'
     )
     parser.add_argument(
-        '-dp', '--discrete-pathway', default='DiscreteIdentity',
+        '-dp',
+        '--discrete-pathway',
+        default='DiscreteIdentity',
     )
     parser.add_argument(
-        '-nb', '--network-body', default='Linear',
+        '-nb',
+        '--network-body',
+        default='Linear',
     )
     parser.add_argument(
-        '--agent', default='ActorCritic',
+        '--agent',
+        default='ActorCritic',
         help='name of preset agent (default: ActorCritic)'
     )
     parser.add_argument(
-        '--profile', type=parse_bool, nargs='?', const=True, default=False,
+        '--profile',
+        type=parse_bool,
+        nargs='?',
+        const=True,
+        default=False,
         help='displays profiling tree after 10e3 steps (default: False)'
     )
     parser.add_argument(
-        '--nb-eval-env', default=1, type=int,
-        help='Number of eval environments to run [in a separate thread] each with a different seed. '
-             'Creates a copy of the network. Disable by setting to 0. (default: 1)'
+        '--nb-eval-env',
+        default=1,
+        type=int,
+        help=
+        'Number of eval environments to run [in a separate thread]'
+        'each with a different seed. Creates a copy of the network. Disable '
+        'by setting to 0. (default: 1)'
     )
     parser.add_argument(
-        '--eval-step-rate', default=0, type=int,
-        help='Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 to disable (default: 0)'
+        '--eval-step-rate',
+        default=0,
+        type=int,
+        help=
+        'Number of eval steps allowed to run per second decreasing this'
+        'amount can improve training speed. 0 to disable (default: 0)'
     )
 
     args = parser.add_args()

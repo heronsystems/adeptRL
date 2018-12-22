@@ -36,9 +36,9 @@ def print_ascii_logo():
          / __ `/ __  / _ \/ __ \/ __/
         / /_/ / /_/ /  __/ /_/ / /_
         \__,_/\__,_/\___/ .___/\__/
-                       /_/           """ +
-        '\n' +
-        '                                     '[:-(version_len + 2)] + 'v{} '.format(VERSION)
+                       /_/           """ + '\n' +
+        '                                     ' [:-(version_len + 2)] +
+        'v{} '.format(VERSION)
     )
 
 
@@ -51,7 +51,9 @@ def make_log_id(tag, mode_name, agent_name, network_name):
     return log_id
 
 
-def make_log_id_from_timestamp(tag, mode_name, agent_name, network_name, timestamp):
+def make_log_id_from_timestamp(
+    tag, mode_name, agent_name, network_name, timestamp
+):
     if tag:
         log_id = '_'.join([tag, mode_name, agent_name, network_name, timestamp])
     else:
@@ -93,7 +95,9 @@ def write_args_file(log_id_dir, args):
 
 
 class ModelSaver:
-    BufferEntry = namedtuple('BufferEntry', ['reward', 'priority', 'network', 'optimizer'])
+    BufferEntry = namedtuple(
+        'BufferEntry', ['reward', 'priority', 'network', 'optimizer']
+    )
 
     def __init__(self, nb_top_model, log_id_dir):
         self.nb_top_model = nb_top_model
@@ -101,7 +105,11 @@ class ModelSaver:
         self._log_id_dir = log_id_dir
 
     def append_if_better(self, reward, network, optimizer):
-        self._buffer.push(self.BufferEntry(reward, time(), network.state_dict(), optimizer.state_dict()))
+        self._buffer.push(
+            self.BufferEntry(
+                reward, time(), network.state_dict(), optimizer.state_dict()
+            )
+        )
 
     def write_state_dicts(self, epoch_id):
         save_dir = os.path.join(self._log_id_dir, str(epoch_id))
@@ -110,11 +118,17 @@ class ModelSaver:
         for j, buff_entry in enumerate(self._buffer.flush()):
             torch.save(
                 buff_entry.network,
-                os.path.join(save_dir, 'model_{}_{}.pth'.format(j + 1, int(buff_entry.reward)))
+                os.path.join(
+                    save_dir,
+                    'model_{}_{}.pth'.format(j + 1, int(buff_entry.reward))
+                )
             )
             torch.save(
                 buff_entry.optimizer,
-                os.path.join(save_dir, 'optimizer_{}_{}.pth'.format(j + 1, int(buff_entry.reward)))
+                os.path.join(
+                    save_dir,
+                    'optimizer_{}_{}.pth'.format(j + 1, int(buff_entry.reward))
+                )
             )
 
 

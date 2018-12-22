@@ -23,8 +23,12 @@ class Agent(abc.ABC):
     """
     An Agent interacts with the environment and accumulates experience.
     """
+
     @abc.abstractclassmethod
-    def from_args(cls, network, device, reward_normalizer, gpu_preprocessor, engine, action_space, args):
+    def from_args(
+        cls, network, device, reward_normalizer, gpu_preprocessor, engine,
+        action_space, args
+    ):
         raise NotImplementedError
 
     @property

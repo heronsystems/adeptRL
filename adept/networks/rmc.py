@@ -27,15 +27,24 @@ class RMC(NetworkInterface):
     Relational Memory Core
     https://arxiv.org/pdf/1806.01822.pdf
     """
+
     def __init__(self, nb_in_chan, output_shape_dict, normalize):
         self.embedding_size = 512
         super(RMC, self).__init__(self.embedding_size, output_shape_dict)
         bias = not normalize
-        self.conv1 = Conv2d(nb_in_chan, 32, kernel_size=3, stride=2, padding=1, bias=bias)
-        self.conv2 = Conv2d(32, 32, kernel_size=3, stride=2, padding=1, bias=bias)
-        self.conv3 = Conv2d(32, 32, kernel_size=3, stride=2, padding=1, bias=bias)
+        self.conv1 = Conv2d(
+            nb_in_chan, 32, kernel_size=3, stride=2, padding=1, bias=bias
+        )
+        self.conv2 = Conv2d(
+            32, 32, kernel_size=3, stride=2, padding=1, bias=bias
+        )
+        self.conv3 = Conv2d(
+            32, 32, kernel_size=3, stride=2, padding=1, bias=bias
+        )
         self.attention = RMCCell(100, 100, 34)
-        self.conv4 = Conv2d(34, 8, kernel_size=3, stride=1, padding=1, bias=bias)
+        self.conv4 = Conv2d(
+            34, 8, kernel_size=3, stride=1, padding=1, bias=bias
+        )
         # BATCH x 8 x 10 x 10
         self.linear = Linear(800, 512, bias=bias)
 
@@ -64,11 +73,18 @@ class RMC(NetworkInterface):
 
         h = x.size(2)
         w = x.size(3)
-        xs_chan = torch.linspace(-1, 1, w).view(1, 1, 1, w).expand(input.size(0), 1, w, w).to(input.device)
-        ys_chan = torch.linspace(-1, 1, h).view(1, 1, h, 1).expand(input.size(0), 1, h, h).to(input.device)
+        xs_chan = torch.linspace(-1, 1, w)\
+            .view(1, 1, 1, w)\
+            .expand(input.size(0), 1, w, w)\
+            .to(input.device)
+        ys_chan = torch.linspace(-1, 1, h)\
+            .view(1, 1, h, 1)\
+            .expand(input.size(0), 1, h, h)\
+            .to(input.device)
         x = torch.cat([x, xs_chan, ys_chan], dim=1)
 
-        # need to transpose because attention expects attention dim before channel dim
+        # need to transpose because attention expects
+        # attention dim before channel dim
         x = x.view(x.size(0), x.size(1), h * w).transpose(1, 2)
         prev_memories = torch.stack(prev_memories)
         x = next_memories = self.attention(x.contiguous(), prev_memories)

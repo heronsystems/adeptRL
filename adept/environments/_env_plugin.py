@@ -21,6 +21,7 @@ class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     """
     Implement this class to add your custom environment.
     """
+
     def __init__(self, action_space, cpu_preprocessor, gpu_preprocessor):
         """
         :param observation_space: ._spaces.Spaces
@@ -49,6 +50,7 @@ class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     def from_args_curry(cls, args, seed, **kwargs):
         def _f():
             return cls.from_args(args, seed, **kwargs)
+
         return _f
 
     @property

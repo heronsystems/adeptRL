@@ -27,9 +27,13 @@ class Residual2DPreact(nn.Module):
         self.stride = stride
 
         self.bn1 = nn.BatchNorm2d(nb_in_chan)
-        self.conv1 = nn.Conv2d(nb_in_chan, nb_out_chan, 3, stride=stride, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            nb_in_chan, nb_out_chan, 3, stride=stride, padding=1, bias=False
+        )
         self.bn2 = nn.BatchNorm2d(nb_out_chan)
-        self.conv2 = nn.Conv2d(nb_out_chan, nb_out_chan, 3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            nb_out_chan, nb_out_chan, 3, stride=1, padding=1, bias=False
+        )
 
         relu_gain = nn.init.calculate_gain('relu')
         self.conv1.weight.data.mul_(relu_gain)
@@ -37,7 +41,9 @@ class Residual2DPreact(nn.Module):
 
         self.do_projection = self.nb_in_chan != self.nb_out_chan or self.stride > 1
         if self.do_projection:
-            self.projection = nn.Conv2d(nb_in_chan, nb_out_chan, 3, stride=stride, padding=1)
+            self.projection = nn.Conv2d(
+                nb_in_chan, nb_out_chan, 3, stride=stride, padding=1
+            )
             self.projection.weight.data.mul_(relu_gain)
 
     def forward(self, x):

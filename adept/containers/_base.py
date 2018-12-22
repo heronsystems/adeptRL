@@ -68,7 +68,9 @@ class CountsRewards(abc.ABC):
         self.local_step_count += self.nb_env
         terminal_rewards = []
         terminal_infos = []
-        for ep_reward, done, info in zip(self.episode_reward_buffer, terminals, infos):
+        for ep_reward, done, info in zip(
+            self.episode_reward_buffer, terminals, infos
+        ):
             if done and info:
                 terminal_rewards.append(ep_reward.item())
                 terminal_infos.append((info))
@@ -82,14 +84,19 @@ class LogsRewards(CountsRewards, metaclass=abc.ABCMeta):
     def logger(self):
         raise NotImplementedError
 
-    def log_episode_results(self, terminal_rewards, terminal_infos, step_count, initial_step_count=0):
+    def log_episode_results(
+        self,
+        terminal_rewards,
+        terminal_infos,
+        step_count,
+        initial_step_count=0
+    ):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
             self.logger.info(
                 'train_frames: {} reward: {} avg_train_fps: {}'.format(
-                    step_count,
-                    ep_reward,
-                    (step_count - initial_step_count) / (time() - self.start_time)
+                    step_count, ep_reward, (step_count - initial_step_count) /
+                    (time() - self.start_time)
                 )
             )
         return terminal_rewards
@@ -108,7 +115,9 @@ class LogsAndSummarizesRewards(LogsRewards, metaclass=abc.ABCMeta):
     def write_reward_summaries(self, terminal_rewards, step_count):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
-            self.summary_writer.add_scalar(self.summary_name, ep_reward, step_count)
+            self.summary_writer.add_scalar(
+                self.summary_name, ep_reward, step_count
+            )
         return terminal_rewards
 
 
@@ -148,7 +157,9 @@ class WritesSummaries(abc.ABC):
             self.prev_summary_time = cur_time
 
             writer = self.summary_writer
-            writer.add_scalar('macro_loss/total_loss', total_loss.item(), step_count)
+            writer.add_scalar(
+                'macro_loss/total_loss', total_loss.item(), step_count
+            )
             for l_name, loss in loss_dict.items():
                 writer.add_scalar('loss/' + l_name, loss.item(), step_count)
             for m_name, metric in metric_dict.items():
@@ -157,7 +168,10 @@ class WritesSummaries(abc.ABC):
                 p_name = p_name.replace('.', '/')
                 writer.add_scalar(p_name, torch.norm(param).item(), step_count)
                 if param.grad is not None:
-                    writer.add_scalar(p_name + '.grad', torch.norm(param.grad).item(), step_count)
+                    writer.add_scalar(
+                        p_name + '.grad',
+                        torch.norm(param.grad).item(), step_count
+                    )
 
 
 class SavesModels(abc.ABC):
@@ -190,7 +204,9 @@ class SavesModels(abc.ABC):
         :return:
         """
         if step_count >= self.__next_save_step:
-            self.saver.save_state_dicts(self.network, int(step_count), optimizer=self.optimizer)
+            self.saver.save_state_dicts(
+                self.network, int(step_count), optimizer=self.optimizer
+            )
             self.__next_save_step += self.epoch_len
 
 

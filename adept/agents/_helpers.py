@@ -25,6 +25,11 @@ def obs_to_device(obs, device):
     """
     batch = []
     for channels in zip(*obs.values()):
-        tensor = torch.cat([channel.to(device).float() for channel in channels if isinstance(channel, torch.Tensor)])
+        tensor = torch.cat(
+            [
+                channel.to(device).float()
+                for channel in channels if isinstance(channel, torch.Tensor)
+            ]
+        )
         batch.append(tensor)
     return torch.stack(batch)

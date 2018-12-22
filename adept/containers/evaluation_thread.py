@@ -21,8 +21,17 @@ from time import time, sleep
 
 
 class EvaluationThread(HasAgent, LogsAndSummarizesRewards):
-    def __init__(self, training_network, agent, env, nb_env, logger, summary_writer, step_rate_limit,
-                 override_step_count_fn=None):
+    def __init__(
+        self,
+        training_network,
+        agent,
+        env,
+        nb_env,
+        logger,
+        summary_writer,
+        step_rate_limit,
+        override_step_count_fn=None
+    ):
         self._training_network = training_network
         self._agent = agent
         self._environment = env
@@ -53,21 +62,32 @@ class EvaluationThread(HasAgent, LogsAndSummarizesRewards):
 
             self.agent.reset_internals(terminals)
             # Perform state updates
-            terminal_rewards, terminal_infos = self.update_buffers(rewards, terminals, infos)
-            self.log_episode_results(terminal_rewards, terminal_infos, self.local_step_count)
+            terminal_rewards, terminal_infos = self.update_buffers(
+                rewards, terminals, infos
+            )
+            self.log_episode_results(
+                terminal_rewards, terminal_infos, self.local_step_count
+            )
             self.write_reward_summaries(terminal_rewards, self.local_step_count)
 
             if np.any(terminals) and np.any(infos):
-                self.network.load_state_dict(self._training_network.state_dict())
+                self.network.load_state_dict(
+                    self._training_network.state_dict()
+                )
 
-    def log_episode_results(self, terminal_rewards, terminal_infos, step_count, initial_step_count=0):
+    def log_episode_results(
+        self,
+        terminal_rewards,
+        terminal_infos,
+        step_count,
+        initial_step_count=0
+    ):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
             self.logger.info(
                 'eval_frames: {} reward: {} avg_eval_fps: {}'.format(
-                    step_count,
-                    ep_reward,
-                    (step_count - initial_step_count) / (time() - self.start_time)
+                    step_count, ep_reward, (step_count - initial_step_count) /
+                    (time() - self.start_time)
                 )
             )
         return terminal_rewards

@@ -25,16 +25,25 @@ class CircularDND(torch.nn.Module):
     """
     Does not support batches
     """
-    def __init__(self, nb_key_chan, nb_v_chan, delta=1e-3, query_width=50, max_len=1028):
+
+    def __init__(
+        self, nb_key_chan, nb_v_chan, delta=1e-3, query_width=50, max_len=1028
+    ):
         super(CircularDND, self).__init__()
         self.delta = delta
         self.query_width = query_width
-        self.keys = torch.nn.Parameter(torch.zeros(max_len, nb_key_chan, requires_grad=True))
-        self.values = torch.nn.Parameter(torch.zeros(max_len, nb_v_chan, requires_grad=True))
+        self.keys = torch.nn.Parameter(
+            torch.zeros(max_len, nb_key_chan, requires_grad=True)
+        )
+        self.values = torch.nn.Parameter(
+            torch.zeros(max_len, nb_v_chan, requires_grad=True)
+        )
 
     def forward(self, key):
         inds, weights = self._k_nearest(key, self.query_width)
-        return torch.sum(self.values[inds, :] * weights, BATCH_AXIS, keepdim=True)
+        return torch.sum(
+            self.values[inds, :] * weights, BATCH_AXIS, keepdim=True
+        )
 
     def _k_nearest(self, key, k):
         lookup_weights = self._kernel(key, self.keys)
@@ -43,7 +52,9 @@ class CircularDND(torch.nn.Module):
         return top_k_inds, weights
 
     def _kernel(self, query_key, all_keys):
-        return 1. / (torch.pow(query_key - all_keys, 2).sum(CHANNEL_AXIS) + self.delta)
+        return 1. / (
+            torch.pow(query_key - all_keys, 2).sum(CHANNEL_AXIS) + self.delta
+        )
 
     def sync_from_shared(self, shared_dnd):
         self.load_state_dict(shared_dnd.state_dict())
@@ -68,7 +79,10 @@ class PruningDND(torch.nn.Module):
     """
     Does not support batches.
     """
-    def __init__(self, nb_key_chan, nb_v_chan, delta=1e-3, query_width=50, max_len=1024):
+
+    def __init__(
+        self, nb_key_chan, nb_v_chan, delta=1e-3, query_width=50, max_len=1024
+    ):
         super(PruningDND, self).__init__()
         self.delta = delta
         self.query_width = query_width
@@ -78,7 +92,11 @@ class PruningDND(torch.nn.Module):
 
     def forward(self, key):
         inds, weights = self._k_nearest(key, self.query_width)
-        return torch.sum(self.values[inds, :] * weights.unsqueeze(CHANNEL_AXIS), BATCH_AXIS, keepdim=True), inds, weights
+        return torch.sum(
+            self.values[inds, :] * weights.unsqueeze(CHANNEL_AXIS),
+            BATCH_AXIS,
+            keepdim=True
+        ), inds, weights
 
     def _k_nearest(self, key, k):
         lookup_weights = self._kernel(key, self.keys)
@@ -87,7 +105,9 @@ class PruningDND(torch.nn.Module):
         return top_k_inds, weights
 
     def _kernel(self, query_key, all_keys):
-        return 1. / (torch.pow(query_key - all_keys, 2).sum(CHANNEL_AXIS) + self.delta)
+        return 1. / (
+            torch.pow(query_key - all_keys, 2).sum(CHANNEL_AXIS) + self.delta
+        )
 
     def sync_from_shared(self, shared_dnd):
         self.load_state_dict(shared_dnd.state_dict())
@@ -137,7 +157,9 @@ class FreqPruningLTM(torch.nn.Module):
         # indexing headache
         values = self.values.unsqueeze(0)
         values = values.expand(inds.size(0), values.size(1), values.size(2))
-        inds_tmp = inds.unsqueeze(2).expand(inds.size(0), inds.size(1), values.size(2))
+        inds_tmp = inds.unsqueeze(2).expand(
+            inds.size(0), inds.size(1), values.size(2)
+        )
         selected_values = values.gather(1, inds_tmp)
 
         weighted_selection = (selected_values * weights.unsqueeze(2)).sum(1)
