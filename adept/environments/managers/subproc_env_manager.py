@@ -35,7 +35,8 @@ class SubProcEnvManager(AdeptEnvManager):
 
     def __init__(self, env_fns, engine):
         super(SubProcEnvManager, self).__init__(env_fns, engine)
-        # TODO: sharing cuda tensors requires spawn or forkserver but these do not work with mpi
+        # TODO: sharing cuda tensors requires spawn or forkserver but these
+        #  do not work with mpi
         # mp.set_start_method('spawn')
 
         self.waiting = False
@@ -48,8 +49,9 @@ class SubProcEnvManager(AdeptEnvManager):
             mp.Process(
                 target=worker,
                 args=(work_remote, remote, CloudpickleWrapper(env_fn))
-            ) for (work_remote, remote,
-                   env_fn) in zip(self.work_remotes, self.remotes, env_fns)
+            ) for (work_remote, remote, env_fn) in zip(
+                self.work_remotes, self.remotes, env_fns
+            )
         ]
         for p in self.ps:
             p.daemon = True

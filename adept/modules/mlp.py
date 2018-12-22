@@ -20,16 +20,14 @@ import torch
 from torch import nn
 from torch.nn import Parameter, functional as F
 
-from adept.models.util import init_tflearn_fc_
-
 
 class GaussianLinear(nn.Module):
     def __init__(self, fan_in, nodes):
         super().__init__()
         self.mu = nn.Linear(fan_in, nodes)
-        init_tflearn_fc_(self.mu)
+        # init_tflearn_fc_(self.mu)
         self.std = nn.Linear(fan_in, nodes)
-        init_tflearn_fc_(self.std)
+        # init_tflearn_fc_(self.std)
 
     def forward(self, x):
         mu = self.mu(x)
@@ -47,8 +45,8 @@ class GaussianLinear(nn.Module):
 
 class NoisyLinear(nn.Linear):
     """
-
-    Reference implementation: https://github.com/Kaixhin/NoisyNet-A3C/blob/master/model.py
+    Reference implementation:
+    https://github.com/Kaixhin/NoisyNet-A3C/blob/master/model.py
     """
 
     def __init__(self, in_features, out_features, sigma_init=0.017, bias=True):
@@ -80,7 +78,8 @@ class NoisyLinear(nn.Linear):
 
     def batch_forward(self, x, internals, batch_size=None):
         print(
-            'WARNING: calling forward multiple times is actually faster than this and takes less memory'
+            'WARNING: calling forward multiple times is actually'
+            'faster than this and takes less memory'
         )
         batch_size = batch_size if batch_size is not None else x.shape[0]
         x = x.unsqueeze(1)
@@ -94,8 +93,8 @@ class NoisyLinear(nn.Linear):
         batch_w += eps_w
         # permute to b x m x p
         batch_w = batch_w.permute(0, 2, 1)
-        batch_b = self.bias.expand(batch_size,
-                                   -1) + self.sigma_bias.expand(batch_size, -1)
+        batch_b = self.bias.expand(batch_size, -1) \
+                  + self.sigma_bias.expand(batch_size, -1)
         batch_b += eps_b
 
         bmm = torch.bmm(x, batch_w).squeeze(1)

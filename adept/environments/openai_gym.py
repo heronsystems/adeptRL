@@ -47,8 +47,9 @@ class AdeptGymEnv(EnvPlugin):
 
         action_space = Spaces.from_gym(env.action_space)
 
-        super(AdeptGymEnv,
-              self).__init__(action_space, cpu_preprocessor, gpu_preprocessor)
+        super(AdeptGymEnv, self).__init__(
+            action_space, cpu_preprocessor, gpu_preprocessor
+        )
 
         self.gym_env = env
         self._gym_obs_space = env.observation_space

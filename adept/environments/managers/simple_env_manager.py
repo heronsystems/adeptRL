@@ -29,8 +29,10 @@ class SimpleEnvManager(AdeptEnvManager):
         super(SimpleEnvManager, self).__init__(env_fns, engine)
         self.envs = [fn() for fn in env_fns]
         env = self.envs[0]
-        self._observation_space, self._action_space = env.observation_space, env.action_space
-        self._cpu_preprocessor, self._gpu_preprocessor = env.cpu_preprocessor, env.gpu_preprocessor
+        self._observation_space = env.observation_space
+        self._action_space = env.action_space
+        self._cpu_preprocessor = env.cpu_preprocessor
+        self._gpu_preprocessor = env.gpu_preprocessor
 
         self.buf_obs = [None for _ in range(self.nb_env)]
         self.buf_dones = [None for _ in range(self.nb_env)]
@@ -64,8 +66,8 @@ class SimpleEnvManager(AdeptEnvManager):
     def step_wait(self):
         obs = []
         for e in range(self.nb_env):
-            ob, self.buf_rews[e], self.buf_dones[e], self.buf_infos[
-                e] = self.envs[e].step(self.actions)
+            ob, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = \
+                self.envs[e].step(self.actions)
             if self.buf_dones[e]:
                 ob = self.envs[e].reset()
             obs.append(ob)

@@ -146,8 +146,10 @@ class VariableRecieverSingle:
             if not has_data:
                 if number_of_recvs >= self.waiting_recv_warning:
                     print(
-                        'WARNING {}: Worker had {} variable updates waiting. Worker is slow.'
-                        .format(self.mpi_comm.Get_rank(), number_of_recvs)
+                        'WARNING {}: Worker had {} variable updates waiting.'
+                        'Worker is slow.'.format(
+                            self.mpi_comm.Get_rank(), number_of_recvs
+                        )
                     )
 
                 return True  # we did get something

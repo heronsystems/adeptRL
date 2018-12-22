@@ -17,7 +17,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import OrderedDict
 from functools import reduce
 
-import os
 import numpy as np
 import torch
 from pysc2.env import environment
@@ -85,8 +84,9 @@ class AdeptSC2Env(EnvPlugin):
         )
         action_space = Spaces(act_entries_by_name)
         self._func_id_to_headnames = SC2ActionLookup()
-        super(AdeptSC2Env,
-              self).__init__(action_space, cpu_preprocessor, gpu_preprocessor)
+        super(AdeptSC2Env, self).__init__(
+            action_space, cpu_preprocessor, gpu_preprocessor
+        )
 
     @classmethod
     def from_args(

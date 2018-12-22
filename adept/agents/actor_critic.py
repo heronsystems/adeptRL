@@ -93,8 +93,8 @@ class ActorCritic(Agent):
             nargs='?',
             const=True,
             default=True,
-            help=
-            'Use generalized advantage estimation for the policy loss. (default: True)'
+            help='Use generalized advantage estimation for the policy loss.'
+                 '(default: True)'
         )
         parser.add_argument(
             '-at',
@@ -116,7 +116,8 @@ class ActorCritic(Agent):
             const=True,
             default=False,
             help=
-            'Normalize the advantage when calculating policy loss. (default: False)'
+            'Normalize the advantage when calculating policy loss.'
+            '(default: False)'
         )
 
     @property
@@ -312,10 +313,11 @@ class ActorCritic(Agent):
         # batched value loss
         value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
 
-        # normalize advantage so that an even number of actions are reinforced and penalized
+        # normalize advantage so that an even number
+        # of actions are reinforced and penalized
         if self.normalize_advantage:
-            batch_advantages = (batch_advantages - batch_advantages.mean()) / \
-                               (batch_advantages.std() + 1e-5)
+            batch_advantages = (batch_advantages - batch_advantages.mean()) \
+                               / (batch_advantages.std() + 1e-5)
         policy_loss = 0.
         entropy_loss = 0.
 
@@ -327,17 +329,16 @@ class ActorCritic(Agent):
             policy_loss = policy_loss - (
                 log_probs * batch_advantages[i].unsqueeze(1).data
             ).sum(1)
-            entropy_loss = entropy_loss - (self.entropy_weight *
-                                           entropies).sum(1)
+            entropy_loss = entropy_loss - (
+                self.entropy_weight * entropies
+            ).sum(1)
 
         batch_size = policy_loss.shape[0]
         nb_action = log_probs.shape[1]
 
-        policy_loss = policy_loss.sum(0
-                                     ) / (batch_size * rollout_len * nb_action)
-        entropy_loss = entropy_loss.sum(0) / (
-            batch_size * rollout_len * nb_action
-        )
+        denom = batch_size * rollout_len * nb_action
+        policy_loss = policy_loss.sum(0) / denom
+        entropy_loss = entropy_loss.sum(0) / denom
 
         losses = {
             'value_loss': value_loss,
@@ -363,14 +364,16 @@ class ActorCritic(Agent):
             terminal = terminals[i]
 
             # Nstep return is always calculated for the critic's target
-            # using the GAE target for the critic results in the same or worse performance
+            # using the GAE target for the critic results in the
+            # same or worse performance
             target_return = reward + self.discount * target_return * terminal
             nstep_target_returns.append(target_return)
 
             # Generalized Advantage Estimation
             if self.gae:
-                delta_t = reward + self.discount * next_value * terminal - values[
-                    i].data
+                delta_t = reward \
+                          + self.discount * next_value * terminal \
+                          - values[i].data
                 gae = gae * self.discount * self.tau * terminal + delta_t
                 gae_advantages.append(gae)
                 next_value = values[i].data

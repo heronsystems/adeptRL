@@ -121,8 +121,8 @@ class ActorCriticVtrace(Agent):
 
     def act(self, obs):
         # TODO: set use_local_buffers flag in the agent
-        # The container currently sets network.eval() if batch norm modules are requested
-        # to use the learned parameters instead of per batch stats
+        # The container currently sets network.eval() if batch norm modules are
+        # requested to use the learned parameters instead of per batch stats
         # self.network.train()
 
         if self.engine == Engines.GYM:
@@ -170,8 +170,9 @@ class ActorCriticVtrace(Agent):
 
     def _act_sc2(self, obs):
         """
-            This is the method called on each worker so it does not require grads and must
-            keep track of it's internals. IMPALA only needs log_probs(a) and the sampled action from the worker
+        This is the method called on each worker so it does not require
+        grads and must keep track of it's internals. IMPALA only needs
+        log_probs(a) and the sampled action from the worker
         """
         with torch.no_grad():
             predictions, internals = self.network(
@@ -269,8 +270,10 @@ class ActorCriticVtrace(Agent):
         self, obs, next_obs, terminal_masks, sampled_actions, internals
     ):
         """
-            This is the method to recompute the forward pass on the host, it must return log_probs, values and entropies
-            Obs, sampled_actions, terminal_masks here are [seq, batch], internals must be reset if terminal
+        This is the method to recompute the forward pass on the host, it
+        must return log_probs, values and entropies Obs, sampled_actions,
+        terminal_masks here are [seq, batch], internals must be reset if
+        terminal
         """
         self.network.train()
         next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
@@ -281,7 +284,8 @@ class ActorCriticVtrace(Agent):
 
         seq_len, batch_size = terminal_masks.shape
 
-        # if network is modular, trunk can be sped up by combining batch & seq dim
+        # if network is modular,
+        # trunk can be sped up by combining batch & seq dim
         def get_results_generator():
             if isinstance(self.network, ModularNetwork):
                 pathway_dict = self.gpu_preprocessor(obs, self.device)
@@ -444,7 +448,8 @@ class ActorCriticVtrace(Agent):
         # internals are prefixed like internals-
         # they are a list[]
         behavior_starting_internals = {
-            # list flattening https://stackoverflow.com/questions/952914/making-a-flat-list-out-of-list-of-lists-in-python
+            # list flattening
+            # https://stackoverflow.com/questions/952914/making-a-flat-list-out-of-list-of-lists-in-python
             k.split('-')[-1]:
             [item.to(self.device) for sublist in v for item in sublist]
             for k, v in rollouts.items() if 'internals' in k
@@ -487,9 +492,15 @@ class ActorCriticVtrace(Agent):
         estimated_value, minimum_importance_value, minimum_importance_policy
     ):
         """
-            Args:
-                discount_terminal_mask: should be shape [seq, batch] of discount * (1 - terminal)
-            Returns target for current critic and advantage for policy
+        :param log_diff_behavior_vs_current:
+        :param discount_terminal_mask: should be shape [seq, batch] of
+        discount * (1 - terminal)
+        :param rewards:
+        :param values:
+        :param estimated_value:
+        :param minimum_importance_value:
+        :param minimum_importance_policy:
+        :return:
         """
         importance = torch.exp(log_diff_behavior_vs_current)
         clamped_importance_value = importance.clamp(
@@ -508,8 +519,9 @@ class ActorCriticVtrace(Agent):
             rewards + discount_terminal_mask * values_t_plus_1 - values
         )
 
-        # reverse over the values to create the summed importance weighted return
-        # everything on the right side of the plus in function 1 of the paper
+        # reverse over the values to create the summed importance weighted
+        # return everything on the right side of the plus in function 1 of
+        # the paper
         vs_minus_v_xs = []
         nstep_v = 0.0
         # TODO: this uses a different clamping if != 1
@@ -529,7 +541,8 @@ class ActorCriticVtrace(Agent):
         v_s_tp1 = torch.cat((v_s[1:], estimated_value.unsqueeze(0)), 0)
         advantage = rewards + discount_terminal_mask * v_s_tp1 - values
 
-        # if multiple actions broadcast the advantage to be weighted by the differen actions importance
+        # if multiple actions broadcast the advantage to be weighted by the
+        # different actions importance
         # (dim 3 is seq, batch, # actions)
         if clamped_importance_pg.dim() == 3:
             advantage = advantage.unsqueeze(-1)
