@@ -7,6 +7,16 @@ from adept.globals import VERSION
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+extras = {
+        'mpi': ['mpi4py>=3.0'],
+        'sc2': ['pysc2>=2.0'],
+        'profiler': ['pyinstrument>=2.0']
+}
+
+all_deps = []
+for group_name in extras:
+    all_deps += extras[group_name]
+extras['all'] = all_deps
 
 setup(
     name='adeptRL',
@@ -29,10 +39,6 @@ setup(
         'cloudpickle>=0.5',
         'opencv-python-headless>=3.4'
     ],
-    extras_require={
-        'mpi': ['mpi4py>=3.0'],
-        'sc2': ['pysc2>=2.0'],
-        'profiler': ['pyinstrument>=2.0']
-    },
+    extras_require=extras,
     include_package_data=True
 )
