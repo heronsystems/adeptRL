@@ -18,12 +18,12 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Testing..'
-                sh 'python -m adept.scripts.local ActorCritic -cm 10000'
+                sh 'pytest --verbose --junit-xml test_reports/results.xml'
             }
-        }
-        stage('Deploy') {
-            steps {
-                echo 'Deploying....'
+            post {
+                always {
+                    junit
+                }
             }
         }
     }

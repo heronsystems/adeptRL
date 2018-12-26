@@ -19,6 +19,10 @@ from collections import OrderedDict
 
 
 def listd_to_dlist(list_of_dicts):
+    """
+    :param list_of_dicts: List[Dict[str, T]]
+    :return: Dict[List[
+    """
     new_dict = OrderedDict()
     for d in list_of_dicts:
         for k, v in d.items():

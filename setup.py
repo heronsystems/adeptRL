@@ -8,15 +8,19 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 extras = {
-        'mpi': ['mpi4py>=3.0'],
-        'sc2': ['pysc2>=2.0'],
-        'profiler': ['pyinstrument>=2.0']
+    'mpi': ['mpi4py>=3.0'],
+    'sc2': ['pysc2>=2.0'],
+    'profiler': ['pyinstrument>=2.0']
 }
+test_deps = ['pytest']
 
 all_deps = []
 for group_name in extras:
     all_deps += extras[group_name]
 extras['all'] = all_deps
+
+for t in test_deps:
+    extras['all'] += t
 
 setup(
     name='adeptRL',
@@ -39,6 +43,7 @@ setup(
         'cloudpickle>=0.5',
         'opencv-python-headless>=3.4'
     ],
+    test_requires=test_deps,
     extras_require=extras,
     include_package_data=True
 )
