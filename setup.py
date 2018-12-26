@@ -17,10 +17,9 @@ test_deps = ['pytest']
 all_deps = []
 for group_name in extras:
     all_deps += extras[group_name]
+all_deps = all_deps + test_deps
 extras['all'] = all_deps
 
-for t in test_deps:
-    extras['all'] += t
 
 setup(
     name='adeptRL',
