@@ -6,6 +6,7 @@ pipeline {
             args '--runtime nvidia -v /tmp/adept_logs:/tmp/adept_logs'
         }
     }
+    triggers { pollSCM('H/15 * * * *') }
 
     stages {
         stage('Build') {
