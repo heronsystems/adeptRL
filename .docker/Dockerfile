@@ -15,4 +15,5 @@ WORKDIR /
 
 RUN pip3 install https://download.pytorch.org/whl/cu100/torch-1.0.0-cp36-cp36m-linux_x86_64.whl
 RUN apt-get install -y cmake zlib1g-dev libjpeg-dev
-# RUN pip3 install gym[atari]
+
+RUN ln -s /usr/bin/python3 /usr/bin/python

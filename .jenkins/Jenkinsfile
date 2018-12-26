@@ -18,6 +18,7 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Testing..'
+                sh 'python -m adept.scripts.local ActorCritic -cm 10000'
             }
         }
         stage('Deploy') {
