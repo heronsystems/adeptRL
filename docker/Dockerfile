@@ -30,4 +30,5 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 # Install AdeptRL
 COPY ./ /adeptRL
 WORKDIR /adeptRL
+RUN ls
 RUN pip3 install .[all]
