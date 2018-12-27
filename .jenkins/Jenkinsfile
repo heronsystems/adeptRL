@@ -3,8 +3,10 @@ pipeline {
         dockerfile {
             filename 'Dockerfile'
             dir 'docker'
-            args '--runtime nvidia -v /tmp/adept_logs:/tmp/adept_logs --net
-            host --cap-add SYS_PTRACE'
+            args("""--runtime nvidia \
+            -v /tmp/adept_logs:/tmp/adept_logs \
+            --net host \
+            --cap-add SYS_PTRACE""")
         }
     }
     triggers { pollSCM('H/15 * * * *') }
