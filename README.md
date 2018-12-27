@@ -37,13 +37,16 @@ We designed this library to be flexible and extensible. Plugging in novel resear
 ## Installation
 From docker:
 * [docker instructions](./docker/)
+
 From source:
 * Follow instructions for [PyTorch](https://pytorch.org/)
 * (Optional) Follow instructions for [StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
 
 ```
+git clone https://github.com/heronsystems/adeptRL
+cd adeptRL
 # Remove mpi, sc2, profiler if you don't plan on using these features:
-pip install adeptRL[mpi,sc2,profiler]
+pip install .[mpi,sc2,profiler]
 ```
 
 ## Performance
