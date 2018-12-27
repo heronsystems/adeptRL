@@ -2,8 +2,9 @@ pipeline {
     agent {
         dockerfile {
             filename 'Dockerfile'
-            dir '.docker'
-            args '--runtime nvidia -v /tmp/adept_logs:/tmp/adept_logs'
+            dir 'docker'
+            args '--runtime nvidia -v /tmp/adept_logs:/tmp/adept_logs --net
+            host --cap-add SYS_PTRACE'
         }
     }
     triggers { pollSCM('H/15 * * * *') }
@@ -11,14 +12,14 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                echo 'Building..'
+                echo 'Checking build...'
                 sh 'nvidia-smi'
-                sh 'pip3 install .[all]'
+                sh 'python -m adept.scripts.local -h'
             }
         }
         stage('Test') {
             steps {
-                echo 'Testing..'
+                echo 'Running unit tests...'
                 sh 'pytest --verbose'
             }
         }
