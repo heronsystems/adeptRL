@@ -19,6 +19,15 @@ from collections import OrderedDict
 
 
 def listd_to_dlist(list_of_dicts):
+    """
+    Converts a list of dictionaries to a dictionary of lists. Preserves key
+    order.
+
+    K is type of key.
+    V is type of value.
+    :param list_of_dicts: List[Dict[K, V]]
+    :return: Dict[K, List[V]]
+    """
     new_dict = OrderedDict()
     for d in list_of_dicts:
         for k, v in d.items():
@@ -30,6 +39,15 @@ def listd_to_dlist(list_of_dicts):
 
 
 def dlist_to_listd(dict_of_lists):
+    """
+    Converts a dictionary of lists to a list of dictionaries. Preserves key
+    order.
+
+    K is type of key.
+    V is type of value.
+    :param dict_of_lists: Dict[K, List[V]]
+    :return: List[Dict[K, V]]
+    """
     keys = dict_of_lists.keys()
     list_len = len(dict_of_lists[next(iter(keys))])
     new_list = []
