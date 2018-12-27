@@ -19,12 +19,7 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Testing..'
-                sh 'pytest --verbose --junit-xml test_reports/results.xml'
-            }
-            post {
-                always {
-                    junit 'test_reports/results.xml'
-                }
+                sh 'pytest --verbose'
             }
         }
     }
