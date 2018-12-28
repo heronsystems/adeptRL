@@ -23,7 +23,7 @@ import torch
 from absl import flags
 
 from adept.containers import Evaluation
-from adept.environments import EnvMetaData, SimpleEnvManager
+from adept.environments import EnvMetaData, SimpleEnvManager, SubProcEnvManager
 from adept.registries.environment import EnvPluginRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
@@ -54,10 +54,15 @@ def main(args, env_registry=EnvPluginRegistry()):
 
     with open(os.path.join(args.log_id_dir, 'args.json'), 'r') as args_file:
         train_args = dotdict(json.load(args_file))
-    train_args.nb_env = 1
+    train_args.nb_env = args.nb_episode  # TODO make this line uneccessary
 
     # construct env
-    env = EnvMetaData.from_args(train_args, registry=env_registry)
+    env = SubProcEnvManager.from_args(
+        train_args,
+        seed=args.seed,
+        nb_env=args.nb_episode,
+        registry=env_registry
+    )
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
@@ -78,11 +83,8 @@ def main(args, env_registry=EnvPluginRegistry()):
         selected_model = None
         for network_file in network_files:
             # load new network
-            network.load_state_dict(
-                torch.load(
-                    network_file, map_location=lambda storage, loc: storage
-                )
-            )
+            print('loaded', network_file)
+            network.load_state_dict(torch.load(network_file))
 
             # construct agent
             agent = make_agent(
@@ -90,23 +92,12 @@ def main(args, env_registry=EnvPluginRegistry()):
                 env_registry.lookup_engine(train_args.env_id), env.action_space,
                 train_args
             )
-
             # container
-            container = Evaluation(
-                agent,
-                device,
-                args.render,
-                lambda s: SimpleEnvManager.from_args(
-                    train_args,
-                    seed=s,
-                    nb_env=1,
-                    registry=env_registry
-                ),
-                args.seed
-            )
+            container = Evaluation(agent, device, env)
 
             # Run the container
-            mean_reward, std_dev = container.run(args.nb_episode)
+            mean_reward, std_dev = container.run()
+            print('----FIRST EP COMPLETe -----')
 
             if mean_reward >= best_mean:
                 best_mean = mean_reward
@@ -141,7 +132,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='AdeptRL Evaluation Mode')
     parser.add_argument(
-        '--log-id-dir', help='path to args file (.../logs/<env-id>/<log-id>)'
+        '--log-id-dir', help='path to log dir (.../logs/<env-id>/<log-id>)'
     )
     parser.add_argument(
         '--nb-episode',
@@ -153,18 +144,9 @@ if __name__ == '__main__':
         '-s',
         '--seed',
         type=int,
-        default=32,
+        default=512,
         metavar='S',
-        help='random seed (default: 32)'
-    )
-    parser.add_argument(
-        '-r',
-        '--render',
-        type=parse_bool,
-        nargs='?',
-        const=True,
-        default=False,
-        help='render the environment during eval. (default: False)'
+        help='random seed (default: 512)'
     )
     parser.add_argument(
         '--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)'

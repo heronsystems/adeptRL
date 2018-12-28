@@ -258,8 +258,9 @@ class ActorCritic(Agent):
 
     def _act_eval_gym(self, obs):
         with torch.no_grad():
+            processed_obs = self.gpu_preprocessor(obs, self.device)
             predictions, internals = self.network(
-                self.gpu_preprocessor(obs, self.device), self.internals
+                processed_obs, self.internals
             )
 
             # reduce feature dim, build action_key dim

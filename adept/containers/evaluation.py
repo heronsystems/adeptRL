@@ -13,11 +13,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
-
-from adept.registries.environment import Engines
-from ._base import HasAgent, CountsRewards
-import numpy as np
 import time
+
+import numpy as np
+
+from ._base import HasAgent, CountsRewards
 
 
 class EvalBase(HasAgent, metaclass=abc.ABCMeta):
@@ -86,48 +86,57 @@ class AtariRenderer(EvalBase):
 
 
 class Evaluation(EvalBase, CountsRewards):
-    def __init__(self, agent, device, render, env_fn, seed_start):
+    def __init__(self, agent, device, environment):
         super().__init__(agent, device)
         self._episode_count = 0
-        self.seed = seed_start
-        self.env_fn = env_fn
-        self.render = render
-        self._environment = self.env_fn(self.seed)
+        self._environment = environment
+        self.episode_complete_statuses = [False for _ in range(self.nb_env)]
 
     @property
     def environment(self):
         return self._environment
 
-    @environment.setter
-    def environment(self, env):
-        self._environment = env
-
     @property
     def nb_env(self):
-        return 1
+        return self._environment.nb_env
 
-    def run(self, nb_episode):
+    def run(self):
+        """
+        Run the evaluation. Terminates once each environment has returned a
+        score. Averages scores to produce final eval score.
+        :return: Tuple[int, int] (mean score, standard deviation)
+        """
         next_obs = self.environment.reset()
-        results = []
-        while len(results) < nb_episode:
+        while not all(self.episode_complete_statuses):
             obs = next_obs
-            if self.render and self.environment.engine == Engines.GYM:
-                self.environment.render()
             actions = self.agent.act_eval(obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
 
             self.agent.reset_internals(terminals)
-            episode_rewards, _ = self.update_buffers(rewards, terminals, infos)
-            for reward in episode_rewards:
-                # remake and reseed env when episode finishes
-                # hard reset
-                self.environment.close()
-                self.seed += 1
-                self.environment = self.env_fn(self.seed)
-                next_obs = self.environment.reset()
+            self.update_buffers(rewards, terminals, infos)
 
-                self._episode_count += 1
-                results.append(reward)
-                if len(results) == nb_episode:
-                    break
-        return np.mean(results), np.std(results)
+        reward_buffer = self.episode_reward_buffer.numpy()
+        return (
+            np.mean(reward_buffer),
+            np.std(reward_buffer)
+        )
+
+    def update_buffers(self, rewards, terminals, infos):
+        """
+        Override the reward buffer update rule. Each environment instance will
+        only contribute one reward towards the averaged eval score.
+
+        :param rewards: List[float]
+        :param terminals: List[bool]
+        :param infos: List[Dict[str, Any]]
+        :return: None
+        """
+        for i in range(len(rewards)):
+            if self.episode_complete_statuses[i]:
+                continue
+            elif terminals[i] and infos[i]:
+                self.episode_reward_buffer[i] += rewards[i]
+                self.episode_complete_statuses[i] = True
+            else:
+                self.episode_reward_buffer[i] += rewards[i]
+        return
