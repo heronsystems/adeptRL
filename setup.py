@@ -40,7 +40,8 @@ setup(
         'absl-py>=0.2',
         'tensorboardX>=1.2',
         'cloudpickle>=0.5',
-        'opencv-python-headless>=3.4'
+        'opencv-python-headless>=3.4',
+        'docopt>=0.6'
     ],
     test_requires=test_deps,
     extras_require=extras,
