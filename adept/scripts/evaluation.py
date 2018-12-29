@@ -83,8 +83,12 @@ def main(args, env_registry=EnvPluginRegistry()):
         selected_model = None
         for network_file in network_files:
             # load new network
-            print('loaded', network_file)
-            network.load_state_dict(torch.load(network_file))
+            network.load_state_dict(
+                torch.load(
+                    network_file,
+                    map_location=lambda storage, loc: storage
+                )
+            )
 
             # construct agent
             agent = make_agent(
@@ -97,7 +101,6 @@ def main(args, env_registry=EnvPluginRegistry()):
 
             # Run the container
             mean_reward, std_dev = container.run()
-            print('----FIRST EP COMPLETe -----')
 
             if mean_reward >= best_mean:
                 best_mean = mean_reward

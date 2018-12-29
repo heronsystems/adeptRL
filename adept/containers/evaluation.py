@@ -21,14 +21,14 @@ from ._base import HasAgent, CountsRewards
 
 
 class EvalBase(HasAgent, metaclass=abc.ABCMeta):
-    def __init__(self, agent, device):
+    def __init__(self, agent, device, environment):
         self._agent = agent
         self._device = device
+        self._environment = environment
 
     @property
-    @abc.abstractmethod
     def environment(self):
-        raise NotImplementedError
+        return self._environment
 
     @property
     def agent(self):
@@ -44,14 +44,6 @@ class ReplayGenerator(EvalBase):
     Generates replays of agent interacting with SC2 environment.
     """
 
-    def __init__(self, agent, device, environment):
-        super(ReplayGenerator, self).__init__(agent, device)
-        self._environment = environment
-
-    @property
-    def environment(self):
-        return self._environment
-
     def run(self):
         next_obs = self.environment.reset()
         while True:
@@ -66,14 +58,6 @@ class AtariRenderer(EvalBase):
     Renders agent interacting with Atari environment.
     """
 
-    def __init__(self, agent, device, environment):
-        super(AtariRenderer, self).__init__(agent, device)
-        self._environment = environment
-
-    @property
-    def environment(self):
-        return self._environment
-
     def run(self):
         next_obs = self.environment.reset()
         while True:
@@ -87,14 +71,9 @@ class AtariRenderer(EvalBase):
 
 class Evaluation(EvalBase, CountsRewards):
     def __init__(self, agent, device, environment):
-        super().__init__(agent, device)
+        super().__init__(agent, device, environment)
         self._episode_count = 0
-        self._environment = environment
         self.episode_complete_statuses = [False for _ in range(self.nb_env)]
-
-    @property
-    def environment(self):
-        return self._environment
 
     @property
     def nb_env(self):
@@ -104,6 +83,7 @@ class Evaluation(EvalBase, CountsRewards):
         """
         Run the evaluation. Terminates once each environment has returned a
         score. Averages scores to produce final eval score.
+
         :return: Tuple[int, int] (mean score, standard deviation)
         """
         next_obs = self.environment.reset()

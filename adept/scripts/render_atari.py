@@ -89,7 +89,6 @@ if __name__ == '__main__':
         metavar='S',
         help='random seed (default: 32)'
     )
-    parser.add_argument('--render')
     parser.add_argument(
         '--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)'
     )
