@@ -92,11 +92,11 @@ class AdeptGymEnv(EnvPlugin):
         if isinstance(space, spaces.Box):
             return self.cpu_preprocessor({'Box': torch.from_numpy(observation)})
         elif isinstance(space, spaces.Discrete):
-            # one hot encode discrete inputs
+            # one hot encode net1d inputs
             longs = torch.from_numpy(observation)
             if longs.dim() > 2:
                 raise ValueError(
-                    'observation is not discrete, too many dims: ' +
+                    'observation is not net1d, too many dims: ' +
                     str(longs.dim())
                 )
             elif len(longs.dim()) == 1:

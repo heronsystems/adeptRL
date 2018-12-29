@@ -1,4 +1,4 @@
-#!python
+#!/usr/bin/env python
 # Copyright (C) 2018 Heron Systems, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -13,6 +13,38 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+             __           __
+  ____ _____/ /__  ____  / /_
+ / __ `/ __  / _ \/ __ \/ __/
+/ /_/ / /_/ /  __/ /_/ / /_
+\__,_/\__,_/\___/ .___/\__/
+               /_/
+
+Local Mode
+
+Train an agent with a single GPU.
+
+Usage:
+    local [options]
+    local (-h | --help)
+
+Options:
+    --agent <agent>         Name of agent class [default: ActorCritic]
+    --env <env>             The environment string [default: PongNoFrameskip-v4]
+    --net1d <net1d>         Network to use for 1d input [default: Identity]
+    --net2d <net2d>         Network to use for 2d input [default: Identity]
+    --net3d <net3d>         Network to use for 3d input [default: FourConv]
+    --net4d <net4d>         Network to use for 4d input [default: Identity]
+    --netjunc <junction>    Network junction to merge inputs [default: TODO]
+    --netbody <body>        Network to use on merged inputs [default: LSTM]
+    --gpu-id <id>           CUDA device ID of GPU [default: 0]
+    --tag <tag>             Name your run [default: None]
+    --logdir <path>         Path to logging directory [default: /tmp/adept_logs/]
+"""
+
+
+
 import os
 from copy import deepcopy
 
@@ -31,9 +63,16 @@ from adept.utils.script_helpers import (
     make_agent, make_network, get_head_shapes, count_parameters
 )
 
-# hack to use argparse for SC2
+# hack to use bypass pysc2 flags
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
+
+
+def parse_args():
+    from docopt import docopt
+    args = docopt(__doc__)
+    print(args)
+    return args
 
 
 def main(args, env_registry=EnvPluginRegistry()):
@@ -160,41 +199,42 @@ def main(args, env_registry=EnvPluginRegistry()):
 
 
 if __name__ == '__main__':
-    import argparse
-    from adept.utils.script_helpers import add_base_args
-
-    base_parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
-
-    def add_args(parser):
-        parser = parser.add_argument_group('Local Mode Args')
-        parser.add_argument(
-            '--gpu-id',
-            type=int,
-            default=0,
-            help='Which GPU to use for training (default: 0)'
-        )
-        parser.add_argument(
-            '--nb-eval-env',
-            default=1,
-            type=int,
-            help=
-            'Number of eval environments to run [in a separate thread] each with a different seed. '
-            'Creates a copy of the network. Disable by setting to 0. (default: 1)'
-        )
-        parser.add_argument(
-            '--eval-step-rate',
-            default=0,
-            type=int,
-            help=
-            'Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 is unlimited (default: 0)'
-        )
-
-    add_base_args(base_parser, add_args)
-    args = base_parser.parse_args()
-
-    if args.debug:
-        args.nb_env = 3
-        args.log_dir = '/tmp/'
-
-    args.mode_name = 'Local'
-    main(args)
+    parse_args()
+    # import argparse
+    # from adept.utils.script_helpers import add_base_args
+    #
+    # base_parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
+    #
+    # def add_args(parser):
+    #     parser = parser.add_argument_group('Local Mode Args')
+    #     parser.add_argument(
+    #         '--gpu-id',
+    #         type=int,
+    #         default=0,
+    #         help='Which GPU to use for training (default: 0)'
+    #     )
+    #     parser.add_argument(
+    #         '--nb-eval-env',
+    #         default=1,
+    #         type=int,
+    #         help=
+    #         'Number of eval environments to run [in a separate thread] each with a different seed. '
+    #         'Creates a copy of the network. Disable by setting to 0. (default: 1)'
+    #     )
+    #     parser.add_argument(
+    #         '--eval-step-rate',
+    #         default=0,
+    #         type=int,
+    #         help=
+    #         'Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 is unlimited (default: 0)'
+    #     )
+    #
+    # add_base_args(base_parser, add_args)
+    # args = base_parser.parse_args()
+    #
+    # if args.debug:
+    #     args.nb_env = 3
+    #     args.log_dir = '/tmp/'
+    #
+    # args.mode_name = 'Local'
+    # main(args)

@@ -31,13 +31,13 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-vn',
-        '--vision-network',
+        '--net3d-network',
         default='Nature',
         help='name of preset network (default: Nature)'
     )
     parser.add_argument(
         '-dp',
-        '--discrete-pathway',
+        '--net1d-pathway',
         default='DiscreteIdentity',
     )
     parser.add_argument(

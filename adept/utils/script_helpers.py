@@ -107,8 +107,8 @@ def _add_agent_args(subparser: ArgumentParser):
 
 def _add_network_args(parser: ArgumentParser):
     subparser = parser.add_argument_group('Network Args')
-    subparser.add_argument('-nv', '--network-vision', default='FourConv')
-    subparser.add_argument('-nd', '--network-discrete', default='Identity')
+    subparser.add_argument('-nv', '--network-net3d', default='FourConv')
+    subparser.add_argument('-nd', '--network-net1d', default='Identity')
     subparser.add_argument('-nb', '--network-body', default='LSTM')
     subparser.add_argument(
         '--normalize',
