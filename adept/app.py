@@ -35,7 +35,7 @@ Commands:
     render_atari        Visualize an agent playing an Atari game.
     replay_gen_sc2      Generate SC2 replay files of an agent playing SC2.
 
-See 'adept.app help <command>' for more information on a specific command.
+See 'adept.app <command> --help' for more information on a specific command.
 """
 from docopt import docopt
 from adept.globals import VERSION
@@ -44,8 +44,11 @@ import os
 
 
 def parse_args():
-    args = docopt(__doc__, version='adept version ' + VERSION,
-                  options_first=True)
+    args = docopt(
+        __doc__,
+        version='adept version ' + VERSION,
+        options_first=True
+    )
 
     print(args)
 

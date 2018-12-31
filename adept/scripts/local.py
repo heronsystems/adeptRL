@@ -38,7 +38,9 @@ Options:
     --net4d <net4d>         Network to use for 4d input [default: Identity]
     --netjunc <junction>    Network junction to merge inputs [default: TODO]
     --netbody <body>        Network to use on merged inputs [default: LSTM]
+
     --gpu-id <id>           CUDA device ID of GPU [default: 0]
+
     --tag <tag>             Name your run [default: None]
     --logdir <path>         Path to logging directory [default: /tmp/adept_logs/]
 """
