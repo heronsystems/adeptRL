@@ -28,6 +28,17 @@ from ._gym_wrappers import (
 
 
 class AdeptGymEnv(EnvPlugin):
+    """
+    Converts gym observations to dictionaries and reads actions from
+    dictionaries instead of numpy arrays. This allows the Gym Env to
+    communicate properly with an EnvManager.
+    """
+    defaults = {
+        "max_episode_length": 10000,
+        "skip_rate": 4,
+        "noop_max": 30
+    }
+
     def __init__(self, env, do_frame_stack):
         # Define the preprocessing operations to be performed on observations
         # CPU Ops
@@ -55,15 +66,14 @@ class AdeptGymEnv(EnvPlugin):
     @classmethod
     def from_args(cls, args, seed, **kwargs):
         # TODO fix this hack
-        do_frame_stack = 'Linear' in args.network_body
-        env = gym.make(args.env_id)
+        do_frame_stack = 'Linear' in args.netbody
+        env = gym.make(args.env)
         if hasattr(env.unwrapped, 'ale'):
             if 'FIRE' in env.unwrapped.get_action_meanings():
                 env = FireResetEnv(env)
-            env = NoopResetEnv(env, noop_max=30)
+            env = NoopResetEnv(env, noop_max=args.noop_max)
             env = EpisodicLifeEnv(env)
-        if 'NoFrameskip' in args.env_id:
-            assert 'NoFrameskip' in env.spec.id
+        if 'NoFrameskip' in args.env:
             env._max_episode_steps = args.max_episode_length * \
                                      args.skip_rate
             env = MaxAndSkipEnv(env, skip=args.skip_rate)

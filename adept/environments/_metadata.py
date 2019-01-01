@@ -42,7 +42,7 @@ class EnvMetaData(HasEnvMetaData):
         :param registry: Optionally provide to avoid recreating.
         :return: EnvMetaData
         """
-        plugin_class = registry.lookup_env_class(args.env_id)
+        plugin_class = registry.lookup_env_class(args.env)
         return cls(plugin_class, args)
 
     @property

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from enum import IntEnum
+from adept.environments._env_plugin import EnvPlugin
 
 
 class Engines(IntEnum):
@@ -83,6 +84,8 @@ class EnvPluginRegistry:
 
     def register_env(self, engine_id, env_plugin_class, env_id_set):
         # TODO assert no duplicate env_ids
+        assert issubclass(env_plugin_class, EnvPlugin)
+        env_plugin_class.check_defaults()
         self.engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
         self.plugin_class_by_engine_id[engine_id] = env_plugin_class
 

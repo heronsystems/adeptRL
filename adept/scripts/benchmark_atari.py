@@ -81,5 +81,5 @@ if __name__ == '__main__':
     args.mode_name = 'Local'
 
     for env_id in ATARI_6_ENVS:
-        args.env_id = env_id
+        args.env = env_id
         main(args)

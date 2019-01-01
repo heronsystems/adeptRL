@@ -29,20 +29,40 @@ Usage:
     local [options]
     local (-h | --help)
 
-Options:
-    --agent <agent>         Name of agent class [default: ActorCritic]
-    --env <env>             The environment string [default: PongNoFrameskip-v4]
-    --net1d <net1d>         Network to use for 1d input [default: Identity]
-    --net2d <net2d>         Network to use for 2d input [default: Identity]
-    --net3d <net3d>         Network to use for 3d input [default: FourConv]
-    --net4d <net4d>         Network to use for 4d input [default: Identity]
-    --netjunc <junction>    Network junction to merge inputs [default: TODO]
-    --netbody <body>        Network to use on merged inputs [default: LSTM]
+Agent Options:
+    --agent <str>           Name of agent class [default: ActorCritic]
 
+Environment Options:
+    --env <str>             Environment name [default: PongNoFrameskip-v4]
+
+Network Options:
+    --net1d <str>           Network to use for 1d input [default: Identity]
+    --net2d <str>           Network to use for 2d input [default: Identity]
+    --net3d <str>           Network to use for 3d input [default: FourConv]
+    --net4d <str>           Network to use for 4d input [default: Identity]
+    --netjunc <str>         Network junction to merge inputs [default: TODO]
+    --netbody <str>         Network to use on merged inputs [default: LSTM]
+    --load-network <path>   Path to network to load
+
+Optimizer Options:
+    --lr <float>            Learning rate [default: 0.0007]
+
+Container Options:
     --gpu-id <id>           CUDA device ID of GPU [default: 0]
+    --nb-env <int>          Number of parallel environments [default: 64]
+    --seed <int>            Seed for random variables [default: 0]
+    --nb-train-frame <int>  Number of frames to train on [default: 10e6]
 
-    --tag <tag>             Name your run [default: None]
+Logging Options:
+    --tag <str>             Name your run [default: None]
     --logdir <path>         Path to logging directory [default: /tmp/adept_logs/]
+    --epoch-len <int>       Save a model every <int> frames [default: 1e6]
+    --nb-eval-env <int>     Evaluate agent in a separate thread [default: 0]
+    --summary-freq <int>    Tensorboard summary frequency [default: 10]
+
+Troubleshooting Options:
+    --debug
+    --profile
 """
 
 
@@ -72,21 +92,41 @@ FLAGS(['local.py'])
 def parse_args():
     from docopt import docopt
     args = docopt(__doc__)
-    print(args)
+    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
+    args = DotDict(args)
+    args.gpu_id = int(args.gpu_id)
+    args.nb_env = int(args.nb_env)
+    args.seed = int(args.seed)
+    args.nb_train_frame = int(float(args.nb_train_frame))
+    args.nb_eval_env = int(args.nb_eval_env)
+    args.summary_freq = int(args.summary_freq)
+    args.lr = float(args.lr)
+    args.epoch_len = int(float(args.epoch_len))
     return args
 
 
+class DotDict(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+
 def main(args, env_registry=EnvPluginRegistry()):
-    env_class = env_registry.lookup_env_class(args.env).prompt_confg()
-    env_class.
+    """
+    :param args: Dict[str, Any]
+    :param env_registry: EnvPluginRegistry
+    :return:
+    """
+    args = DotDict(args)
+    env_args = env_registry.lookup_env_class(args.env).prompt()
+    args = DotDict({**args, **env_args})
 
     # construct logging objects
     print_ascii_logo()
     log_id = make_log_id(
-        args.tag, args.mode_name, args.agent,
-        args.network_vision + args.network_body
+        args.tag, 'Local', args.agent, args.net3d + args.netbody
     )
-    log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+    log_id_dir = os.path.join(args.logdir, args.env, log_id)
 
     os.makedirs(log_id_dir)
     logger = make_logger('Local', os.path.join(log_id_dir, 'train_log.txt'))
@@ -129,7 +169,7 @@ def main(args, env_registry=EnvPluginRegistry()):
     # Construct the Container
     def make_optimizer(params):
         opt = torch.optim.RMSprop(
-            params, lr=args.learning_rate, eps=1e-5, alpha=0.99
+            params, lr=args.lr, eps=1e-5, alpha=0.99
         )
         if args.load_optimizer:
             opt.load_state_dict(
@@ -194,7 +234,7 @@ def main(args, env_registry=EnvPluginRegistry()):
         profiler.stop()
         print(profiler.output_text(unicode=True, color=True))
     else:
-        container.run(args.max_train_steps, initial_count=initial_step_count)
+        container.run(args.nb_train_frame, initial_count=initial_step_count)
     env.close()
 
     if args.nb_eval_env > 0:
@@ -203,7 +243,7 @@ def main(args, env_registry=EnvPluginRegistry()):
 
 
 if __name__ == '__main__':
-    parse_args()
+    main(parse_args())
     # import argparse
     # from adept.utils.script_helpers import add_base_args
     #

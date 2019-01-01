@@ -43,9 +43,9 @@ def main(args, env_registry=EnvPluginRegistry()):
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         log_id = make_log_id_from_timestamp(
             args.tag, args.mode_name, args.agent,
-            args.network_vision + args.network_body, timestamp
+            args.net3d + args.netbody, timestamp
         )
-        log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+        log_id_dir = os.path.join(args.logdir, args.env, log_id)
         os.makedirs(log_id_dir)
         saver = SimpleModelSaver(log_id_dir)
         print_ascii_logo()
@@ -56,9 +56,9 @@ def main(args, env_registry=EnvPluginRegistry()):
     if rank != 0:
         log_id = make_log_id_from_timestamp(
             args.tag, args.mode_name, args.agent,
-            args.network_vision + args.network_body, timestamp
+            args.net3d + args.netbody, timestamp
         )
-        log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+        log_id_dir = os.path.join(args.logdir, args.env, log_id)
 
     comm.Barrier()
 
@@ -136,7 +136,7 @@ def main(args, env_registry=EnvPluginRegistry()):
         # construct container
         container = ToweredWorker(
             agent, env, args.nb_env, logger, summary_writer,
-            args.summary_frequency
+            args.summary_freq
         )
 
         # Run the container
@@ -160,7 +160,7 @@ def main(args, env_registry=EnvPluginRegistry()):
         # Construct the optimizer
         def make_optimizer(params):
             opt = torch.optim.RMSprop(
-                params, lr=args.learning_rate, eps=1e-5, alpha=0.99
+                params, lr=args.lr, eps=1e-5, alpha=0.99
             )
             if args.load_optimizer:
                 opt.load_state_dict(
@@ -191,7 +191,7 @@ def main(args, env_registry=EnvPluginRegistry()):
             print(profiler.output_text(unicode=True, color=True))
         else:
             container.run(
-                args.max_train_steps, initial_step_count=initial_step_count
+                args.nb_train_frame, initial_step_count=initial_step_count
             )
 
 
@@ -224,7 +224,7 @@ if __name__ == '__main__':
 
     if args.debug:
         args.nb_env = 3
-        args.log_dir = '/tmp/'
+        args.logdir = '/tmp/'
     args.mode_name = 'Towered'
 
     main(args)

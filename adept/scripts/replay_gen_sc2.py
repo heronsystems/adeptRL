@@ -41,7 +41,7 @@ def main(args, env_registry=EnvPluginRegistry()):
         train_args = dotdict(json.load(args_file))
     train_args.nb_env = 1  # TODO remove
 
-    engine = env_registry.lookup_engine(train_args.env_id)
+    engine = env_registry.lookup_engine(train_args.env)
     assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
 
     # construct env

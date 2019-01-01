@@ -49,8 +49,8 @@ class AdeptEnvManager(EnvBase, metaclass=abc.ABCMeta):
         if nb_env is None:
             nb_env = args.nb_env
 
-        engine = registry.lookup_engine(args.env_id)
-        env_class = registry.lookup_env_class(args.env_id)
+        engine = registry.lookup_engine(args.env)
+        env_class = registry.lookup_env_class(args.env)
 
         env_fns = []
         for i in range(nb_env):

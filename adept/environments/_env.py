@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
-import json
 
 
 class HasEnvMetaData(metaclass=abc.ABCMeta):
@@ -39,14 +38,6 @@ class HasEnvMetaData(metaclass=abc.ABCMeta):
 
 
 class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
-    @property
-    @abc.abstractmethod
-    def defaults(self):
-        """
-        :return: Dictionary of defaults.
-        """
-        raise NotImplementedError
-
     @abc.abstractmethod
     def step(self, action):
         raise NotImplementedError
@@ -58,30 +49,6 @@ class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def close(self):
         raise NotImplementedError
-
-    def prompt(self):
-        """
-        Display defaults as JSON, prompt user for changes.
-
-        :return: Dict[str, Any] Updated config dictionary.
-        """
-        if not self.defaults:
-            return self.defaults
-
-        user_input = input(
-            '\n{} Defaults:\n{}\nPress ENTER to use defaults. Otherwise, '
-            'modify JSON keys then press ENTER.\n'.format(
-                self.__class__.__name__,
-                json.dumps(self.defaults,  indent=2, sort_keys=True)
-            )
-        )
-
-        # use defaults if no changes specified
-        if user_input == '':
-            return self.defaults
-
-        updates = json.loads(user_input)
-        return {**self.defaults, **updates}
 
 
 def reward_normalizer_by_env_id(env_id):

@@ -13,14 +13,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+import json
 
 from adept.environments._env import EnvBase
 
 
 class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     """
-    Implement this class to add your custom environment.
+    Implement this class to add your custom environment. Don't forget to
+    implement defaults.
     """
+    defaults = None
+
+    @classmethod
+    def check_defaults(cls):
+        if cls.defaults is None:
+            raise NotImplementedError(
+                'Subclass must define class attribute: defaults'
+            )
 
     def __init__(self, action_space, cpu_preprocessor, gpu_preprocessor):
         """
@@ -68,3 +78,28 @@ class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
     @property
     def gpu_preprocessor(self):
         return self._gpu_preprocessor
+
+    @classmethod
+    def prompt(cls):
+        """
+        Display defaults as JSON, prompt user for changes.
+
+        :return: Dict[str, Any] Updated config dictionary.
+        """
+        if not cls.defaults:
+            return cls.defaults
+
+        user_input = input(
+            '\n{} Defaults:\n{}\nPress ENTER to use defaults. Otherwise, '
+            'modify JSON keys then press ENTER.\n'.format(
+                cls.__name__,
+                json.dumps(cls.defaults, indent=2, sort_keys=True)
+            )
+        )
+
+        # use defaults if no changes specified
+        if user_input == '':
+            return cls.defaults
+
+        updates = json.loads(user_input)
+        return {**cls.defaults, **updates}

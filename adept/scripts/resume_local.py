@@ -38,16 +38,16 @@ def main(args):
     network_file = args.network_file
     optimizer_file = args.optimizer_file
     args_file_path = args.args_file
-    mts = args.max_train_steps
+    mts = args.nb_train_frame
     with open(args.args_file, 'r') as args_file:
         args = dotdict(json.load(args_file))
 
     print_ascii_logo()
     log_id = make_log_id(
         args.tag, args.mode_name, args.agent,
-        args.network_vision + args.network_body
+        args.net3d + args.netbody
     )
-    log_id_dir = os.path.join(args.log_dir, args.env_id, log_id)
+    log_id_dir = os.path.join(args.logdir, args.env, log_id)
 
     os.makedirs(log_id_dir)
     logger = make_logger('Local', os.path.join(log_id_dir, 'train_log.txt'))
@@ -83,7 +83,7 @@ def main(args):
     # Construct the Container
     def make_optimizer(params):
         opt = torch.optim.RMSprop(
-            params, lr=args.learning_rate, eps=1e-5, alpha=0.99
+            params, lr=args.lr, eps=1e-5, alpha=0.99
         )
         if args.optimizer_file is not None:
             opt.load_state_dict(torch.load(optimizer_file))
@@ -91,7 +91,7 @@ def main(args):
 
     container = Local(
         agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
-        summary_writer, args.summary_frequency, saver
+        summary_writer, args.summary_freq, saver
     )
     try:
         container.run(mts + initial_count, initial_count)

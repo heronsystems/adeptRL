@@ -93,7 +93,7 @@ def main(args, env_registry=EnvPluginRegistry()):
             # construct agent
             agent = make_agent(
                 network, device, env.gpu_preprocessor,
-                env_registry.lookup_engine(train_args.env_id), env.action_space,
+                env_registry.lookup_engine(train_args.env), env.action_space,
                 train_args
             )
             # container

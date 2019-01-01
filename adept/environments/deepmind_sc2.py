@@ -33,6 +33,8 @@ from adept.preprocess.ops import BaseOp, FlattenSpace, CastToFloat
 
 
 class AdeptSC2Env(EnvPlugin):
+    defaults = {}
+
     def __init__(self, env):
         self.sc2_env = env
         self._max_num_actions = len(FUNCTIONS)
@@ -98,7 +100,7 @@ class AdeptSC2Env(EnvPlugin):
             feature_screen=84, feature_minimap=84, action_space='FEATURES'
         )
         env = SC2Env(
-            map_name=args.env_id,
+            map_name=args.env,
             step_mul=8,
             game_steps_per_episode=0,
             discount=0.99,

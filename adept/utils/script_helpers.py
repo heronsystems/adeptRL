@@ -41,7 +41,7 @@ def make_network(
             elif rank == 2:
                 raise NotImplementedError('Rank 2 inputs not implemented')
             elif rank == 3:
-                pathways_by_name[name] = chw_networks[args.network_vision]\
+                pathways_by_name[name] = chw_networks[args.net3d]\
                     .from_args(ebn[name].shape, args)
             elif rank == 4:
                 raise NotImplementedError('Rank 4 inputs not implemented')
@@ -51,7 +51,7 @@ def make_network(
                 )
 
     trunk = NetworkTrunk(pathways_by_name)
-    body = network_bodies[args.network_body].from_args(
+    body = network_bodies[args.netbody].from_args(
         trunk.nb_output_channel, embedding_size, args
     )
     head = NetworkHead(body.nb_output_channel, network_head_shapes)
@@ -65,7 +65,7 @@ def count_parameters(model):
 
 def make_agent(network, device, gpu_preprocessor, engine, action_space, args):
     Agent = AGENTS[args.agent]
-    reward_normalizer = reward_normalizer_by_env_id(args.env_id)
+    reward_normalizer = reward_normalizer_by_env_id(args.env)
     return Agent.from_args(
         network, device, reward_normalizer, gpu_preprocessor, engine,
         action_space, args
