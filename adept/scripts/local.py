@@ -46,7 +46,6 @@ Options:
 """
 
 
-
 import os
 from copy import deepcopy
 
@@ -78,6 +77,9 @@ def parse_args():
 
 
 def main(args, env_registry=EnvPluginRegistry()):
+    env_class = env_registry.lookup_env_class(args.env).prompt_confg()
+    env_class.
+
     # construct logging objects
     print_ascii_logo()
     log_id = make_log_id(

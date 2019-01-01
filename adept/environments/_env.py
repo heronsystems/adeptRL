@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+import json
 
 
 class HasEnvMetaData(metaclass=abc.ABCMeta):
@@ -38,6 +39,13 @@ class HasEnvMetaData(metaclass=abc.ABCMeta):
 
 
 class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def defaults(self):
+        """
+        :return: Dictionary of defaults.
+        """
+
     @abc.abstractmethod
     def step(self, action):
         raise NotImplementedError
@@ -49,6 +57,15 @@ class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def close(self):
         raise NotImplementedError
+
+    def prompt(self):
+        user_input = input(
+            '{} Defaults:\n{}'.format(
+                self.__name__,
+                json.dumps(self.defaults,  indent=4)
+            )
+        )
+
 
 
 def reward_normalizer_by_env_id(env_id):
