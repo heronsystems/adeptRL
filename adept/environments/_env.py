@@ -45,6 +45,7 @@ class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
         """
         :return: Dictionary of defaults.
         """
+        raise NotImplementedError
 
     @abc.abstractmethod
     def step(self, action):
@@ -59,13 +60,28 @@ class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     def prompt(self):
+        """
+        Display defaults as JSON, prompt user for changes.
+
+        :return: Dict[str, Any] Updated config dictionary.
+        """
+        if not self.defaults:
+            return self.defaults
+
         user_input = input(
-            '{} Defaults:\n{}'.format(
-                self.__name__,
-                json.dumps(self.defaults,  indent=4)
+            '\n{} Defaults:\n{}\nPress ENTER to use defaults. Otherwise, '
+            'modify JSON keys then press ENTER.\n'.format(
+                self.__class__.__name__,
+                json.dumps(self.defaults,  indent=2, sort_keys=True)
             )
         )
 
+        # use defaults if no changes specified
+        if user_input == '':
+            return self.defaults
+
+        updates = json.loads(user_input)
+        return {**self.defaults, **updates}
 
 
 def reward_normalizer_by_env_id(env_id):
