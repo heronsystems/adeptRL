@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from argparse import ArgumentParser
 from collections import OrderedDict
 
 import torch
@@ -20,11 +19,20 @@ from adept.registries.environment import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
-from adept.utils.util import listd_to_dlist, parse_bool
-from ._base import Agent
+from adept.utils.util import listd_to_dlist
+from adept.agents.agent_plugin import AgentPlugin
 
 
-class ActorCritic(Agent):
+class ActorCritic(AgentPlugin):
+    defaults = {
+        'nb_rollout': 20,
+        'discount': 0.99,
+        'gae': True,
+        'tau': 1.,
+        'normalize_advantage': False,
+        'entropy_weight': 0.01
+    }
+
     def __init__(
         self,
         network,
@@ -39,7 +47,7 @@ class ActorCritic(Agent):
         gae,
         tau,
         normalize_advantage,
-        entropy_weight=0.01
+        entropy_weight
     ):
         self.discount, self.gae, self.tau = discount, gae, tau
         self.normalize_advantage = normalize_advantage
@@ -71,51 +79,7 @@ class ActorCritic(Agent):
         return cls(
             network, device, reward_normalizer, gpu_preprocessor, engine,
             action_space, args.nb_env, args.exp_length, args.discount,
-            args.generalized_advantage_estimation, args.tau,
-            args.normalize_advantage
-        )
-
-    @classmethod
-    def add_args(cls, parser: ArgumentParser):
-        parser.add_argument(
-            '-ae',
-            '--exp-length',
-            type=int,
-            default=20,
-            help='Experience length (default: 20)'
-        )
-        parser.add_argument(
-            '-ag',
-            '--generalized-advantage-estimation',
-            type=parse_bool,
-            nargs='?',
-            const=True,
-            default=True,
-            help='Use generalized advantage estimation for the policy loss.'
-                 '(default: True)'
-        )
-        parser.add_argument(
-            '-at',
-            '--tau',
-            type=float,
-            default=1.00,
-            help='parameter for GAE (default: 1.00)'
-        )
-        parser.add_argument(
-            '--entropy-weight',
-            type=float,
-            default=0.01,
-            help='Entropy penalty (default: 0.01)'
-        )
-        parser.add_argument(
-            '--normalize-advantage',
-            type=parse_bool,
-            nargs='?',
-            const=True,
-            default=False,
-            help=
-            'Normalize the advantage when calculating policy loss.'
-            '(default: False)'
+            args.gae, args.tau, args.normalize_advantage, args.entropy_weight
         )
 
     @property

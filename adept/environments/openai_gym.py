@@ -21,7 +21,7 @@ from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import (
     CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack
 )
-from adept.environments._env_plugin import EnvPlugin
+from adept.environments.env_plugin import EnvPlugin
 from ._gym_wrappers import (
     NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv
 )

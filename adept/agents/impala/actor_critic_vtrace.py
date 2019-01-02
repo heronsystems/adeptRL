@@ -21,10 +21,10 @@ from adept.registries.environment import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
-from .._base import Agent
+from adept.agents.agent_plugin import AgentPlugin
 
 
-class ActorCriticVtrace(Agent):
+class ActorCriticVtrace(AgentPlugin):
     def __init__(
         self,
         network,

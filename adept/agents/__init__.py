@@ -15,5 +15,3 @@
 
 from .actor_critic import ActorCritic
 from .impala import ActorCriticVtrace
-
-AGENTS = {'ActorCritic': ActorCritic, 'ActorCriticVtrace': ActorCriticVtrace}

@@ -36,7 +36,7 @@ def make_network(
     for rank, names in nbr.items():
         for name in names:
             if rank == 1:
-                pathways_by_name[name] = c_networks[args.network_discrete]\
+                pathways_by_name[name] = c_networks[args.net1d]\
                     .from_args(ebn[name].shape, args)
             elif rank == 2:
                 raise NotImplementedError('Rank 2 inputs not implemented')

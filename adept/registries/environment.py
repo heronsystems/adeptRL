@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from enum import IntEnum
-from adept.environments._env_plugin import EnvPlugin
+from adept.environments import EnvPlugin
 
 
 class Engines(IntEnum):

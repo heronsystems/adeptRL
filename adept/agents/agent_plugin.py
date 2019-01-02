@@ -13,16 +13,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+from adept.utils.requires_args import RequiresArgs
 
-import torch
 
-
-class Agent(abc.ABC):
+class AgentPlugin(RequiresArgs, metaclass=abc.ABCMeta):
     """
     An Agent interacts with the environment and accumulates experience.
     """
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def from_args(
         cls, network, device, reward_normalizer, gpu_preprocessor, engine,
         action_space, args

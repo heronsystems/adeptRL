@@ -158,8 +158,11 @@ def main(args, env_registry=EnvPluginRegistry()):
     logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
     # construct agent
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        "cuda:{}".format(args.gpu_id)
+        if (torch.cuda.is_available() and args.gpu_id >= 0)
+        else "cpu"
+    )
     torch.backends.cudnn.benchmark = True
     agent = make_agent(
         network, device, env.gpu_preprocessor, env.engine, env.action_space,
