@@ -23,10 +23,10 @@ import torch
 from absl import flags
 
 from adept.containers import Evaluation
-from adept.environments import EnvMetaData, SimpleEnvManager, SubProcEnvManager
-from adept.registries.environment import EnvPluginRegistry
+from adept.environments import SubProcEnvManager
+from adept.environments.env_registry import EnvPluginRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, parse_bool
+from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
 from adept.utils.util import dotdict
 
 # hack to use argparse for SC2

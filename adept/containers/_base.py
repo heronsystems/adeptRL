@@ -21,7 +21,8 @@ import torch
 
 class CountsRewards(abc.ABC):
     """
-    Maintains a buffer that increments and resets episode rewards for multiple environments.
+    Maintains a buffer that increments and resets episode rewards for multiple
+    environments.
     """
     # define lazy properties
     _episode_reward_buffer = None

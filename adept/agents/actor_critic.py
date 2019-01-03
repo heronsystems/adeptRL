@@ -15,7 +15,7 @@
 from collections import OrderedDict
 
 import torch
-from adept.registries.environment import Engines
+from adept.environments.env_registry import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
@@ -24,7 +24,7 @@ from adept.agents.agent_plugin import AgentPlugin
 
 
 class ActorCritic(AgentPlugin):
-    defaults = {
+    args = {
         'nb_rollout': 20,
         'discount': 0.99,
         'gae': True,

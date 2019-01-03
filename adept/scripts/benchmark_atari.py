@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.registries.environment import ATARI_6_ENVS
+from adept.environments.env_registry import ATARI_6_ENVS
 from adept.utils.util import parse_bool
 from .local import main
 

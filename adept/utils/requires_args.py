@@ -16,13 +16,13 @@ import json
 
 
 class RequiresArgs:
-    defaults = None
+    args = None
 
     @classmethod
     def check_defaults(cls):
-        if cls.defaults is None:
+        if cls.args is None:
             raise NotImplementedError(
-                'Subclass must define class attribute: defaults'
+                'Subclass must define class attribute "args"'
             )
 
     @classmethod
@@ -32,20 +32,20 @@ class RequiresArgs:
 
         :return: Dict[str, Any] Updated config dictionary.
         """
-        if not cls.defaults:
-            return cls.defaults
+        if not cls.args:
+            return cls.args
 
         user_input = input(
             '\n{} Defaults:\n{}\nPress ENTER to use defaults. Otherwise, '
             'modify JSON keys then press ENTER.\n'.format(
                 cls.__name__,
-                json.dumps(cls.defaults, indent=2, sort_keys=True)
+                json.dumps(cls.args, indent=2, sort_keys=True)
             )
         )
 
         # use defaults if no changes specified
         if user_input == '':
-            return cls.defaults
+            return cls.args
 
         updates = json.loads(user_input)
-        return {**cls.defaults, **updates}
+        return {**cls.args, **updates}

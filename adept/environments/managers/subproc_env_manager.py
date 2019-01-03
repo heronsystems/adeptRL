@@ -20,11 +20,11 @@ import numpy as np
 import torch
 from torch import multiprocessing as mp
 
-from adept.environments.managers._manager import AdeptEnvManager
+from adept.environments.managers._manager import EnvManager
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 
-class SubProcEnvManager(AdeptEnvManager):
+class SubProcEnvManager(EnvManager):
     """
     Modified.
     MIT License

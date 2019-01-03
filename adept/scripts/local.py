@@ -75,7 +75,7 @@ from tensorboardX import SummaryWriter
 
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
-from adept.registries.environment import EnvPluginRegistry
+from adept.environments.env_registry import EnvPluginRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
     SimpleModelSaver

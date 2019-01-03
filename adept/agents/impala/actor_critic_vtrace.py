@@ -17,7 +17,7 @@ from collections import OrderedDict
 import torch
 from torch.nn import functional as F
 
-from adept.registries.environment import Engines
+from adept.environments.env_registry import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
@@ -25,6 +25,10 @@ from adept.agents.agent_plugin import AgentPlugin
 
 
 class ActorCriticVtrace(AgentPlugin):
+    args = {
+        # TODO
+    }
+
     def __init__(
         self,
         network,

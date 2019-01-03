@@ -33,7 +33,7 @@ from adept.preprocess.ops import BaseOp, FlattenSpace, CastToFloat
 
 
 class AdeptSC2Env(EnvPlugin):
-    defaults = {}
+    args = {}
 
     def __init__(self, env):
         self.sc2_env = env

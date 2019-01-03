@@ -15,10 +15,10 @@
 import abc
 
 from adept.environments._env import EnvBase
-from adept.registries.environment import EnvPluginRegistry
+from adept.environments.env_registry import EnvPluginRegistry
 
 
-class AdeptEnvManager(EnvBase, metaclass=abc.ABCMeta):
+class EnvManager(EnvBase, metaclass=abc.ABCMeta):
     def __init__(self, env_fns, engine):
         self._env_fns = env_fns
         self._engine = engine

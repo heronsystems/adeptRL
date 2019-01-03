@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 from adept.containers import ToweredHost, ToweredWorker
 from adept.environments import SubProcEnvManager, EnvMetaData
-from adept.registries.environment import EnvPluginRegistry
+from adept.environments.env_registry import EnvPluginRegistry
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters

@@ -33,7 +33,7 @@ class AdeptGymEnv(EnvPlugin):
     dictionaries instead of numpy arrays. This allows the Gym Env to
     communicate properly with an EnvManager.
     """
-    defaults = {
+    args = {
         "max_episode_length": 10000,
         "skip_rate": 4,
         "noop_max": 30

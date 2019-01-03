@@ -21,7 +21,7 @@ from absl import flags
 
 from adept.containers import ReplayGenerator
 from adept.environments import SubProcEnvManager
-from adept.registries.environment import EnvPluginRegistry, Engines
+from adept.environments.env_registry import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import make_agent, make_network, \
     get_head_shapes, parse_bool
