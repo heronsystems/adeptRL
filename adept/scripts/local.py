@@ -73,6 +73,7 @@ import torch
 from absl import flags
 from tensorboardX import SummaryWriter
 
+from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvPluginRegistry
@@ -111,15 +112,21 @@ class DotDict(dict):
     __delattr__ = dict.__delitem__
 
 
-def main(args, env_registry=EnvPluginRegistry()):
+def main(
+    args,
+    agent_registry=AgentRegistry(),
+    env_registry=EnvPluginRegistry()
+):
     """
     :param args: Dict[str, Any]
+    :param agent_registry: AgentRegistry
     :param env_registry: EnvPluginRegistry
     :return:
     """
     args = DotDict(args)
+    agent_args = agent_registry.lookup_agent(args.agent).prompt()
     env_args = env_registry.lookup_env_class(args.env).prompt()
-    args = DotDict({**args, **env_args})
+    args = DotDict({**args, **agent_args, **env_args})
 
     # construct logging objects
     print_ascii_logo()
@@ -164,6 +171,9 @@ def main(args, env_registry=EnvPluginRegistry()):
         else "cpu"
     )
     torch.backends.cudnn.benchmark = True
+    agent = agent_registry.lookup_agent(args.agent).from_args(
+        network, device,
+    )
     agent = make_agent(
         network, device, env.gpu_preprocessor, env.engine, env.action_space,
         args
