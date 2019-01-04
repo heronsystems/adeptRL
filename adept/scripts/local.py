@@ -200,7 +200,7 @@ def main(
 
     container = Local(
         agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
-        summary_writer, args.summary_frequency, saver
+        summary_writer, args.summary_freq, saver
     )
 
     # if running an eval thread create eval env, agent, & logger

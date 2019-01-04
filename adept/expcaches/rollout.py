@@ -21,6 +21,7 @@ import numpy as np
 class RolloutCache(dict, BaseExperience):
     def __init__(self, nb_rollout, device, reward_normalizer, keys):
         super(RolloutCache, self).__init__()
+        assert type(nb_rollout == int)
         for k in keys:
             self[k] = []
         self['states'] = []

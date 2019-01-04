@@ -78,8 +78,14 @@ class ActorCritic(AgentPlugin):
     ):
         return cls(
             network, device, reward_normalizer, gpu_preprocessor, engine,
-            action_space, args.nb_env, args.exp_length, args.discount,
-            args.gae, args.tau, args.normalize_advantage, args.entropy_weight
+            action_space,
+            nb_env=args.nb_env,
+            nb_rollout=args.nb_rollout,
+            discount=args.discount,
+            gae=args.gae,
+            tau=args.tau,
+            normalize_advantage=args.normalize_advantage,
+            entropy_weight=args.entropy_weight
         )
 
     @property
