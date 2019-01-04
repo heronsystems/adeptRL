@@ -43,13 +43,13 @@ Network Options:
     --netjunc <str>         Network junction to merge inputs [default: TODO]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
     --normalize <bool>      TEMPORARY [default: True]
-    --load-network <path>   Path to network to load
+    --load-network <path>   Path to network file
 
 Optimizer Options:
     --lr <float>            Learning rate [default: 0.0007]
 
 Container Options:
-    --gpu-id <id>           CUDA device ID of GPU [default: 0]
+    --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-env <int>          Number of parallel environments [default: 64]
     --seed <int>            Seed for random variables [default: 0]
     --nb-train-frame <int>  Number of frames to train on [default: 10e6]
@@ -122,12 +122,12 @@ def main(
     :param env_registry: EnvPluginRegistry
     :return:
     """
-    print_ascii_logo()
-
     args = DotDict(args)
     agent_args = agent_registry.lookup_agent(args.agent).prompt()
     env_args = env_registry.lookup_env_class(args.env).prompt()
     args = DotDict({**args, **agent_args, **env_args})
+
+    print_ascii_logo()
 
     # construct logging objects
     log_id = make_log_id(

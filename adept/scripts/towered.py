@@ -43,7 +43,7 @@ Network Options:
     --netjunc <str>          Network junction to merge inputs [default: TODO]
     --netbody <str>          Network to use on merged inputs [default: LSTM]
     --normalize <bool>       TEMPORARY [default: True]
-    --load-network <path>    Path to network to load
+    --load-network <path>    Path to network file
 
 Optimizer Options:
     --lr <float>             Learning rate [default: 0.0007]
@@ -120,7 +120,6 @@ def main(
 ):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
-        print_ascii_logo()
         args = DotDict(args)
         agent_args = agent_registry.lookup_agent(args.agent).prompt()
         env_args = env_registry.lookup_env_class(args.env).prompt()
@@ -136,11 +135,11 @@ def main(
         os.makedirs(log_id_dir)
         saver = SimpleModelSaver(log_id_dir)
         args = dict(args)
+        print_ascii_logo()
     else:
         timestamp = None
         args = None
     timestamp = comm.bcast(timestamp, root=0)
-    print(args)
     args = comm.bcast(args, root=0)
     args = DotDict(args)
 

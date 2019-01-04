@@ -35,7 +35,7 @@ Commands:
     render_atari        Visualize an agent playing an Atari game.
     replay_gen_sc2      Generate SC2 replay files of an agent playing SC2.
 
-See 'adept.app <command> --help' for more information on a specific command.
+See 'adept.app help <command>' for more information on a specific command.
 """
 from docopt import docopt
 from adept.globals import VERSION
@@ -50,19 +50,40 @@ def parse_args():
         options_first=True
     )
 
-    print(args)
-
     env = os.environ
     argv = args['<args>']
     if args['<command>'] == 'local':
         print(argv)
         exit(call(['python', '-m', 'adept.scripts.local'] + argv, env=env))
     elif args['<command>'] == 'towered':
-        print('calling towered')
+        nb_mpi_proc = input('Enter number of GPU workers [default: 2]\n')
+        nb_mpi_proc = 2 if not nb_mpi_proc else nb_mpi_proc
+        exit(call([
+            'mpiexec',
+            '-n',
+            str(nb_mpi_proc + 1),  # Add one for host
+            'python',
+            '-m',
+            'adept.scripts.towered'
+        ] + argv, env=env))
+    elif args['<command>'] == 'impala':
+        nb_mpi_proc = input('Enter number of GPU workers [default: 2]\n')
+        nb_mpi_proc = 2 if not nb_mpi_proc else nb_mpi_proc
+        exit(call([
+              'mpiexec',
+              '-n',
+              str(nb_mpi_proc + 1),  # Add one for host
+              'python',
+              '-m',
+              'adept.scripts.impala'
+          ] + argv, env=env))
     elif args['<command>'] == 'help':
         if 'local' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.local', '-h']))
-        # TODO help messages for other commands
+        elif 'towered' in args['<args>']:
+            exit(call(['python', '-m', 'adept.scripts.towered', '-h']))
+        elif 'impala' in args['<args>']:
+            exit(call(['python', '-m', 'adept.scripts.impala', '-h']))
     else:
         exit(
             "{} is not a valid command. See 'adept.app --help'.".

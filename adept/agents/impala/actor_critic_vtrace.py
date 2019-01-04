@@ -26,7 +26,11 @@ from adept.agents.agent_plugin import AgentPlugin
 
 class ActorCriticVtrace(AgentPlugin):
     args = {
-        # TODO
+        'nb_rollout': 20,
+        'discount': 0.99,
+        'minimum_importance_value': 1.0,
+        'minimum_importance_policy': 1.0,
+        'entropy_weight': 0.01
     }
 
     def __init__(
@@ -40,9 +44,9 @@ class ActorCriticVtrace(AgentPlugin):
         nb_env,
         nb_rollout,
         discount,
-        minimum_importance_value=1.0,
-        minimum_importance_policy=1.0,
-        entropy_weight=0.01
+        minimum_importance_value,
+        minimum_importance_policy,
+        entropy_weight
     ):
         self.discount = discount
         self.gpu_preprocessor = gpu_preprocessor
@@ -74,17 +78,13 @@ class ActorCriticVtrace(AgentPlugin):
     ):
         return cls(
             network, device, reward_normalizer, gpu_preprocessor, engine,
-            action_space, args.nb_env, args.exp_length, args.discount
-        )
-
-    @classmethod
-    def add_args(cls, parser):
-        parser.add_argument(
-            '-ae',
-            '--exp-length',
-            type=int,
-            default=20,
-            help='Experience length (default: 20)'
+            action_space,
+            nb_env=args.nb_env,
+            nb_rollout=args.nb_rollout,
+            discount=args.discount,
+            minimum_importance_value=args.minimum_importance_value,
+            minimum_importance_policy=args.minimum_importance_policy,
+            entropy_weight=args.entropy_weight
         )
 
     @property
