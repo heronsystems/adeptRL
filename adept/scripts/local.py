@@ -62,7 +62,7 @@ Logging Options:
     --summary-freq <int>    Tensorboard summary frequency [default: 10]
 
 Troubleshooting Options:
-    --profile               Profile local mode
+    --profile               Profile this script
 """
 
 
@@ -82,7 +82,7 @@ from adept.utils.logging import (
 )
 from adept.utils.script_helpers import (
     make_network, count_parameters,
-    parse_bool_str, DotDict
+    parse_bool_str, DotDict, parse_none
 )
 
 # hack to use bypass pysc2 flags
@@ -101,6 +101,7 @@ def parse_args():
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
     args.nb_train_frame = int(float(args.nb_train_frame))
+    args.tag = parse_none(args.tag)
     args.nb_eval_env = int(args.nb_eval_env)
     args.summary_freq = int(args.summary_freq)
     args.lr = float(args.lr)

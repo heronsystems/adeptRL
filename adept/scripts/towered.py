@@ -13,18 +13,73 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+             __           __
+  ____ _____/ /__  ____  / /_
+ / __ `/ __  / _ \/ __ \/ __/
+/ /_/ / /_/ /  __/ /_/ / /_
+\__,_/\__,_/\___/ .___/\__/
+               /_/
+
+Towered Mode
+
+Train an agent with multiple GPUs.
+
+Usage:
+    local [options]
+    local (-h | --help)
+
+Agent Options:
+    --agent <str>            Name of agent class [default: ActorCritic]
+
+Environment Options:
+    --env <str>              Environment name [default: PongNoFrameskip-v4]
+
+Network Options:
+    --net1d <str>            Network to use for 1d input [default: Identity]
+    --net2d <str>            Network to use for 2d input [default: Identity]
+    --net3d <str>            Network to use for 3d input [default: FourConv]
+    --net4d <str>            Network to use for 4d input [default: Identity]
+    --netjunc <str>          Network junction to merge inputs [default: TODO]
+    --netbody <str>          Network to use on merged inputs [default: LSTM]
+    --normalize <bool>       TEMPORARY [default: True]
+    --load-network <path>    Path to network to load
+
+Optimizer Options:
+    --lr <float>             Learning rate [default: 0.0007]
+
+Container Options:
+    --gpu-ids <ids>          Comma-separated CUDA IDs [default: 0,0]
+    --nb-env <int>           Number of environments per Tower [default: 32]
+    --seed <int>             Seed for random variables [default: 0]
+    --nb-train-frame <int>   Number of frames to train on [default: 10e6]
+    --nb-grad-to-drop <int>  Number of gradients to drop per round [default: 0]
+
+Logging Options:
+    --tag <str>              Name your run [default: None]
+    --logdir <path>          Path to logging directory [default: /tmp/adept_logs/]
+    --epoch-len <int>        Save a model every <int> frames [default: 1e6]
+    --summary-freq <int>     Tensorboard summary frequency [default: 10]
+
+Troubleshooting Options:
+    --profile                Profile this script
+"""
 import os
 import torch
 from absl import flags
 from mpi4py import MPI as mpi
 from tensorboardX import SummaryWriter
 
+from adept.agents.agent_registry import AgentRegistry
 from adept.containers import ToweredHost, ToweredWorker
 from adept.environments import SubProcEnvManager, EnvMetaData
 from adept.environments.env_registry import EnvPluginRegistry
 from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes, count_parameters
+from adept.utils.script_helpers import (
+    make_network, count_parameters, parse_bool_str,
+    DotDict, parse_list_str, parse_none
+)
 from datetime import datetime
 
 # hack to use argparse for SC2
@@ -37,25 +92,61 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 
-def main(args, env_registry=EnvPluginRegistry()):
+def parse_args():
+    from docopt import docopt
+    args = docopt(__doc__)
+    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
+    del args['h']
+    del args['help']
+    args = DotDict(args)
+    args.gpu_ids = parse_list_str(args.gpu_ids, int)
+    args.nb_env = int(args.nb_env)
+    args.seed = int(args.seed)
+    args.nb_train_frame = int(float(args.nb_train_frame))
+    args.nb_grad_to_drop = int(args.nb_grad_to_drop)
+    args.tag = parse_none(args.tag)
+    args.summary_freq = int(args.summary_freq)
+    args.lr = float(args.lr)
+    args.epoch_len = int(float(args.epoch_len))
+    args.profile = bool(args.profile)
+    args.normalize = parse_bool_str(args.normalize)
+    return args
+
+
+def main(
+    args,
+    agent_registry=AgentRegistry(),
+    env_registry=EnvPluginRegistry()
+):
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
+        print_ascii_logo()
+        args = DotDict(args)
+        agent_args = agent_registry.lookup_agent(args.agent).prompt()
+        env_args = env_registry.lookup_env_class(args.env).prompt()
+        args = {**args, **agent_args, **env_args}
+        args = DotDict(args)
+
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         log_id = make_log_id_from_timestamp(
-            args.tag, args.mode_name, args.agent,
+            args.tag, 'Towered', args.agent,
             args.net3d + args.netbody, timestamp
         )
         log_id_dir = os.path.join(args.logdir, args.env, log_id)
         os.makedirs(log_id_dir)
         saver = SimpleModelSaver(log_id_dir)
-        print_ascii_logo()
+        args = dict(args)
     else:
         timestamp = None
+        args = None
     timestamp = comm.bcast(timestamp, root=0)
+    print(args)
+    args = comm.bcast(args, root=0)
+    args = DotDict(args)
 
     if rank != 0:
         log_id = make_log_id_from_timestamp(
-            args.tag, args.mode_name, args.agent,
+            args.tag, 'Towered', args.agent,
             args.net3d + args.netbody, timestamp
         )
         log_id_dir = os.path.join(args.logdir, args.env, log_id)
@@ -75,8 +166,11 @@ def main(args, env_registry=EnvPluginRegistry()):
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, args.agent)
-    network = make_network(env.observation_space, network_head_shapes, args)
+    network = make_network(
+        env.observation_space,
+        agent_registry.lookup_output_shape(args.agent, env.action_space),
+        args
+    )
 
     # possibly load network
     initial_step_count = 0
@@ -121,16 +215,21 @@ def main(args, env_registry=EnvPluginRegistry()):
 
         # construct agent
         # distribute evenly across gpus
-        if isinstance(args.gpu_id, list):
-            gpu_id = args.gpu_id[(rank - 1) % len(args.gpu_id)]
-        else:
-            gpu_id = args.gpu_id
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        gpu_id = args.gpu_ids[(rank - 1) % len(args.gpu_ids)]
+        device = torch.device(
+            "cuda:{}".format(gpu_id)
+            if (torch.cuda.is_available() and gpu_id >= 0)
+            else "cpu"
+        )
         torch.backends.cudnn.benchmark = True
-        agent = make_agent(
-            network, device, env.gpu_preprocessor, env.engine, env.action_space,
-            args
+        agent = agent_registry.lookup_agent(args.agent).from_args(
+            args,
+            network,
+            device,
+            env_registry.lookup_reward_normalizer(args.env),
+            env.gpu_preprocessor,
+            env.engine,
+            env.action_space
         )
 
         # construct container
@@ -172,7 +271,7 @@ def main(args, env_registry=EnvPluginRegistry()):
             return opt
 
         container = ToweredHost(
-            comm, args.num_grads_to_drop, network, make_optimizer, saver,
+            comm, args.nb_grad_drop, network, make_optimizer, saver,
             args.epoch_len, logger
         )
 
@@ -196,35 +295,4 @@ def main(args, env_registry=EnvPluginRegistry()):
 
 
 if __name__ == '__main__':
-    import argparse
-    from adept.utils.script_helpers import add_base_args
-
-    base_parser = argparse.ArgumentParser(description='AdeptRL Towered Mode')
-
-    def add_args(parser):
-        parser = parser.add_argument_group('Towered Mode Args')
-        parser.add_argument(
-            '--gpu-id',
-            type=int,
-            nargs='+',
-            default=0,
-            help='Which GPU(s) to use for training (default: 0)'
-        )
-        parser.add_argument(
-            '--num-grads-to-drop',
-            type=int,
-            default=0,
-            help=
-            'The number of gradient receives to drop in a round. https://arxiv.org/abs/1604.00981 recommends dropping'
-            ' 10 percent of gradients for maximum speed (default: 0)'
-        )
-
-    add_base_args(base_parser, add_args)
-    args = base_parser.parse_args()
-
-    if args.debug:
-        args.nb_env = 3
-        args.logdir = '/tmp/'
-    args.mode_name = 'Towered'
-
-    main(args)
+    main(parse_args())

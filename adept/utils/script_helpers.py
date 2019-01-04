@@ -79,3 +79,15 @@ class DotDict(dict):
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
+
+
+def parse_list_str(list_str, item_type):
+    items = list_str.split(',')
+    return [item_type(item) for item in items]
+
+
+def parse_none(none_str):
+    if none_str == 'None':
+        return None
+    else:
+        return none_str
