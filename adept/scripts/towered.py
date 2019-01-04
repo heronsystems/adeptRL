@@ -53,7 +53,7 @@ Container Options:
     --nb-env <int>           Number of environments per Tower [default: 32]
     --seed <int>             Seed for random variables [default: 0]
     --nb-train-frame <int>   Number of frames to train on [default: 10e6]
-    --nb-grad-to-drop <int>  Number of gradients to drop per round [default: 0]
+    --nb-grad-drop <int>     Number of gradients to drop per round [default: 0]
 
 Logging Options:
     --tag <str>              Name your run [default: None]
@@ -103,7 +103,7 @@ def parse_args():
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
     args.nb_train_frame = int(float(args.nb_train_frame))
-    args.nb_grad_to_drop = int(args.nb_grad_to_drop)
+    args.nb_grad_drop = int(args.nb_grad_drop)
     args.tag = parse_none(args.tag)
     args.summary_freq = int(args.summary_freq)
     args.lr = float(args.lr)
