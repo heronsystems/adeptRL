@@ -53,7 +53,6 @@ def parse_args():
     env = os.environ
     argv = args['<args>']
     if args['<command>'] == 'local':
-        print(argv)
         exit(call(['python', '-m', 'adept.scripts.local'] + argv, env=env))
     elif args['<command>'] == 'towered':
         nb_mpi_proc = input('Enter number of GPU workers [default: 2]\n')

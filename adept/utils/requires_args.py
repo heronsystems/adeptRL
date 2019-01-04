@@ -36,11 +36,13 @@ class RequiresArgs:
             return cls.args
 
         user_input = input(
-            '\n{} Defaults:\n{}\nPress ENTER to use defaults. Otherwise, '
+            '\n{} Defaults:\n{}\n'
+            'Press ENTER to use defaults. Otherwise, '
             'modify JSON keys then press ENTER.\n'.format(
                 cls.__name__,
                 json.dumps(cls.args, indent=2, sort_keys=True)
-            )
+            ) + 'Example: {"some_key": <new_value>, "another_key": '
+                '<new_value>}\n'
         )
 
         # use defaults if no changes specified
