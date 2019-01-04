@@ -42,6 +42,7 @@ Network Options:
     --net4d <str>           Network to use for 4d input [default: Identity]
     --netjunc <str>         Network junction to merge inputs [default: TODO]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
+    --normalize <bool>      TEMPORARY [default: True]
     --load-network <path>   Path to network to load
 
 Optimizer Options:
@@ -66,7 +67,6 @@ Troubleshooting Options:
 
 
 import os
-from copy import deepcopy
 
 import torch
 from absl import flags
@@ -81,7 +81,8 @@ from adept.utils.logging import (
     SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    make_network, count_parameters
+    make_network, count_parameters,
+    parse_bool_str, DotDict
 )
 
 # hack to use bypass pysc2 flags
@@ -93,6 +94,8 @@ def parse_args():
     from docopt import docopt
     args = docopt(__doc__)
     args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
+    del args['h']
+    del args['help']
     args = DotDict(args)
     args.gpu_id = int(args.gpu_id)
     args.nb_env = int(args.nb_env)
@@ -103,13 +106,8 @@ def parse_args():
     args.lr = float(args.lr)
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
+    args.normalize = parse_bool_str(args.normalize)
     return args
-
-
-class DotDict(dict):
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
 
 
 def main(
@@ -123,13 +121,14 @@ def main(
     :param env_registry: EnvPluginRegistry
     :return:
     """
+    print_ascii_logo()
+
     args = DotDict(args)
     agent_args = agent_registry.lookup_agent(args.agent).prompt()
     env_args = env_registry.lookup_env_class(args.env).prompt()
     args = DotDict({**args, **agent_args, **env_args})
 
     # construct logging objects
-    print_ascii_logo()
     log_id = make_log_id(
         args.tag, 'Local', args.agent, args.net3d + args.netbody
     )
@@ -205,21 +204,21 @@ def main(
 
     # if running an eval thread create eval env, agent, & logger
     if args.nb_eval_env > 0:
-        # replace args num envs & seed
-        eval_args = deepcopy(args)
 
         # env and agent
-        eval_args.nb_env = args.nb_eval_env
         eval_env = SubProcEnvManager.from_args(
-            eval_args, seed=args.seed + args.nb_env, registry=env_registry
+            args,
+            seed=args.seed + args.nb_env,
+            nb_env=args.nb_eval_env,
+            registry=env_registry
         )
         eval_net = make_network(
             eval_env.observation_space,
             agent_registry.lookup_output_shape(args.agent, env.action_space),
-            eval_args
+            args
         )
         eval_agent = agent_registry.lookup_agent(args.agent).from_args(
-            eval_args,
+            args,
             eval_net,
             device,
             eval_env.gpu_preprocessor,

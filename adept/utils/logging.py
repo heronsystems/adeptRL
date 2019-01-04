@@ -82,8 +82,8 @@ def make_logger(logger_name, log_file):
 
 def log_args(logger, args):
     args = args if isinstance(args, dict) else vars(args)
-    for k, v in args.items():
-        logger.info('{}: {}'.format(k, v))
+    for k in sorted(args):
+        logger.info('{}: {}'.format(k, args[k]))
 
 
 def write_args_file(log_id_dir, args):

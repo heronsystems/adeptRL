@@ -58,3 +58,24 @@ def make_network(
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def parse_bool_str(bool_str):
+    """
+    Convert string to boolean.
+
+    :param bool_str: str
+    :return: Bool
+    """
+    if bool_str.lower() == 'false':
+        return False
+    elif bool_str.lower() == 'true':
+        return True
+    else:
+        raise ValueError('Unable to parse "{}"'.format(bool_str))
+
+
+class DotDict(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
