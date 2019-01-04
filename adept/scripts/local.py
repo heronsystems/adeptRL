@@ -81,7 +81,7 @@ from adept.utils.logging import (
     SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    make_network, get_head_shapes, count_parameters
+    make_network, count_parameters
 )
 
 # hack to use bypass pysc2 flags
@@ -148,8 +148,11 @@ def main(
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, args.agent)
-    network = make_network(env.observation_space, network_head_shapes, args)
+    network = make_network(
+        env.observation_space,
+        agent_registry.lookup_output_shape(args.agent, env.action_space),
+        args
+    )
     # possibly load network
     initial_step_count = 0
     if args.load_network:
@@ -211,7 +214,9 @@ def main(
             eval_args, seed=args.seed + args.nb_env, registry=env_registry
         )
         eval_net = make_network(
-            eval_env.observation_space, network_head_shapes, eval_args
+            eval_env.observation_space,
+            agent_registry.lookup_output_shape(args.agent, env.action_space),
+            eval_args
         )
         eval_agent = agent_registry.lookup_agent(args.agent).from_args(
             eval_args,

@@ -59,5 +59,12 @@ class AgentRegistry:
         """
         return self._agent_class_by_id[agent_id]
 
-    def lookup_nb_output(self):
-        
+    def lookup_output_shape(self, agent_id, action_space):
+        """
+        For a given agent_id, determine the shapes of the outputs.
+
+        :param agent_id: str
+        :param action_space:
+        :return:
+        """
+        return self._agent_class_by_id[agent_id].output_shape(action_space)

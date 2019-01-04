@@ -74,7 +74,7 @@ class EnvPluginRegistry:
     def __init__(self):
         self._engine_ids_by_env_id_set = {}
         self._plugin_class_by_engine_id = {}
-        self._reward_norm_by_env_id = defaultdict(Clip)
+        self._reward_norm_by_env_id = defaultdict(Clip())
 
         from adept.environments.openai_gym import AdeptGymEnv
         self.register_env(Engines.GYM, AdeptGymEnv, ATARI_ENVS)
