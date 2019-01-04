@@ -73,8 +73,8 @@ class ActorCritic(AgentPlugin):
 
     @classmethod
     def from_args(
-        cls, network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, args
+        cls, args, network, device, reward_normalizer, gpu_preprocessor, engine,
+        action_space
     ):
         return cls(
             network, device, reward_normalizer, gpu_preprocessor, engine,

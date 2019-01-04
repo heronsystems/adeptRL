@@ -49,15 +49,3 @@ class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def close(self):
         raise NotImplementedError
-
-
-def reward_normalizer_by_env_id(env_id):
-    from adept.utils.normalizers import Clip, Scale
-    norm_by_id = {
-        'DefeatRoaches': Scale(0.1),
-        'DefeatZerglingsAndBanelings': Scale(0.2)
-    }
-    if env_id not in norm_by_id:
-        return Clip()
-    else:
-        return norm_by_id[env_id]

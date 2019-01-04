@@ -23,15 +23,18 @@ class AgentRegistry:
     def __init__(self):
         self._agent_class_by_id = {}
 
-
         self.register_agent('ActorCritic', self._load_actor_critic())
-        self.register_agent('ActorCriticVtrace', self._load_actor_critic_vtrace())
+        self.register_agent(
+            'ActorCriticVtrace', self._load_actor_critic_vtrace()
+        )
 
-    def _load_actor_critic(self):
+    @staticmethod
+    def _load_actor_critic():
         from adept.agents.actor_critic import ActorCritic
         return ActorCritic
 
-    def _load_actor_critic_vtrace(self):
+    @staticmethod
+    def _load_actor_critic_vtrace():
         from adept.agents.impala.actor_critic_vtrace import ActorCriticVtrace
         return ActorCriticVtrace
 
@@ -55,3 +58,6 @@ class AgentRegistry:
         :return: adept.agents.AgentPlugin
         """
         return self._agent_class_by_id[agent_id]
+
+    def lookup_nb_output(self):
+        

@@ -63,15 +63,6 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def make_agent(network, device, gpu_preprocessor, engine, action_space, args):
-    Agent = AGENTS[args.agent]
-    reward_normalizer = reward_normalizer_by_env_id(args.env)
-    return Agent.from_args(
-        network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, args
-    )
-
-
 def get_head_shapes(action_space, agent_name):
     Agent = AGENTS[agent_name]
     return Agent.output_shape(action_space)

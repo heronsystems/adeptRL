@@ -61,8 +61,7 @@ Logging Options:
     --summary-freq <int>    Tensorboard summary frequency [default: 10]
 
 Troubleshooting Options:
-    --debug
-    --profile
+    --profile               Profile local mode
 """
 
 
@@ -82,7 +81,7 @@ from adept.utils.logging import (
     SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    make_agent, make_network, get_head_shapes, count_parameters
+    make_network, get_head_shapes, count_parameters
 )
 
 # hack to use bypass pysc2 flags
@@ -103,6 +102,7 @@ def parse_args():
     args.summary_freq = int(args.summary_freq)
     args.lr = float(args.lr)
     args.epoch_len = int(float(args.epoch_len))
+    args.profile = bool(args.profile)
     return args
 
 
@@ -172,11 +172,13 @@ def main(
     )
     torch.backends.cudnn.benchmark = True
     agent = agent_registry.lookup_agent(args.agent).from_args(
-        network, device,
-    )
-    agent = make_agent(
-        network, device, env.gpu_preprocessor, env.engine, env.action_space,
-        args
+        args,
+        network,
+        device,
+        env_registry.lookup_reward_normalizer(args.env),
+        env.gpu_preprocessor,
+        env.engine,
+        env.action_space
     )
 
     # Construct the Container
@@ -211,9 +213,13 @@ def main(
         eval_net = make_network(
             eval_env.observation_space, network_head_shapes, eval_args
         )
-        eval_agent = make_agent(
-            eval_net, device, eval_env.gpu_preprocessor, eval_env.engine,
-            env.action_space, eval_args
+        eval_agent = agent_registry.lookup_agent(args.agent).from_args(
+            eval_args,
+            eval_net,
+            device,
+            eval_env.gpu_preprocessor,
+            eval_env.engine,
+            env.action_space
         )
         eval_net.load_state_dict(network.state_dict())
 
@@ -257,41 +263,3 @@ def main(
 
 if __name__ == '__main__':
     main(parse_args())
-    # import argparse
-    # from adept.utils.script_helpers import add_base_args
-    #
-    # base_parser = argparse.ArgumentParser(description='AdeptRL Local Mode')
-    #
-    # def add_args(parser):
-    #     parser = parser.add_argument_group('Local Mode Args')
-    #     parser.add_argument(
-    #         '--gpu-id',
-    #         type=int,
-    #         default=0,
-    #         help='Which GPU to use for training (default: 0)'
-    #     )
-    #     parser.add_argument(
-    #         '--nb-eval-env',
-    #         default=1,
-    #         type=int,
-    #         help=
-    #         'Number of eval environments to run [in a separate thread] each with a different seed. '
-    #         'Creates a copy of the network. Disable by setting to 0. (default: 1)'
-    #     )
-    #     parser.add_argument(
-    #         '--eval-step-rate',
-    #         default=0,
-    #         type=int,
-    #         help=
-    #         'Number of eval steps allowed to run per second decreasing this amount can improve training speed. 0 is unlimited (default: 0)'
-    #     )
-    #
-    # add_base_args(base_parser, add_args)
-    # args = base_parser.parse_args()
-    #
-    # if args.debug:
-    #     args.nb_env = 3
-    #     args.log_dir = '/tmp/'
-    #
-    # args.mode_name = 'Local'
-    # main(args)

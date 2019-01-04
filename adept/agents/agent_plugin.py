@@ -24,8 +24,8 @@ class AgentPlugin(RequiresArgs, metaclass=abc.ABCMeta):
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, args
+        cls, args, network, device, reward_normalizer, gpu_preprocessor, engine,
+        action_space
     ):
         raise NotImplementedError
 
