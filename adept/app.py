@@ -76,6 +76,8 @@ def parse_args():
               '-m',
               'adept.scripts.impala'
           ] + argv, env=env))
+    elif args['<command>'] == 'evaluate':
+        exit(call(['python', '-m', 'adept.scripts.evaluate'] + argv, env=env))
     elif args['<command>'] == 'help':
         if 'local' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.local', '-h']))

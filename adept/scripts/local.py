@@ -117,6 +117,8 @@ def main(
     env_registry=EnvPluginRegistry()
 ):
     """
+    Run local training.
+
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvPluginRegistry

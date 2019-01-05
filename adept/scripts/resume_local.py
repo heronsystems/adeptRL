@@ -1,4 +1,4 @@
-#!python
+#!/usr/bin/env python
 # Copyright (C) 2018 Heron Systems, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,12 @@ import os
 import torch
 from absl import flags
 
+from adept.environments.env_registry import EnvPluginRegistry
+from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Local
 from adept.environments import SubProcEnvManager
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
-from adept.utils.util import dotdict
+from adept.utils.script_helpers import make_network
+from adept.utils.util import DotDict
 from adept.utils.logging import make_log_id, make_logger, print_ascii_logo, log_args, write_args_file, \
     SimpleModelSaver
 from tensorboardX import SummaryWriter
@@ -32,7 +34,11 @@ FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
 
-def main(args):
+def main(
+    args,
+    agent_registry=AgentRegistry(),
+    env_registry=EnvPluginRegistry()
+):
     epoch_dir = os.path.split(args.network_file)[0]
     initial_count = int(os.path.split(epoch_dir)[-1])
     network_file = args.network_file
@@ -40,7 +46,7 @@ def main(args):
     args_file_path = args.args_file
     mts = args.nb_train_frame
     with open(args.args_file, 'r') as args_file:
-        args = dotdict(json.load(args_file))
+        args = DotDict(json.load(args_file))
 
     print_ascii_logo()
     log_id = make_log_id(
@@ -63,21 +69,32 @@ def main(args):
     )
 
     # construct env
-    env = SubProcEnvManager.from_args(args)
+    env = SubProcEnvManager.from_args(args, registry=env_registry)
 
     # construct network
     torch.manual_seed(args.seed)
-    network_head_shapes = get_head_shapes(env.action_space, args.agent)
-    network = make_network(env.observation_space, network_head_shapes, args)
+    network = make_network(
+        env.observation_space,
+        agent_registry.lookup_output_shape(args.agent, env.action_space),
+        args
+    )
     network.load_state_dict(torch.load(network_file))
 
     # construct agent
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        "cuda:{}".format(args.gpu_id)
+        if (torch.cuda.is_available() and args.gpu_id >= 0)
+        else "cpu"
+    )
     torch.backends.cudnn.benchmark = True
-    agent = make_agent(
-        network, device, env.gpu_preprocessor, env.engine, env.action_space,
-        args
+    agent = agent_registry.lookup_agent(args.agent).from_args(
+        args,
+        network,
+        device,
+        env_registry.lookup_reward_normalizer(args.env),
+        env.gpu_preprocessor,
+        env.engine,
+        env.action_space
     )
 
     # Construct the Container

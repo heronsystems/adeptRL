@@ -23,7 +23,7 @@ from adept.environments import SimpleEnvManager
 from adept.environments.env_registry import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
-from adept.utils.util import dotdict
+from adept.utils.util import DotDict
 
 
 def main(args, env_registry=EnvPluginRegistry()):
@@ -32,7 +32,7 @@ def main(args, env_registry=EnvPluginRegistry()):
     print('Rendering... Press Ctrl+C to stop.')
 
     with open(args.args_file, 'r') as args_file:
-        train_args = dotdict(json.load(args_file))
+        train_args = DotDict(json.load(args_file))
 
     engine = env_registry.lookup_engine(train_args.env)
     assert engine == Engines.GYM, "render_atari.py is only for Atari."

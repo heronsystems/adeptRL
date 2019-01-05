@@ -74,12 +74,15 @@ class ActorCritic(AgentPlugin):
     @classmethod
     def from_args(
         cls, args, network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space
+        action_space, nb_env=None
     ):
+        if nb_env is None:
+            nb_env = args.nb_env
+
         return cls(
             network, device, reward_normalizer, gpu_preprocessor, engine,
             action_space,
-            nb_env=args.nb_env,
+            nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
             gae=args.gae,

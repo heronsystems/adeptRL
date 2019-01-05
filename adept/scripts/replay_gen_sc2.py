@@ -25,7 +25,7 @@ from adept.environments.env_registry import EnvPluginRegistry, Engines
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import make_agent, make_network, \
     get_head_shapes, parse_bool
-from adept.utils.util import dotdict
+from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -38,7 +38,7 @@ def main(args, env_registry=EnvPluginRegistry()):
     print('Saving replays... Press Ctrl+C to stop.')
 
     with open(args.args_file, 'r') as args_file:
-        train_args = dotdict(json.load(args_file))
+        train_args = DotDict(json.load(args_file))
     train_args.nb_env = 1  # TODO remove
 
     engine = env_registry.lookup_engine(train_args.env)

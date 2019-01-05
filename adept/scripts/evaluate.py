@@ -1,4 +1,4 @@
-#!python
+#!/usr/bin/env python
 # Copyright (C) 2018 Heron Systems, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -13,6 +13,30 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+             __           __
+  ____ _____/ /__  ____  / /_
+ / __ `/ __  / _ \/ __ \/ __/
+/ /_/ / /_/ /  __/ /_/ / /_
+\__,_/\__,_/\___/ .___/\__/
+               /_/
+
+Evaluate
+
+Evaluates an agent after training. Computes N-episode average reward by
+loading a saved model from each epoch. N-episode averages are computed by
+running N environments in parallel.
+
+Usage:
+    evaluate [options]
+    evaluate (-h | --help)
+
+Options:
+    --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
+    --gpu-id <int>          CUDA device ID of GPU [default: 0]
+    --nb-episode <int>      Number of episodes to average [default: 30]
+    --seed <int>            Seed for random variables [default: 512]
+"""
 import json
 import os
 from collections import namedtuple
@@ -22,22 +46,51 @@ import numpy as np
 import torch
 from absl import flags
 
+from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Evaluation
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvPluginRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
-from adept.utils.util import dotdict
+from adept.utils.script_helpers import make_network
+from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
+
+def parse_args():
+    from docopt import docopt
+    args = docopt(__doc__)
+    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
+    del args['h']
+    del args['help']
+    args = DotDict(args)
+    args.gpu_id = int(args.gpu_id)
+    args.nb_episode = int(args.nb_episode)
+    args.seed = int(args.seed)
+    return args
+
+
 Result = namedtuple('Result', ['epoch', 'mean', 'std_dev'])
 SelectedModel = namedtuple('SelectedModel', ['epoch', 'model_id'])
 
 
-def main(args, env_registry=EnvPluginRegistry()):
+def main(
+    args,
+    agent_registry=AgentRegistry(),
+    env_registry=EnvPluginRegistry()
+):
+    """
+    Run an evaluation.
+
+    :param args: Dict[str, Any]
+    :param agent_registry: AgentRegistry
+    :param env_registry: EnvPluginRegistry
+    :return:
+    """
+    args = DotDict(args)
+
     print_ascii_logo()
     logger = make_logger(
         'Eval', os.path.join(args.log_id_dir, 'evaluation_log.txt')
@@ -53,8 +106,7 @@ def main(args, env_registry=EnvPluginRegistry()):
     )
 
     with open(os.path.join(args.log_id_dir, 'args.json'), 'r') as args_file:
-        train_args = dotdict(json.load(args_file))
-    train_args.nb_env = args.nb_episode  # TODO make this line uneccessary
+        train_args = DotDict(json.load(args_file))
 
     # construct env
     env = SubProcEnvManager.from_args(
@@ -63,11 +115,15 @@ def main(args, env_registry=EnvPluginRegistry()):
         nb_env=args.nb_episode,
         registry=env_registry
     )
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
+    device = torch.device(
+        "cuda:{}".format(args.gpu_id)
+        if (torch.cuda.is_available() and args.gpu_id >= 0)
+        else "cpu"
+    )
     network = make_network(
-        env.observation_space, network_head_shapes, train_args
+        env.observation_space,
+        agent_registry.lookup_output_shape(train_args.agent, env.action_space),
+        train_args
     )
 
     results = []
@@ -91,10 +147,15 @@ def main(args, env_registry=EnvPluginRegistry()):
             )
 
             # construct agent
-            agent = make_agent(
-                network, device, env.gpu_preprocessor,
-                env_registry.lookup_engine(train_args.env), env.action_space,
-                train_args
+            agent = agent_registry.lookup_agent(train_args.agent).from_args(
+                train_args,
+                network,
+                device,
+                env_registry.lookup_reward_normalizer(train_args.env),
+                env.gpu_preprocessor,
+                env.engine,
+                env.action_space,
+                nb_env=args.nb_episode
             )
             # container
             container = Evaluation(agent, device, env)
@@ -131,28 +192,4 @@ def main(args, env_registry=EnvPluginRegistry()):
 
 
 if __name__ == '__main__':
-    import argparse
-
-    parser = argparse.ArgumentParser(description='AdeptRL Evaluation Mode')
-    parser.add_argument(
-        '--log-id-dir', help='path to log dir (.../logs/<env-id>/<log-id>)'
-    )
-    parser.add_argument(
-        '--nb-episode',
-        type=int,
-        default=30,
-        help='number of episodes to evaluate on. (default: 30)'
-    )
-    parser.add_argument(
-        '-s',
-        '--seed',
-        type=int,
-        default=512,
-        metavar='S',
-        help='random seed (default: 512)'
-    )
-    parser.add_argument(
-        '--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)'
-    )
-    args = parser.parse_args()
-    main(args)
+    main(parse_args())
