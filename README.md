@@ -69,24 +69,23 @@ file, saved models, and other metadata.
 ```
 # Local Mode (A2C)
 # We recommend 4GB+ GPU memory, 8GB+ RAM, 4+ Cores
-python -m adept.scripts.local ActorCritic --env-id BeamRiderNoFrameskip-v4
+python -m adept.app local --env BeamRiderNoFrameskip-v4
 
 # Towered Mode (A3C Variant, requires mpi4py)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-mpiexec -n 3 python -m adept.scripts.towered ActorCritic --env-id BeamRiderNoFrameskip-v4
+python -m adept.app towered --env BeamRiderNoFrameskip-v4
 
 # IMPALA (requires mpi4py and is resource intensive)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-mpiexec -n 3 python -m adept.scripts.impala ActorCriticVtrace --env-id BeamRiderNoFrameskip-v4
+python -m adept.app impala --env BeamRiderNoFrameskip-v4
 
 # StarCraft 2 (IMPALA not supported yet)
 # Warning: much more resource intensive than Atari
-python -m adept.scripts.local --env-id CollectMineralShards
+python -m adept.app local --env CollectMineralShards
 
 # To see a full list of options:
-python -m adept.scripts.local -h
-python -m adept.scripts.towered -h
-python -m adept.scripts.impala -h
+python -m adept.app -h
+python -m adept.app help <command>
 ```
 
 ## API Reference

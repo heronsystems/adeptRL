@@ -77,6 +77,14 @@ def parse_args():
           ] + argv, env=env))
     elif args['<command>'] == 'evaluate':
         exit(call(['python', '-m', 'adept.scripts.evaluate'] + argv, env=env))
+    elif args['<command>'] == 'render_atari':
+        exit(call([
+            'python', '-m', 'adept.scripts.render_atari'
+        ] + argv, env=env))
+    elif args['<command>'] == 'replay_gen_sc2':
+        exit(call([
+            'python', '-m', 'adept.scripts.replay_gen_sc2'
+        ] + argv, env=env))
     elif args['<command>'] == 'help':
         if 'local' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.local', '-h']))
@@ -84,6 +92,12 @@ def parse_args():
             exit(call(['python', '-m', 'adept.scripts.towered', '-h']))
         elif 'impala' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.impala', '-h']))
+        elif 'evaluate' in args['<args>']:
+            exit(call(['python', '-m', 'adept.scripts.evaluate', '-h']))
+        elif 'render_atari' in args['<args>']:
+            exit(call(['python', '-m', 'adept.scripts.render_atari', '-h']))
+        elif 'replay_gen_sc2' in args['<args>']:
+            exit(call(['python', '-m', 'adept.scripts.replay_gen_sc2', '-h']))
     else:
         exit(
             "{} is not a valid command. See 'adept.app --help'.".

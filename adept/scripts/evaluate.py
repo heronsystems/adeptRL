@@ -28,11 +28,13 @@ loading a saved model from each epoch. N-episode averages are computed by
 running N environments in parallel.
 
 Usage:
-    evaluate [options]
+    evaluate (--log-id-dir <path>) [options]
     evaluate (-h | --help)
 
-Options:
+Required:
     --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
+
+Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-episode <int>      Number of episodes to average [default: 30]
     --seed <int>            Seed for random variables [default: 512]

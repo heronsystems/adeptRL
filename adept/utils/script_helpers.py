@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from argparse import ArgumentParser  # for type hinting
+import os
 
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
@@ -91,3 +91,65 @@ def parse_none(none_str):
         return None
     else:
         return none_str
+
+
+class LogDirHelper:
+    def __init__(self, log_id_path):
+        """
+        :param log_id_path: str Path to Log ID
+        """
+        self._log_id_path = log_id_path
+
+    def epochs(self):
+        return [
+            int(epoch)
+            for epoch in os.listdir(self._log_id_path)
+            if os.path.isdir(os.path.join(self._log_id_path, epoch))
+        ]
+
+    def latest_epoch(self):
+        return max(self.epochs())
+
+    def latest_epoch_path(self):
+        return os.path.join(self._log_id_path, str(self.latest_epoch()))
+
+    def latest_network_path(self):
+        network_file = [
+            f for f in os.listdir(self.latest_epoch_path())
+            if ('model' in f)
+        ][0]
+        return os.path.join(self.latest_epoch_path(), network_file)
+
+    def latest_optim_path(self):
+        optim_file = [
+            f for f in os.listdir(self.latest_epoch_path())
+            if ('optim' in f)
+        ][0]
+        return os.path.join(self.latest_epoch_path(), optim_file)
+
+    def epoch_path_at_epoch(self, epoch):
+        return os.path.join(self._log_id_path, str(epoch))
+
+    def network_path_at_epoch(self, epoch):
+        epoch_path = self.epoch_path_at_epoch(epoch)
+        network_file = [
+            f for f in os.listdir(epoch_path)
+            if ('model' in f)
+        ][0]
+        return os.path.join(epoch_path, network_file)
+
+    def optim_path_at_epoch(self, epoch):
+        epoch_path = self.epoch_path_at_epoch(epoch)
+        optim_file = [
+            f for f in os.listdir(epoch_path)
+            if ('optim' in f)
+        ][0]
+        return os.path.join(epoch_path, optim_file)
+
+    def timestamp(self):
+        splits = self._log_id_path.split('_')
+        timestamp = splits[-2] + '_' + splits[-1]
+        return timestamp
+
+    def args_file_path(self):
+        return os.path.join(self._log_id_path, 'args.json')

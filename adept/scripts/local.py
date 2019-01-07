@@ -69,8 +69,6 @@ Logging Options:
 Troubleshooting Options:
     --profile               Profile this script
 """
-
-
 import json
 import os
 
@@ -88,7 +86,7 @@ from adept.utils.logging import (
 )
 from adept.utils.script_helpers import (
     make_network, count_parameters,
-    parse_bool_str, DotDict, parse_none
+    parse_bool_str, DotDict, parse_none, LogDirHelper
 )
 
 # hack to use bypass pysc2 flags
@@ -138,31 +136,18 @@ def main(
 
     initial_step_count = 0
     if args.resume:
-        epochs = os.listdir(args.resume)
-        epoch_file = str(max([
-            int(epoch)
-            for epoch in epochs
-            if os.path.isdir(os.path.join(args.resume, epoch))
-        ]))
-        epoch_path = os.path.join(args.resume, epoch_file)
-        network_file = [f for f in os.listdir(epoch_path) if ('model' in f)][0]
-        optim_file = [f for f in os.listdir(epoch_path) if ('optim' in f)][0]
-        network_path = os.path.join(epoch_path, network_file)
-        optim_path = os.path.join(epoch_path, optim_file)
+        log_dir_helper = LogDirHelper(args.resume)
 
-        splits = args.resume.split('_')
-        timestamp = splits[-2] + '_' + splits[-1]
-
-        with open(os.path.join(args.resume, 'args.json'), 'r') as args_file:
+        with open(log_dir_helper.args_file_path(), 'r') as args_file:
             args = DotDict(json.load(args_file))
 
-        args.load_network = network_path
-        args.load_optim = optim_path
-        initial_step_count = int(epoch_file)
+        args.load_network = log_dir_helper.latest_network_path()
+        args.load_optim = log_dir_helper.latest_optim_path()
+        initial_step_count = log_dir_helper.latest_epoch()
 
         log_id = make_log_id(
             args.tag, 'Local', args.agent, args.net3d + args.netbody,
-            timestamp=timestamp
+            timestamp=log_dir_helper.timestamp()
         )
     else:
         args = DotDict(args)
