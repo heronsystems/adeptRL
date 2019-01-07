@@ -300,7 +300,7 @@ def main(
             'python',
             '-m',
             'adept.scripts.evaluate',
-            '---log-id-dir',
+            '--log-id-dir',
             log_id_dir,
             '--gpu-id',
             str(args.gpu_id)
