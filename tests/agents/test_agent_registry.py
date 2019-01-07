@@ -12,7 +12,6 @@ class ArgsNotImplemented(AgentModule):
 
 
 class TestAgentRegistry(unittest.TestCase):
-
     def test_register_invalid_class(self):
         registry = AgentRegistry()
         with self.assertRaises(AssertionError):

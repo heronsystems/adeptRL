@@ -6,7 +6,7 @@ from adept.utils.requires_args import RequiresArgs
 
 
 class Stub(RequiresArgs):
-    defaults = {
+    args = {
         'k1': 0,
         'k2': False,
         'k3': 1.5,
@@ -20,15 +20,15 @@ class TestRequiresArgs(unittest.TestCase):
     def test_prompt_no_changes(self):
         sys.stdin = io.StringIO('\n')
         new_conf = self.stub.prompt()
-        assert(new_conf == self.stub.defaults)
+        assert(new_conf == self.stub.args)
 
     def test_prompt_modify(self):
         sys.stdin = io.StringIO('{"k1": 5}')
         new_conf = self.stub.prompt()
         assert(new_conf['k1'] == 5)
-        assert(new_conf['k2'] == self.stub.defaults['k2'])
-        assert(new_conf['k3'] == self.stub.defaults['k3'])
-        assert(new_conf['k4'] == self.stub.defaults['k4'])
+        assert(new_conf['k2'] == self.stub.args['k2'])
+        assert(new_conf['k3'] == self.stub.args['k3'])
+        assert(new_conf['k4'] == self.stub.args['k4'])
 
 
 if __name__ == '__main__':
