@@ -18,7 +18,7 @@ from adept.utils.requires_args import RequiresArgs
 from adept.environments._env import HasEnvMetaData
 
 
-class EnvPlugin(HasEnvMetaData, RequiresArgs, metaclass=abc.ABCMeta):
+class EnvModule(HasEnvMetaData, RequiresArgs, metaclass=abc.ABCMeta):
     """
     Implement this class to add your custom environment. Don't forget to
     implement defaults.
@@ -43,7 +43,7 @@ class EnvPlugin(HasEnvMetaData, RequiresArgs, metaclass=abc.ABCMeta):
         :param args: Arguments object
         :param seed: Integer used to seed this environment.
         :param kwargs: Any custom arguments are passed through kwargs.
-        :return: EnvPlugin instance.
+        :return: EnvModule instance.
         """
         raise NotImplementedError
 

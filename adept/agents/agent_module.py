@@ -16,7 +16,7 @@ import abc
 from adept.utils.requires_args import RequiresArgs
 
 
-class AgentPlugin(RequiresArgs, metaclass=abc.ABCMeta):
+class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
     """
     An Agent interacts with the environment and accumulates experience.
     """

@@ -21,10 +21,10 @@ from adept.environments.env_registry import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
-from adept.agents.agent_plugin import AgentPlugin
+from adept.agents.agent_module import AgentModule
 
 
-class ActorCriticVtrace(AgentPlugin):
+class ActorCriticVtrace(AgentModule):
     args = {
         'nb_rollout': 20,
         'discount': 0.99,

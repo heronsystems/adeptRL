@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from enum import IntEnum
-from adept.environments.env_plugin import EnvPlugin
+from adept.environments.env_module import EnvModule
 from adept.utils.normalizers import Clip, Scale
 from collections import defaultdict
 
@@ -90,7 +90,7 @@ class EnvPluginRegistry:
 
     def register_env(self, engine_id, env_plugin_class, env_id_set):
         # TODO assert no duplicate env_ids
-        assert issubclass(env_plugin_class, EnvPlugin)
+        assert issubclass(env_plugin_class, EnvModule)
         env_plugin_class.check_defaults()
         self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
         self._plugin_class_by_engine_id[engine_id] = env_plugin_class

@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.agents.agent_plugin import AgentPlugin
+from adept.agents.agent_module import AgentModule
 
 
 class AgentRegistry:
@@ -43,10 +43,10 @@ class AgentRegistry:
         Add your own agent class.
 
         :param agent_id: str Name of your agent.
-        :param agent_class: adept.agents.AgentPlugin. Your custom class.
+        :param agent_class: adept.agents.AgentModule. Your custom class.
         :return:
         """
-        assert issubclass(agent_class, AgentPlugin)
+        assert issubclass(agent_class, AgentModule)
         agent_class.check_defaults()
         self._agent_class_by_id[agent_id] = agent_class
 
@@ -55,7 +55,7 @@ class AgentRegistry:
         Get an agent class by id.
 
         :param agent_id: str
-        :return: adept.agents.AgentPlugin
+        :return: adept.agents.AgentModule
         """
         return self._agent_class_by_id[agent_id]
 

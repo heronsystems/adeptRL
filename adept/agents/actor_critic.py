@@ -20,10 +20,10 @@ from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist
-from adept.agents.agent_plugin import AgentPlugin
+from adept.agents.agent_module import AgentModule
 
 
-class ActorCritic(AgentPlugin):
+class ActorCritic(AgentModule):
     args = {
         'nb_rollout': 20,
         'discount': 0.99,

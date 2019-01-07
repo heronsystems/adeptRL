@@ -1,5 +1,5 @@
 import unittest
-from adept.agents.agent_plugin import AgentPlugin
+from adept.agents.agent_module import AgentModule
 from adept.agents.agent_registry import AgentRegistry
 
 
@@ -7,7 +7,7 @@ class NotSubclass:
     pass
 
 
-class ArgsNotImplemented(AgentPlugin):
+class ArgsNotImplemented(AgentModule):
     pass
 
 

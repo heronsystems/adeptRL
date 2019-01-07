@@ -21,13 +21,13 @@ from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import (
     CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack
 )
-from adept.environments.env_plugin import EnvPlugin
+from adept.environments.env_module import EnvModule
 from ._gym_wrappers import (
     NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv
 )
 
 
-class AdeptGymEnv(EnvPlugin):
+class AdeptGymEnv(EnvModule):
     """
     Converts gym observations to dictionaries and reads actions from
     dictionaries instead of numpy arrays. This allows the Gym Env to

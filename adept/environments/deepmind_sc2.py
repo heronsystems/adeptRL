@@ -26,13 +26,13 @@ from pysc2.lib.features import (
 )
 from pysc2.lib.static_data import UNIT_TYPES
 
-from adept.environments.env_plugin import EnvPlugin
+from adept.environments.env_module import EnvModule
 from adept.environments._spaces import Space, Spaces
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import BaseOp, FlattenSpace, CastToFloat
 
 
-class AdeptSC2Env(EnvPlugin):
+class AdeptSC2Env(EnvModule):
     args = {}
 
     def __init__(self, env):
