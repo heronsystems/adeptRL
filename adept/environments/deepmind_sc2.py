@@ -26,13 +26,15 @@ from pysc2.lib.features import (
 )
 from pysc2.lib.static_data import UNIT_TYPES
 
-from adept.environments._env_plugin import EnvPlugin
+from adept.environments.env_module import EnvModule
 from adept.environments._spaces import Space, Spaces
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import BaseOp, FlattenSpace, CastToFloat
 
 
-class AdeptSC2Env(EnvPlugin):
+class AdeptSC2Env(EnvModule):
+    args = {}
+
     def __init__(self, env):
         self.sc2_env = env
         self._max_num_actions = len(FUNCTIONS)
@@ -42,7 +44,7 @@ class AdeptSC2Env(EnvPlugin):
             # 'build_queue': Space(),
             # 'cargo': Space(),
             # 'cargo_slots_available': Space((1,), None, None, None),
-            'vision':
+            'net3d':
                 Space((24, 84, 84), None, None, None),
             # 'player': Space((11,), None, None, None),
             'control_groups':
@@ -98,7 +100,7 @@ class AdeptSC2Env(EnvPlugin):
             feature_screen=84, feature_minimap=84, action_space='FEATURES'
         )
         env = SC2Env(
-            map_name=args.env_id,
+            map_name=args.env,
             step_mul=8,
             game_steps_per_episode=0,
             discount=0.99,
@@ -137,7 +139,7 @@ class AdeptSC2Env(EnvPlugin):
 
     def _wrap_observation(self, observation):
         obs = OrderedDict()
-        obs['vision'] = torch.cat(
+        obs['net3d'] = torch.cat(
             [
                 torch.from_numpy(observation['feature_screen']),
                 torch.from_numpy(observation['feature_minimap'])
@@ -169,7 +171,7 @@ class SC2RemoveFeatures(BaseOp):
     def __init__(
         self, feats_to_remove, feats=SCREEN_FEATURES + MINIMAP_FEATURES
     ):
-        super(SC2RemoveFeatures, self).__init__({'vision'})
+        super(SC2RemoveFeatures, self).__init__({'net3d'})
 
         self.idxs = []
         self.features = []
@@ -199,7 +201,7 @@ class SC2RemoveFeatures(BaseOp):
 
 class SC2OneHot(BaseOp):
     def __init__(self, feats=SCREEN_FEATURES + MINIMAP_FEATURES):
-        super(SC2OneHot, self).__init__({'vision'})
+        super(SC2OneHot, self).__init__({'net3d'})
 
         self.features = []
         self._ranges_by_feature_idx = {}
@@ -303,7 +305,7 @@ class SC2ScaleChannels(BaseOp):
         :param feats:
         :param mode: 'all' or 'scalar' to decide which type of features to scale
         """
-        super(SC2ScaleChannels, self).__init__({'vision'})
+        super(SC2ScaleChannels, self).__init__({'net3d'})
         scales = torch.ones(nb_channel)
         for i, feat in enumerate(feats):
             if mode == 'all':

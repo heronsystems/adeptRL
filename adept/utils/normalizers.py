@@ -15,13 +15,13 @@
 import abc
 
 
-class NormalizerBase(abc.ABC):
+class Normalizer(abc.ABC):
     @abc.abstractmethod
     def __call__(self, item):
         raise NotImplementedError
 
 
-class Clip(NormalizerBase):
+class Clip(Normalizer):
     def __init__(self, floor=-1, ceil=1):
         self.floor = floor
         self.ceil = ceil
@@ -30,7 +30,7 @@ class Clip(NormalizerBase):
         return float(max(min(item, self.ceil), self.floor))
 
 
-class Scale(NormalizerBase):
+class Scale(Normalizer):
     def __init__(self, coefficient):
         self.coefficient = coefficient
 

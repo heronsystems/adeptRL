@@ -13,6 +13,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from enum import IntEnum
+from adept.environments.env_module import EnvModule
+from adept.utils.normalizers import Clip, Scale
+from collections import defaultdict
 
 
 class Engines(IntEnum):
@@ -63,38 +66,62 @@ ATARI_ENVS = [
 ]
 
 
-class EnvPluginRegistry:
+class EnvModuleRegistry:
     """
-    Keeps track of supported environment plugins.
+    Keeps track of supported environment modules.
     """
 
     def __init__(self):
-        self.engine_ids_by_env_id_set = {}
-        self.plugin_class_by_engine_id = {}
+        self._engine_ids_by_env_id_set = {}
+        self._module_class_by_engine_id = {}
+        self._reward_norm_by_env_id = defaultdict(lambda: Clip())
 
-        # TODO lazy imports
         from adept.environments.openai_gym import AdeptGymEnv
         self.register_env(Engines.GYM, AdeptGymEnv, ATARI_ENVS)
         try:
             from adept.environments.deepmind_sc2 import AdeptSC2Env
             self.register_env(Engines.SC2, AdeptSC2Env, SC2_ENVS)
+            self.register_reward_normalizer('DefeatRoaches', Scale(0.1))
+            self.register_reward_normalizer(
+                'DefeatZerglingsAndBanelings', Scale(0.2)
+            )
         except ImportError:
             print('StarCraft 2 Environment not detected.')
 
-    def register_env(self, engine_id, env_plugin_class, env_id_set):
+    def register_env(self, engine_id, env_module_class, env_id_set):
         # TODO assert no duplicate env_ids
-        self.engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
-        self.plugin_class_by_engine_id[engine_id] = env_plugin_class
+        assert issubclass(env_module_class, EnvModule)
+        env_module_class.check_defaults()
+        self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
+        self._module_class_by_engine_id[engine_id] = env_module_class
 
     def lookup_env_class(self, env_id):
         engine = self.lookup_engine(env_id)
-        return self.plugin_class_by_engine_id[engine]
+        return self._module_class_by_engine_id[engine]
 
     def lookup_engine(self, env_id):
         eng = None
-        for env_id_set, engine_id in self.engine_ids_by_env_id_set.items():
+        for env_id_set, engine_id in self._engine_ids_by_env_id_set.items():
             if env_id in env_id_set:
                 eng = engine_id
         if eng is None:
             raise Exception('Environment not registered: ' + env_id)
         return eng
+
+    def register_reward_normalizer(self, env_id, normalizer):
+        """
+        Associate a reward normalizer with an environment id.
+
+        :param env_id: str
+        :param normalizer: Callable[[float], float]
+        :return:
+        """
+        self._reward_norm_by_env_id[env_id] = normalizer
+
+    def lookup_reward_normalizer(self, env_id):
+        """
+
+        :param env_id: str
+        :return: Callable[[float], float]
+        """
+        return self._reward_norm_by_env_id[env_id]

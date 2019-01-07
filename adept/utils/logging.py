@@ -40,18 +40,10 @@ def print_ascii_logo():
     )
 
 
-def make_log_id(tag, mode_name, agent_name, network_name):
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    if tag:
-        log_id = '_'.join([tag, mode_name, agent_name, network_name, timestamp])
-    else:
-        log_id = '_'.join([mode_name, agent_name, network_name, timestamp])
-    return log_id
+def make_log_id(tag, mode_name, agent_name, network_name, timestamp=None):
+    if timestamp is None:
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
-
-def make_log_id_from_timestamp(
-    tag, mode_name, agent_name, network_name, timestamp
-):
     if tag:
         log_id = '_'.join([tag, mode_name, agent_name, network_name, timestamp])
     else:
@@ -69,7 +61,7 @@ def make_logger(logger_name, log_file):
     fmt = logging.Formatter('%(message)s')
     sh.setFormatter(fmt)
 
-    fh = logging.FileHandler(log_file, mode='w')
+    fh = logging.FileHandler(log_file, mode='a')
     fh.setLevel(logging.DEBUG)
     fmt = logging.Formatter('%(asctime)s  [%(levelname)s] %(message)s')
     fh.setFormatter(fmt)
@@ -82,8 +74,8 @@ def make_logger(logger_name, log_file):
 
 def log_args(logger, args):
     args = args if isinstance(args, dict) else vars(args)
-    for k, v in args.items():
-        logger.info('{}: {}'.format(k, v))
+    for k in sorted(args):
+        logger.info('{}: {}'.format(k, args[k]))
 
 
 def write_args_file(log_id_dir, args):

@@ -40,24 +40,25 @@ class HasEnvMetaData(metaclass=abc.ABCMeta):
 class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def step(self, action):
+        """
+        :param action: Dict[ActionID, Any] Action dictionary
+        :return: Tuple[Observation, Reward, Terminal, Info]
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def reset(self, **kwargs):
+        """
+        :param kwargs:
+        :return: Dict[ObservationID, Any] Observation dictionary
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def close(self):
+        """
+        Close environment. Release resources.
+
+        :return:
+        """
         raise NotImplementedError
-
-
-def reward_normalizer_by_env_id(env_id):
-    from adept.utils.normalizers import Clip, Scale
-    norm_by_id = {
-        'DefeatRoaches': Scale(0.1),
-        'DefeatZerglingsAndBanelings': Scale(0.2)
-    }
-    if env_id not in norm_by_id:
-        return Clip()
-    else:
-        return norm_by_id[env_id]

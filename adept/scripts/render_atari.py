@@ -1,4 +1,4 @@
-#!python
+#!/usr/bin/env python
 # Copyright (C) 2018 Heron Systems, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
@@ -13,52 +13,113 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+             __           __
+  ____ _____/ /__  ____  / /_
+ / __ `/ __  / _ \/ __ \/ __/
+/ /_/ / /_/ /  __/ /_/ / /_
+\__,_/\__,_/\___/ .___/\__/
+               /_/
+
+Render Atari
+
+Renders an agent interacting with an Atari environment.
+
+Usage:
+    render_atari (--log-id-dir <path> --epoch <int>) [options]
+    render_atari (-h | --help)
+
+Required:
+    --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
+    --epoch <int>           Epoch number to load
+
+Options:
+    --gpu-id <int>          CUDA device ID of GPU [default: 0]
+    --seed <int>            Seed for random variables [default: 512]
+"""
 import json
-import os
 
 import torch
 
+from adept.agents.agent_registry import AgentRegistry
 from adept.containers import AtariRenderer
 from adept.environments import SimpleEnvManager
-from adept.registries.environment import EnvPluginRegistry, Engines
+from adept.environments.env_registry import EnvModuleRegistry, Engines
 from adept.utils.logging import print_ascii_logo
-from adept.utils.script_helpers import make_agent, make_network, get_head_shapes
-from adept.utils.util import dotdict
+from adept.utils.script_helpers import make_network, LogDirHelper
+from adept.utils.util import DotDict
 
 
-def main(args, env_registry=EnvPluginRegistry()):
+def parse_args():
+    from docopt import docopt
+    args = docopt(__doc__)
+    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
+    del args['h']
+    del args['help']
+    args = DotDict(args)
+    args.epoch = int(float(args.epoch))
+    args.gpu_id = int(args.gpu_id)
+    args.seed = int(args.seed)
+    return args
+
+
+def main(
+    args,
+    agent_registry=AgentRegistry(),
+    env_registry=EnvModuleRegistry()
+):
+    """
+    Run an evaluation.
+
+    :param args: Dict[str, Any]
+    :param agent_registry: AgentRegistry
+    :param env_registry: EnvModuleRegistry
+    :return:
+    """
     # construct logging objects
     print_ascii_logo()
     print('Rendering... Press Ctrl+C to stop.')
 
-    with open(args.args_file, 'r') as args_file:
-        train_args = dotdict(json.load(args_file))
+    log_dir_helper = LogDirHelper(args.log_id_dir)
 
-    engine = env_registry.lookup_engine(train_args.env_id)
+    with open(log_dir_helper.args_file_path(), 'r') as args_file:
+        train_args = DotDict(json.load(args_file))
+
+    engine = env_registry.lookup_engine(train_args.env)
     assert engine == Engines.GYM, "render_atari.py is only for Atari."
 
-    train_args.nb_env = 1
     env = SimpleEnvManager.from_args(
         train_args, seed=args.seed, nb_env=1, registry=env_registry
     )
 
     # construct network
-    network_head_shapes = get_head_shapes(env.action_space, train_args.agent)
     network = make_network(
-        env.observation_space, network_head_shapes, train_args
+        env.observation_space,
+        agent_registry.lookup_output_shape(train_args.agent, env.action_space),
+        train_args
     )
     network.load_state_dict(
         torch.load(
-            args.network_file, map_location=lambda storage, loc: storage
+            log_dir_helper.network_path_at_epoch(args.epoch),
+            map_location=lambda storage, loc: storage
         )
     )
 
     # create an agent (add act_eval method)
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    agent = make_agent(
-        network, device, env.gpu_preprocessor, env.engine, env.action_space,
-        train_args
+    device = torch.device(
+        "cuda:{}".format(args.gpu_id)
+        if (torch.cuda.is_available() and args.gpu_id >= 0)
+        else "cpu"
+    )
+    agent = agent_registry.lookup_agent(train_args.agent).from_args(
+        train_args,
+        network,
+        device,
+        env_registry.lookup_reward_normalizer(train_args.env),
+        env.gpu_preprocessor,
+        env.engine,
+        env.action_space,
+        nb_env=1
     )
 
     # create a rendering container
@@ -70,27 +131,4 @@ def main(args, env_registry=EnvPluginRegistry()):
 
 
 if __name__ == '__main__':
-    import argparse
-
-    parser = argparse.ArgumentParser(description='AdeptRL Render Mode')
-    parser.add_argument(
-        '--network-file',
-        help='path to args file (.../logs/<env-id>/<log-id>/<epoch>/model.pth)'
-    )
-    parser.add_argument(
-        '--args-file',
-        help='path to args file (.../logs/<env-id>/<log-id>/args.json)'
-    )
-    parser.add_argument(
-        '-s',
-        '--seed',
-        type=int,
-        default=32,
-        metavar='S',
-        help='random seed (default: 32)'
-    )
-    parser.add_argument(
-        '--gpu-id', type=int, default=0, help='Which GPU to use (default: 0)'
-    )
-    args = parser.parse_args()
-    main(args)
+    main(parse_args())

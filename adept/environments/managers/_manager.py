@@ -15,10 +15,10 @@
 import abc
 
 from adept.environments._env import EnvBase
-from adept.registries.environment import EnvPluginRegistry
+from adept.environments.env_registry import EnvModuleRegistry
 
 
-class AdeptEnvManager(EnvBase, metaclass=abc.ABCMeta):
+class EnvManager(EnvBase, metaclass=abc.ABCMeta):
     def __init__(self, env_fns, engine):
         self._env_fns = env_fns
         self._engine = engine
@@ -41,7 +41,7 @@ class AdeptEnvManager(EnvBase, metaclass=abc.ABCMeta):
         args,
         seed=None,
         nb_env=None,
-        registry=EnvPluginRegistry(),
+        registry=EnvModuleRegistry(),
         **kwargs
     ):
         if seed is None:
@@ -49,8 +49,8 @@ class AdeptEnvManager(EnvBase, metaclass=abc.ABCMeta):
         if nb_env is None:
             nb_env = args.nb_env
 
-        engine = registry.lookup_engine(args.env_id)
-        env_class = registry.lookup_env_class(args.env_id)
+        engine = registry.lookup_engine(args.env)
+        env_class = registry.lookup_env_class(args.env)
 
         env_fns = []
         for i in range(nb_env):

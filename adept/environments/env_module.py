@@ -14,14 +14,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
 
+from adept.utils.requires_args import RequiresArgs
 from adept.environments._env import EnvBase
 
 
-class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
+class EnvModule(EnvBase, RequiresArgs, metaclass=abc.ABCMeta):
     """
-    Implement this class to add your custom environment.
+    Implement this class to add your custom environment. Don't forget to
+    implement args.
     """
-
     def __init__(self, action_space, cpu_preprocessor, gpu_preprocessor):
         """
         :param observation_space: ._spaces.Spaces
@@ -42,7 +43,7 @@ class EnvPlugin(EnvBase, metaclass=abc.ABCMeta):
         :param args: Arguments object
         :param seed: Integer used to seed this environment.
         :param kwargs: Any custom arguments are passed through kwargs.
-        :return: EnvPlugin instance.
+        :return: EnvModule instance.
         """
         raise NotImplementedError
 

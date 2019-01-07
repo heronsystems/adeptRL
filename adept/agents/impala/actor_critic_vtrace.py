@@ -17,14 +17,22 @@ from collections import OrderedDict
 import torch
 from torch.nn import functional as F
 
-from adept.registries.environment import Engines
+from adept.environments.env_registry import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.networks._base import ModularNetwork
-from .._base import Agent
+from adept.agents.agent_module import AgentModule
 
 
-class ActorCriticVtrace(Agent):
+class ActorCriticVtrace(AgentModule):
+    args = {
+        'nb_rollout': 20,
+        'discount': 0.99,
+        'minimum_importance_value': 1.0,
+        'minimum_importance_policy': 1.0,
+        'entropy_weight': 0.01
+    }
+
     def __init__(
         self,
         network,
@@ -36,9 +44,9 @@ class ActorCriticVtrace(Agent):
         nb_env,
         nb_rollout,
         discount,
-        minimum_importance_value=1.0,
-        minimum_importance_policy=1.0,
-        entropy_weight=0.01
+        minimum_importance_value,
+        minimum_importance_policy,
+        entropy_weight
     ):
         self.discount = discount
         self.gpu_preprocessor = gpu_preprocessor
@@ -65,22 +73,21 @@ class ActorCriticVtrace(Agent):
 
     @classmethod
     def from_args(
-        cls, network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, args
+        cls, args, network, device, reward_normalizer, gpu_preprocessor, engine,
+        action_space, nb_env=None
     ):
+        if nb_env is None:
+            nb_env = args.nb_env
+
         return cls(
             network, device, reward_normalizer, gpu_preprocessor, engine,
-            action_space, args.nb_env, args.exp_length, args.discount
-        )
-
-    @classmethod
-    def add_args(cls, parser):
-        parser.add_argument(
-            '-ae',
-            '--exp-length',
-            type=int,
-            default=20,
-            help='Experience length (default: 20)'
+            action_space,
+            nb_env=nb_env,
+            nb_rollout=args.nb_rollout,
+            discount=args.discount,
+            minimum_importance_value=args.minimum_importance_value,
+            minimum_importance_policy=args.minimum_importance_policy,
+            entropy_weight=args.entropy_weight
         )
 
     @property

@@ -12,13 +12,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from argparse import ArgumentParser  # for type hinting
+import os
 
-from adept.agents import AGENTS
-from adept.environments._env import reward_normalizer_by_env_id
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
 from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
-from adept.utils.util import parse_bool
 
 
 def make_network(
@@ -36,12 +33,12 @@ def make_network(
     for rank, names in nbr.items():
         for name in names:
             if rank == 1:
-                pathways_by_name[name] = c_networks[args.network_discrete]\
+                pathways_by_name[name] = c_networks[args.net1d]\
                     .from_args(ebn[name].shape, args)
             elif rank == 2:
                 raise NotImplementedError('Rank 2 inputs not implemented')
             elif rank == 3:
-                pathways_by_name[name] = chw_networks[args.network_vision]\
+                pathways_by_name[name] = chw_networks[args.net3d]\
                     .from_args(ebn[name].shape, args)
             elif rank == 4:
                 raise NotImplementedError('Rank 4 inputs not implemented')
@@ -51,7 +48,7 @@ def make_network(
                 )
 
     trunk = NetworkTrunk(pathways_by_name)
-    body = network_bodies[args.network_body].from_args(
+    body = network_bodies[args.netbody].from_args(
         trunk.nb_output_channel, embedding_size, args
     )
     head = NetworkHead(body.nb_output_channel, network_head_shapes)
@@ -63,192 +60,90 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def make_agent(network, device, gpu_preprocessor, engine, action_space, args):
-    Agent = AGENTS[args.agent]
-    reward_normalizer = reward_normalizer_by_env_id(args.env_id)
-    return Agent.from_args(
-        network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, args
-    )
-
-
-def get_head_shapes(action_space, agent_name):
-    Agent = AGENTS[agent_name]
-    return Agent.output_shape(action_space)
-
-
-def _add_common_agent_args(parser: ArgumentParser):
-    parser.add_argument(
-        '-al',
-        '--learning-rate',
-        type=float,
-        default=7e-4,
-        help='learning rate (default: 7e-4)'
-    )
-    parser.add_argument(
-        '-ad',
-        '--discount',
-        type=float,
-        default=0.99,
-        help='discount factor for rewards (default: 0.99)'
-    )
-
-
-def _add_agent_args(subparser: ArgumentParser):
-    agent_parsers = []
-    for agent_name, agent_class in AGENTS.items():
-        parser_agent = subparser.add_parser(agent_name)
-        agent_group = parser_agent.add_argument_group('Agent Args')
-        _add_common_agent_args(agent_group)
-        agent_class.add_args(agent_group)
-        agent_parsers.append(parser_agent)
-    return agent_parsers
-
-
-def _add_network_args(parser: ArgumentParser):
-    subparser = parser.add_argument_group('Network Args')
-    subparser.add_argument('-nv', '--network-vision', default='FourConv')
-    subparser.add_argument('-nd', '--network-discrete', default='Identity')
-    subparser.add_argument('-nb', '--network-body', default='LSTM')
-    subparser.add_argument(
-        '--normalize',
-        type=parse_bool,
-        nargs='?',
-        const=True,
-        default=True,
-        help=
-        'Applies batch norm between linear/convolutional'
-        'layers and layer norm for LSTMs (default: True)'
-    )
-
-
-def _add_reload_args(parser: ArgumentParser):
-    subparser = parser.add_argument_group('Reload Args')
-    # Reload from save
-    subparser.add_argument(
-        '-ln',
-        '--load-network',
-        default='',
-        help='Load network from this path. Sets initial step count'
-    )
-    subparser.add_argument(
-        '-lo',
-        '--load-optimizer',
-        default='',
-        help='Load optimizer from this path'
-    )
-
-
-def _add_env_args(parser: ArgumentParser):
-    subparser = parser.add_argument_group('Environment Args')
-    subparser.add_argument(
-        '-e',
-        '--env-id',
-        default='PongNoFrameskip-v4',
-        help='environment to train on (default: PongNoFrameskip-v4)'
-    )
-    subparser.add_argument(
-        '-ne',
-        '--nb-env',
-        type=int,
-        default=32,
-        help='number of envs to run in parallel (default: 32)'
-    )
-    subparser.add_argument(
-        '-es',
-        '--skip-rate',
-        type=int,
-        default=4,
-        help='frame skip rate (default: 4)'
-    )
-    subparser.add_argument(
-        '-em',
-        '--max-episode-length',
-        type=int,
-        default=10000,
-        metavar='MEL',
-        help='maximum length of an episode (default: 10000)'
-    )
-
-
-def _add_common_args(parser: ArgumentParser):
-    _add_env_args(parser)
-    _add_network_args(parser)
-    _add_reload_args(parser)
+def parse_bool_str(bool_str):
     """
-    Common Arguments
+    Convert string to boolean.
+
+    :param bool_str: str
+    :return: Bool
     """
-    subparser = parser.add_argument_group('Common Args')
-    subparser.add_argument(
-        '-cl',
-        '--log-dir',
-        default='/tmp/adept_logs/',
-        help='Folder to save logs. (default: /tmp/adept_logs)'
-    )
-    subparser.add_argument(
-        '-ct',
-        '--tag',
-        default='',
-        help=
-        'Identify your experiment with a tag that'
-        'gets prepended to the experiment log directory'
-    )
-    subparser.add_argument(
-        '-cm',
-        '--max-train-steps',
-        type=int,
-        default=10e6,
-        help='Number of steps to train for (default: 10e6)'
-    )
-    subparser.add_argument(
-        '-ce',
-        '--epoch-len',
-        type=int,
-        default=1e6,
-        metavar='FREQ',
-        help='Save models every FREQ steps'
-    )
-    subparser.add_argument(
-        '-cf',
-        '--summary-frequency',
-        default=10,
-        help='Write tensorboard summaries every FREQ seconds'
-    )
-    subparser.add_argument(
-        '--seed', type=int, default=0, help='Random seed (default: 0)'
-    )
-    subparser.add_argument(
-        '--profile',
-        type=parse_bool,
-        nargs='?',
-        const=True,
-        default=False,
-        help='displays profiling tree after 10e3 steps (default: False)'
-    )
-    subparser.add_argument(
-        '--debug',
-        type=parse_bool,
-        nargs='?',
-        const=True,
-        default=False,
-        help=
-        'debug mode sends the logs to /tmp/ and overrides'
-        'number of workers to 3 (default: False)'
-    )
+    if bool_str.lower() == 'false':
+        return False
+    elif bool_str.lower() == 'true':
+        return True
+    else:
+        raise ValueError('Unable to parse "{}"'.format(bool_str))
 
 
-def _add_args_to_parsers(arg_fn, parsers):
-    return [arg_fn(x) for x in parsers]
+def parse_list_str(list_str, item_type):
+    items = list_str.split(',')
+    return [item_type(item) for item in items]
 
 
-def add_base_args(parser: ArgumentParser, additional_args_fn=None):
-    # TODO: there must be a better way of adding
-    #  args to subparsers while keeping the help message
-    # TODO: some agents may not run in certain modes not sure the best way to handle this
-    subparser_agent = parser.add_subparsers(title='Agents', dest='agent')
-    subparser_agent.required = True
-    agent_parsers = _add_agent_args(subparser_agent)
-    _add_args_to_parsers(_add_common_args, agent_parsers)
-    _add_args_to_parsers(additional_args_fn, agent_parsers)
+def parse_none(none_str):
+    if none_str == 'None':
+        return None
+    else:
+        return none_str
 
-    return parser
+
+class LogDirHelper:
+    def __init__(self, log_id_path):
+        """
+        :param log_id_path: str Path to Log ID
+        """
+        self._log_id_path = log_id_path
+
+    def epochs(self):
+        return [
+            int(epoch)
+            for epoch in os.listdir(self._log_id_path)
+            if os.path.isdir(os.path.join(self._log_id_path, epoch))
+        ]
+
+    def latest_epoch(self):
+        return max(self.epochs())
+
+    def latest_epoch_path(self):
+        return os.path.join(self._log_id_path, str(self.latest_epoch()))
+
+    def latest_network_path(self):
+        network_file = [
+            f for f in os.listdir(self.latest_epoch_path())
+            if ('model' in f)
+        ][0]
+        return os.path.join(self.latest_epoch_path(), network_file)
+
+    def latest_optim_path(self):
+        optim_file = [
+            f for f in os.listdir(self.latest_epoch_path())
+            if ('optim' in f)
+        ][0]
+        return os.path.join(self.latest_epoch_path(), optim_file)
+
+    def epoch_path_at_epoch(self, epoch):
+        return os.path.join(self._log_id_path, str(epoch))
+
+    def network_path_at_epoch(self, epoch):
+        epoch_path = self.epoch_path_at_epoch(epoch)
+        network_file = [
+            f for f in os.listdir(epoch_path)
+            if ('model' in f)
+        ][0]
+        return os.path.join(epoch_path, network_file)
+
+    def optim_path_at_epoch(self, epoch):
+        epoch_path = self.epoch_path_at_epoch(epoch)
+        optim_file = [
+            f for f in os.listdir(epoch_path)
+            if ('optim' in f)
+        ][0]
+        return os.path.join(epoch_path, optim_file)
+
+    def timestamp(self):
+        splits = self._log_id_path.split('_')
+        timestamp = splits[-2] + '_' + splits[-1]
+        return timestamp
+
+    def args_file_path(self):
+        return os.path.join(self._log_id_path, 'args.json')

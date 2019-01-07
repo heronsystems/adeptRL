@@ -14,12 +14,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
 
-from adept.environments.managers._manager import AdeptEnvManager
+from adept.environments.managers._manager import EnvManager
 from adept.environments.managers.subproc_env_manager import dummy_handle_ob
 from adept.utils import listd_to_dlist
 
 
-class SimpleEnvManager(AdeptEnvManager):
+class SimpleEnvManager(EnvManager):
     """
     Manages multiple environments in the same process. This is slower than a
     SubProcEnvManager but allows debugging.
