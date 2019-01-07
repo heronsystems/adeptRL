@@ -88,7 +88,6 @@ def main(
     engine = env_registry.lookup_engine(train_args.env)
     assert engine == Engines.GYM, "render_atari.py is only for Atari."
 
-    train_args.nb_env = 1
     env = SimpleEnvManager.from_args(
         train_args, seed=args.seed, nb_env=1, registry=env_registry
     )
@@ -120,7 +119,7 @@ def main(
         env.gpu_preprocessor,
         env.engine,
         env.action_space,
-        nb_env=args.nb_episode
+        nb_env=1
     )
 
     # create a rendering container
