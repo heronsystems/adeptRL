@@ -40,12 +40,25 @@ class HasEnvMetaData(metaclass=abc.ABCMeta):
 class EnvBase(HasEnvMetaData, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def step(self, action):
+        """
+        :param action: Dict[ActionID, Any] Action dictionary
+        :return: Tuple[Observation, Reward, Terminal, Info]
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def reset(self, **kwargs):
+        """
+        :param kwargs:
+        :return: Dict[ObservationID, Any] Observation dictionary
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def close(self):
+        """
+        Close environment. Release resources.
+
+        :return:
+        """
         raise NotImplementedError

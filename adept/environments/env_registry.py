@@ -66,7 +66,7 @@ ATARI_ENVS = [
 ]
 
 
-class EnvPluginRegistry:
+class EnvModuleRegistry:
     """
     Keeps track of supported environment plugins.
     """
@@ -88,12 +88,12 @@ class EnvPluginRegistry:
         except ImportError:
             print('StarCraft 2 Environment not detected.')
 
-    def register_env(self, engine_id, env_plugin_class, env_id_set):
+    def register_env(self, engine_id, env_module_class, env_id_set):
         # TODO assert no duplicate env_ids
-        assert issubclass(env_plugin_class, EnvModule)
-        env_plugin_class.check_defaults()
+        assert issubclass(env_module_class, EnvModule)
+        env_module_class.check_defaults()
         self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
-        self._plugin_class_by_engine_id[engine_id] = env_plugin_class
+        self._plugin_class_by_engine_id[engine_id] = env_module_class
 
     def lookup_env_class(self, env_id):
         engine = self.lookup_engine(env_id)

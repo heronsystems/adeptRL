@@ -81,7 +81,7 @@ from tensorboardX import SummaryWriter
 from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
-from adept.environments.env_registry import EnvPluginRegistry
+from adept.environments.env_registry import EnvModuleRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
     SimpleModelSaver
@@ -125,14 +125,14 @@ def parse_args():
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvPluginRegistry()
+    env_registry=EnvModuleRegistry()
 ):
     """
     Run local training.
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
-    :param env_registry: EnvPluginRegistry
+    :param env_registry: EnvModuleRegistry
     :return:
     """
 

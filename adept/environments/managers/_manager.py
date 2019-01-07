@@ -15,7 +15,7 @@
 import abc
 
 from adept.environments._env import EnvBase
-from adept.environments.env_registry import EnvPluginRegistry
+from adept.environments.env_registry import EnvModuleRegistry
 
 
 class EnvManager(EnvBase, metaclass=abc.ABCMeta):
@@ -41,7 +41,7 @@ class EnvManager(EnvBase, metaclass=abc.ABCMeta):
         args,
         seed=None,
         nb_env=None,
-        registry=EnvPluginRegistry(),
+        registry=EnvModuleRegistry(),
         **kwargs
     ):
         if seed is None:

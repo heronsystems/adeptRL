@@ -21,7 +21,7 @@ from absl import flags
 
 from adept.containers import ReplayGenerator
 from adept.environments import SubProcEnvManager
-from adept.environments.env_registry import EnvPluginRegistry, Engines
+from adept.environments.env_registry import EnvModuleRegistry, Engines
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import make_agent, make_network, \
     get_head_shapes, parse_bool
@@ -32,7 +32,7 @@ FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
 
-def main(args, env_registry=EnvPluginRegistry()):
+def main(args, env_registry=EnvModuleRegistry()):
 
     print_ascii_logo()
     print('Saving replays... Press Ctrl+C to stop.')

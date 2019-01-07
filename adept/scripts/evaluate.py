@@ -49,7 +49,7 @@ from absl import flags
 from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Evaluation
 from adept.environments import SubProcEnvManager
-from adept.environments.env_registry import EnvPluginRegistry
+from adept.environments.env_registry import EnvModuleRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
 from adept.utils.script_helpers import make_network
 from adept.utils.util import DotDict
@@ -79,14 +79,14 @@ SelectedModel = namedtuple('SelectedModel', ['epoch', 'model_id'])
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvPluginRegistry()
+    env_registry=EnvModuleRegistry()
 ):
     """
     Run an evaluation.
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
-    :param env_registry: EnvPluginRegistry
+    :param env_registry: EnvModuleRegistry
     :return:
     """
     args = DotDict(args)
