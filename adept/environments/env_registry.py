@@ -68,12 +68,12 @@ ATARI_ENVS = [
 
 class EnvModuleRegistry:
     """
-    Keeps track of supported environment plugins.
+    Keeps track of supported environment modules.
     """
 
     def __init__(self):
         self._engine_ids_by_env_id_set = {}
-        self._plugin_class_by_engine_id = {}
+        self._module_class_by_engine_id = {}
         self._reward_norm_by_env_id = defaultdict(lambda: Clip())
 
         from adept.environments.openai_gym import AdeptGymEnv
@@ -93,11 +93,11 @@ class EnvModuleRegistry:
         assert issubclass(env_module_class, EnvModule)
         env_module_class.check_defaults()
         self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
-        self._plugin_class_by_engine_id[engine_id] = env_module_class
+        self._module_class_by_engine_id[engine_id] = env_module_class
 
     def lookup_env_class(self, env_id):
         engine = self.lookup_engine(env_id)
-        return self._plugin_class_by_engine_id[engine]
+        return self._module_class_by_engine_id[engine]
 
     def lookup_engine(self, env_id):
         eng = None

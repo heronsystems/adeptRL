@@ -86,8 +86,9 @@ from adept.utils.logging import (
 )
 from adept.utils.script_helpers import (
     make_network, count_parameters,
-    parse_bool_str, DotDict, parse_none, LogDirHelper
+    parse_bool_str, parse_none, LogDirHelper
 )
+from adept.utils.util import DotDict
 
 # hack to use bypass pysc2 flags
 FLAGS = flags.FLAGS

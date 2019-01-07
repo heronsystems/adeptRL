@@ -54,8 +54,8 @@ pip install .[mpi,sc2,profiler]
 
 ## Performance
 * Atari/SC2 scores pending
-* ~2000 training frames (6000 environment frames) per second (Local Mode / 64 
-environments / GeForce 2080 Ti / Ryzen 2700x 8-core)
+* ~ 3000 TFPS / 12000 FPS (Local Mode / 64 environments / GeForce 2080 Ti / 
+Ryzen 2700x 8-core)
 * Used to win a 
 [Doom competition](http://vizdoom.cs.put.edu.pl/competition-cig-2018/competition-results) 
 (Ben Bell / Marv2in)
@@ -87,6 +87,15 @@ python -m adept.app local --env CollectMineralShards
 python -m adept.app -h
 python -m adept.app help <command>
 ```
+## Important Terminology
+* **Training Frame** - An environment frame that is trained on
+* **Frame** - A raw environment frame, including skipped frames. A skipped 
+frame is a frame that is not trained on. By default, Atari only trains on 
+every fourth frame.
+* **FPS** - Frames per second.
+* **TFPS** - Training frames per second.
+Typically research papers report raw environment frames. Our logs report 
+training frames, since we are interested in sample efficiency.
 
 ## API Reference
 ![architecture](images/architecture.png)

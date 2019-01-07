@@ -75,12 +75,6 @@ def parse_bool_str(bool_str):
         raise ValueError('Unable to parse "{}"'.format(bool_str))
 
 
-class DotDict(dict):
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
-
-
 def parse_list_str(list_str, item_type):
     items = list_str.split(',')
     return [item_type(item) for item in items]

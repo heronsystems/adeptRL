@@ -88,8 +88,8 @@ from adept.utils.logging import (
 from adept.utils.script_helpers import (
     make_network, count_parameters,
     parse_none, parse_bool_str,
-    DotDict,
     parse_list_str)
+from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS

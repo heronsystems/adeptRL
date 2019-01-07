@@ -36,14 +36,14 @@ class EnvMetaData(HasEnvMetaData):
     @classmethod
     def from_args(cls, args, registry=EnvModuleRegistry()):
         """
-        Mimic the AdeptEnvPlugin.from_args API to simplify interface.
+        Mimic the EnvModule.from_args API to simplify interface.
 
         :param args: Arguments object
         :param registry: Optionally provide to avoid recreating.
         :return: EnvMetaData
         """
-        plugin_class = registry.lookup_env_class(args.env)
-        return cls(plugin_class, args)
+        module_class = registry.lookup_env_class(args.env)
+        return cls(module_class, args)
 
     @property
     def observation_space(self):

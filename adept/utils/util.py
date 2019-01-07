@@ -136,7 +136,7 @@ class HeapQueue:
 
 class DotDict(dict):
     """
-    dot.notation access to dictionary attributes
+    Dictionary to access attributes
     """
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__

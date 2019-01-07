@@ -80,8 +80,9 @@ from adept.utils.logging import (
 )
 from adept.utils.script_helpers import (
     make_network, count_parameters, parse_bool_str,
-    DotDict, parse_list_str, parse_none
+    parse_list_str, parse_none
 )
+from adept.utils.util import DotDict
 from datetime import datetime
 
 # hack to use argparse for SC2
