@@ -317,7 +317,7 @@ def main(
             '---log-id-dir',
             log_id_dir,
             '--gpu-id',
-            args.gpu_id
+            str(args.gpu_id)
         ], env=os.environ))
 
 
