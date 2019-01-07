@@ -1,4 +1,4 @@
-#!python
+#!/usr/bin/env python
 # Copyright (C) 2018 Heron Systems, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
