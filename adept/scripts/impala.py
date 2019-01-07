@@ -82,7 +82,7 @@ from adept.containers import ImpalaHost, ImpalaWorker
 from adept.environments import SubProcEnvManager, EnvMetaData
 from adept.environments.env_registry import EnvPluginRegistry
 from adept.utils.logging import (
-    make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args,
+    make_log_id, make_logger, print_ascii_logo, log_args,
     write_args_file, SimpleModelSaver
 )
 from adept.utils.script_helpers import (
@@ -151,7 +151,7 @@ def main(
         args = DotDict(args)
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        log_id = make_log_id_from_timestamp(
+        log_id = make_log_id(
             args.tag, 'Impala', args.agent,
             args.net3d + args.netbody, timestamp
         )
@@ -168,7 +168,7 @@ def main(
     args = DotDict(args)
 
     if rank != 0:
-        log_id = make_log_id_from_timestamp(
+        log_id = make_log_id(
             args.tag, 'Impala', args.agent,
             args.net3d + args.netbody, timestamp
         )

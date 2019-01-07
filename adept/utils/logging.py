@@ -51,16 +51,6 @@ def make_log_id(tag, mode_name, agent_name, network_name, timestamp=None):
     return log_id
 
 
-def make_log_id_from_timestamp(
-    tag, mode_name, agent_name, network_name, timestamp
-):
-    if tag:
-        log_id = '_'.join([tag, mode_name, agent_name, network_name, timestamp])
-    else:
-        log_id = '_'.join([mode_name, agent_name, network_name, timestamp])
-    return log_id
-
-
 def make_logger(logger_name, log_file):
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.INFO)

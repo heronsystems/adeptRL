@@ -74,8 +74,10 @@ from adept.agents.agent_registry import AgentRegistry
 from adept.containers import ToweredHost, ToweredWorker
 from adept.environments import SubProcEnvManager, EnvMetaData
 from adept.environments.env_registry import EnvPluginRegistry
-from adept.utils.logging import make_log_id_from_timestamp, make_logger, print_ascii_logo, log_args, write_args_file, \
-    SimpleModelSaver
+from adept.utils.logging import (
+    make_log_id, make_logger, print_ascii_logo,
+    log_args, write_args_file, SimpleModelSaver
+)
 from adept.utils.script_helpers import (
     make_network, count_parameters, parse_bool_str,
     DotDict, parse_list_str, parse_none
@@ -127,7 +129,7 @@ def main(
         args = DotDict(args)
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        log_id = make_log_id_from_timestamp(
+        log_id = make_log_id(
             args.tag, 'Towered', args.agent,
             args.net3d + args.netbody, timestamp
         )
@@ -144,7 +146,7 @@ def main(
     args = DotDict(args)
 
     if rank != 0:
-        log_id = make_log_id_from_timestamp(
+        log_id = make_log_id(
             args.tag, 'Towered', args.agent,
             args.net3d + args.netbody, timestamp
         )
