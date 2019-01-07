@@ -31,7 +31,6 @@ Commands:
     towered             Train an agent on multiple GPUs.
     impala              Train an agent on multiple GPUs with IMPALA.
     evaluate            Evaluate a trained agent.
-    resume_local        Resume a local job.
     render_atari        Visualize an agent playing an Atari game.
     replay_gen_sc2      Generate SC2 replay files of an agent playing SC2.
 

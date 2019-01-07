@@ -26,14 +26,26 @@ IMPALA Mode
 Train an agent with multiple GPUs. https://arxiv.org/abs/1802.01561.
 
 Usage:
-    local [options]
-    local (-h | --help)
+    impala [options]
+    impala (-h | --help)
 
 Agent Options:
     --agent <str>             Name of agent class [default: ActorCriticVtrace]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
+
+Script Options:
+    --gpu-ids <ids>            Comma-separated CUDA IDs [default: 0,1]
+    --nb-env <int>             Number of environments per Tower [default: 32]
+    --seed <int>               Seed for random variables [default: 0]
+    --nb-train-frame <int>     Number of frames to train on [default: 10e6]
+    --max-queue-len <int>      Maximum rollout queue length
+    --nb-rollout-batch <int>   Number of rollouts in a batch
+    --max-dynamic-batch <int>  Limit max rollouts in batch [default: 0]
+    --min-dynamic-batch <int>  Limit min rollouts in batch [default: 0]
+    --info-interval <int>      Write INFO every <int> training frames [default: 100]
+    --use-local-buffers        Workers use local buffers (ie. mean/stddev)
 
 Network Options:
     --net1d <str>              Network to use for 1d input [default: Identity]
@@ -47,18 +59,6 @@ Network Options:
 
 Optimizer Options:
     --lr <float>               Learning rate [default: 0.0007]
-
-Container Options:
-    --gpu-ids <ids>            Comma-separated CUDA IDs [default: 0,1]
-    --nb-env <int>             Number of environments per Tower [default: 32]
-    --seed <int>               Seed for random variables [default: 0]
-    --nb-train-frame <int>     Number of frames to train on [default: 10e6]
-    --max-queue-len <int>      Maximum rollout queue length
-    --nb-rollout-batch <int>   Number of rollouts in a batch
-    --max-dynamic-batch <int>  Limit max rollouts in batch [default: 0]
-    --min-dynamic-batch <int>  Limit min rollouts in batch [default: 0]
-    --info-interval <int>      Write INFO every <int> training frames [default: 100]
-    --use-local-buffers        Workers use local buffers (ie. mean/stddev)
 
 Logging Options:
     --tag <str>                Name your run [default: None]
@@ -298,10 +298,10 @@ def main(
             opt = torch.optim.RMSprop(
                 params, lr=args.lr, eps=1e-5, alpha=0.99
             )
-            if args.load_optimizer:
+            if args.load_optim:
                 opt.load_state_dict(
                     torch.load(
-                        args.load_optimizer,
+                        args.load_optim,
                         map_location=lambda storage, loc: storage
                     )
                 )

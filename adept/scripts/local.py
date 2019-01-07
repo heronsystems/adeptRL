@@ -27,6 +27,7 @@ Train an agent with a single GPU.
 
 Usage:
     local [options]
+    local --resume <path>
     local (-h | --help)
 
 Agent Options:
@@ -34,6 +35,17 @@ Agent Options:
 
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
+
+Script Options:
+    --gpu-id <int>          CUDA device ID of GPU [default: 0]
+    --nb-env <int>          Number of parallel environments [default: 64]
+    --seed <int>            Seed for random variables [default: 0]
+    --nb-train-frame <int>  Number of frames to train on [default: 10e6]
+    --load-network <path>   Path to network file
+    --load-optim <path>     Path to optimizer file
+    --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
+    --eval                  Run an evaluation after training
+    -y, --use-defaults      Skip prompts, use defaults
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity]
@@ -43,16 +55,9 @@ Network Options:
     --netjunc <str>         Network junction to merge inputs [default: TODO]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
     --normalize <bool>      TEMPORARY [default: True]
-    --load-network <path>   Path to network file
 
 Optimizer Options:
     --lr <float>            Learning rate [default: 0.0007]
-
-Container Options:
-    --gpu-id <int>          CUDA device ID of GPU [default: 0]
-    --nb-env <int>          Number of parallel environments [default: 64]
-    --seed <int>            Seed for random variables [default: 0]
-    --nb-train-frame <int>  Number of frames to train on [default: 10e6]
 
 Logging Options:
     --tag <str>             Name your run [default: None]
@@ -66,6 +71,7 @@ Troubleshooting Options:
 """
 
 
+import json
 import os
 
 import torch
@@ -97,6 +103,11 @@ def parse_args():
     del args['h']
     del args['help']
     args = DotDict(args)
+
+    # Ignore other args if resuming
+    if args.resume:
+        return args
+
     args.gpu_id = int(args.gpu_id)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
@@ -124,24 +135,57 @@ def main(
     :param env_registry: EnvPluginRegistry
     :return:
     """
-    args = DotDict(args)
-    agent_args = agent_registry.lookup_agent(args.agent).prompt()
-    env_args = env_registry.lookup_env_class(args.env).prompt()
-    args = DotDict({**args, **agent_args, **env_args})
 
-    print_ascii_logo()
+    initial_step_count = 0
+    if args.resume:
+        epochs = os.listdir(args.resume)
+        epoch_file = str(max([
+            int(epoch)
+            for epoch in epochs
+            if os.path.isdir(os.path.join(args.resume, epoch))
+        ]))
+        epoch_path = os.path.join(args.resume, epoch_file)
+        network_file = [f for f in os.listdir(epoch_path) if ('model' in f)][0]
+        optim_file = [f for f in os.listdir(epoch_path) if ('optim' in f)][0]
+        network_path = os.path.join(epoch_path, network_file)
+        optim_path = os.path.join(epoch_path, optim_file)
 
-    # construct logging objects
-    log_id = make_log_id(
-        args.tag, 'Local', args.agent, args.net3d + args.netbody
-    )
+        splits = args.resume.split('_')
+        timestamp = splits[-2] + '_' + splits[-1]
+
+        with open(os.path.join(args.resume, 'args.json'), 'r') as args_file:
+            args = DotDict(json.load(args_file))
+
+        args.load_network = network_path
+        args.load_optim = optim_path
+        initial_step_count = int(epoch_file)
+
+        log_id = make_log_id(
+            args.tag, 'Local', args.agent, args.net3d + args.netbody,
+            timestamp=timestamp
+        )
+    else:
+        args = DotDict(args)
+        if args.use_defaults:
+            agent_args = agent_registry.lookup_agent(args.agent).args
+            env_args = env_registry.lookup_env_class(args.env).args
+        else:
+            agent_args = agent_registry.lookup_agent(args.agent).prompt()
+            env_args = env_registry.lookup_env_class(args.env).prompt()
+        args = DotDict({**args, **agent_args, **env_args})
+
+        # construct logging objects
+        log_id = make_log_id(
+            args.tag, 'Local', args.agent, args.net3d + args.netbody
+        )
+
     log_id_dir = os.path.join(args.logdir, args.env, log_id)
 
-    os.makedirs(log_id_dir)
+    os.makedirs(log_id_dir, exist_ok=True)
     logger = make_logger('Local', os.path.join(log_id_dir, 'train_log.txt'))
     summary_writer = SummaryWriter(log_id_dir)
     saver = SimpleModelSaver(log_id_dir)
-
+    print_ascii_logo()
     log_args(logger, args)
     write_args_file(log_id_dir, args)
 
@@ -156,17 +200,13 @@ def main(
         args
     )
     # possibly load network
-    initial_step_count = 0
     if args.load_network:
         network.load_state_dict(
             torch.load(
                 args.load_network, map_location=lambda storage, loc: storage
             )
         )
-        # get step count from network file
-        epoch_dir = os.path.split(args.load_network)[0]
-        initial_step_count = int(os.path.split(epoch_dir)[-1])
-        print('Reloaded network from {}'.format(args.load_network))
+        logger.info('Reloaded network from {}'.format(args.load_network))
     logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
     # construct agent
@@ -191,13 +231,14 @@ def main(
         opt = torch.optim.RMSprop(
             params, lr=args.lr, eps=1e-5, alpha=0.99
         )
-        if args.load_optimizer:
+        if args.load_optim:
             opt.load_state_dict(
                 torch.load(
-                    args.load_optimizer,
+                    args.load_optim,
                     map_location=lambda storage, loc: storage
                 )
             )
+            logger.info("Reloaded optimizer from {}".format(args.load_optim))
         return opt
 
     container = Local(
@@ -266,6 +307,18 @@ def main(
     if args.nb_eval_env > 0:
         evaluation_container.stop()
         eval_env.close()
+
+    if args.eval:
+        import subprocess
+        exit(subprocess.call([
+            'python',
+            '-m',
+            'adept.scripts.evaluate',
+            '---log-id-dir',
+            log_id_dir,
+            '--gpu-id',
+            args.gpu_id
+        ], env=os.environ))
 
 
 if __name__ == '__main__':
