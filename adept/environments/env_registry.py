@@ -91,7 +91,7 @@ class EnvModuleRegistry:
     def register_env(self, engine_id, env_module_class, env_id_set):
         # TODO assert no duplicate env_ids
         assert issubclass(env_module_class, EnvModule)
-        env_module_class.check_defaults()
+        env_module_class.check_args_implemented()
         self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
         self._module_class_by_engine_id[engine_id] = env_module_class
 

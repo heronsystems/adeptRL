@@ -16,11 +16,11 @@ import torch
 from torch.nn import Conv2d, Linear, BatchNorm2d, BatchNorm1d, functional as F
 
 from adept.modules import RMCCell, Identity
-from ._base import NetworkInterface
+from ._base import NetworkModule
 
 
 # TODO
-class RMC(NetworkInterface):
+class RMC(NetworkModule):
     """
     Relational Memory Core
     https://arxiv.org/pdf/1806.01822.pdf

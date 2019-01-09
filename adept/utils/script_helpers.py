@@ -15,7 +15,7 @@
 import os
 
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
-from adept.networks._base import NetworkTrunk, ModularNetwork, NetworkHead
+from adept.networks._base import NetworkJunction, ModularNetwork, NetworkHead
 
 
 def make_network(
@@ -47,7 +47,7 @@ def make_network(
                     'Rank {} inputs not implemented'.format(rank)
                 )
 
-    trunk = NetworkTrunk(pathways_by_name)
+    trunk = NetworkJunction(pathways_by_name)
     body = network_bodies[args.netbody].from_args(
         trunk.nb_output_channel, embedding_size, args
     )

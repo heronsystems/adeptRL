@@ -54,7 +54,7 @@ Network Options:
     --net4d <str>           Network to use for 4d input [default: Identity]
     --netjunc <str>         Network junction to merge inputs [default: TODO]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
-    --normalize <bool>      TEMPORARY [default: True]
+    --custom-network        Name of custom network class
 
 Optimizer Options:
     --lr <float>            Learning rate [default: 0.0007]
@@ -80,6 +80,7 @@ from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvModuleRegistry
+from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
     SimpleModelSaver
@@ -117,14 +118,14 @@ def parse_args():
     args.lr = float(args.lr)
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
-    args.normalize = parse_bool_str(args.normalize)
     return args
 
 
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvModuleRegistry()
+    env_registry=EnvModuleRegistry(),
+    net_registry=NetworkRegistry()
 ):
     """
     Run local training.
@@ -132,6 +133,7 @@ def main(
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvModuleRegistry
+    :param net_registry: NetworkRegistry
     :return:
     """
 
@@ -155,10 +157,24 @@ def main(
         if args.use_defaults:
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
+            if args.custom_network:
+                net_args = net_registry.lookup_custom_network(args.net).args
+            else:
+                net_args = net_registry.lookup_modular_args(
+                    args.net1d, args.net2d, args.net3d, args.net4d,
+                    args.netjunc, args.netbody
+                )
         else:
             agent_args = agent_registry.lookup_agent(args.agent).prompt()
             env_args = env_registry.lookup_env_class(args.env).prompt()
-        args = DotDict({**args, **agent_args, **env_args})
+            if args.custom_network:
+                net_args = net_registry.lookup_custom_network(args.net).prompt()
+            else:
+                net_args = net_registry.prompt_modular_args(
+                    args.net1d, args.net2d, args.net3d, args.net4d,
+                    args.netjunc, args.netbody
+                )
+        args = DotDict({**args, **agent_args, **env_args, **net_args})
 
         # construct logging objects
         log_id = make_log_id(

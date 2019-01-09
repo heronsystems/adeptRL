@@ -47,7 +47,7 @@ class AgentRegistry:
         :return:
         """
         assert issubclass(agent_class, AgentModule)
-        agent_class.check_defaults()
+        agent_class.check_args_implemented()
         self._agent_class_by_id[agent_id] = agent_class
 
     def lookup_agent(self, agent_id):

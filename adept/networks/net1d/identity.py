@@ -12,21 +12,23 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from .._base import InputNetwork
+from adept.networks.net1d.net_1d import Net1D
 
 
-class DiscreteIdentity(InputNetwork):
+class Identity(Net1D):
+    args = {}
+
     def __init__(self, nb_in_channel):
         super().__init__()
-        self._nb_output_channel = nb_in_channel[0]
+        self._nb_output_channel = nb_in_channel[0]  # TODO why is this a list
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
+    def from_args(cls, args, nb_in_channel):
         return cls(nb_in_channel)
 
     @property
     def nb_output_channel(self):
         return self._nb_output_channel
 
-    def forward(self, x):
-        return x
+    def _forward(self, input):
+        return input
