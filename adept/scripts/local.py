@@ -158,7 +158,7 @@ def main(
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
             if args.custom_network:
-                net_args = net_registry.lookup_custom_network(args.net).args
+                net_args = net_registry.lookup_custom_net(args.net).args
             else:
                 net_args = net_registry.lookup_modular_args(
                     args.net1d, args.net2d, args.net3d, args.net4d,
@@ -168,7 +168,7 @@ def main(
             agent_args = agent_registry.lookup_agent(args.agent).prompt()
             env_args = env_registry.lookup_env_class(args.env).prompt()
             if args.custom_network:
-                net_args = net_registry.lookup_custom_network(args.net).prompt()
+                net_args = net_registry.lookup_custom_net(args.net).prompt()
             else:
                 net_args = net_registry.prompt_modular_args(
                     args.net1d, args.net2d, args.net3d, args.net4d,

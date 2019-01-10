@@ -12,23 +12,21 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.networks.net1d.net_1d import Net1D
+from adept.networks.net1d.submodule_1d import SubModule1D
 
 
-class Identity(Net1D):
+class Identity1D(SubModule1D):
     args = {}
 
-    def __init__(self, nb_in_channel):
-        super().__init__()
-        self._nb_output_channel = nb_in_channel[0]  # TODO why is this a list
+    def __init__(self, input_shape):
+        super().__init__(input_shape)
 
     @classmethod
-    def from_args(cls, args, nb_in_channel):
-        return cls(nb_in_channel)
+    def from_args(cls, args, input_shape):
+        return cls(input_shape)
 
-    @property
-    def nb_output_channel(self):
-        return self._nb_output_channel
+    def _output_shape(self, input_shape):
+        return input_shape
 
-    def _forward(self, input):
+    def _forward(self, *input):
         return input

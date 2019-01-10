@@ -17,34 +17,29 @@ from adept.networks._base import SubModule
 import abc
 
 
-class Net1D(SubModule, metaclass=abc.ABCMeta):
-    def __init__(self):
-        super(Net1D, self).__init__()
+class SubModule1D(SubModule, metaclass=abc.ABCMeta):
+    def __init__(self, input_shape):
+        super(SubModule1D, self).__init__(input_shape)
+        assert self.dim == 1
 
-    @property
-    def dim(self):
-        return 1
-
-    @abc.abstractmethod
-    def _forward(self, *input):
-        """
-        :param input:
-        :return: Tuple[Result, Internals]
-        """
-        raise NotImplementedError
-
-    def forward(self, *input, dim=None):
-        result = self._forward(*input)
+    def output_shape(self, input_shape, dim=None):
         if dim is None or dim == 1:
-            return result
+            return self._output_shape(input_shape)
         elif dim == 2:
-            return self._to_2d(result)
+            return self._output_shape(input_shape).view(-1, 1)
         elif dim == 3:
-            return self._to_3d(result)
+            return self._output_shape(input_shape).view(-1, 1, 1)
         elif dim == 4:
-            return self._to_4d(result)
+            return self._output_shape(input_shape).view(-1, 1, 1, 1)
         else:
             raise ValueError('Invalid dim: {}'.format(dim))
+
+    def _to_1d(self, result):
+        """
+        :param result: torch.Tensor (1D)
+        :return: torch.Tensor (1D)
+        """
+        return result
 
     def _to_2d(self, result):
         """

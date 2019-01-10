@@ -13,136 +13,76 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from adept.networks._base import NetworkModule
-from adept.networks.net1d.net_1d import Net1D
+from adept.networks.net1d.submodule_1d import SubModule1D
 from adept.utils.requires_args import RequiresArgs
 
 
 class NetworkRegistry:
     def __init__(self):
         self.name_to_custom_net = {}
-        self.name_to_net1d_cls = {}
-        self.name_to_net2d_cls = {}
-        self.name_to_net3d_cls = {}
-        self.name_to_net4d_cls = {}
-        self.name_to_netjunc_cls = {}
-        self.name_to_netbody_cls = {}
+        self.name_to_submodule = {}
 
-    def register_custom_net(self, name, net_class):
+    def register_custom_net(self, name, net_cls):
         """
         Add your custom network.
 
         :param name: str
-        :param net_class: NetworkModule
+        :param net_cls: NetworkModule
         :return:
         """
-        assert issubclass(net_class, NetworkModule)
-        net_class.check_args_implemented()
-        self.name_to_custom_net[name] = net_class
+        assert issubclass(net_cls, NetworkModule)
+        net_cls.check_args_implemented()
+        self.name_to_custom_net[name] = net_cls
 
-    def register_net1d_class(self, name, net_class):
+    def register_submodule(self, name, submod_cls):
         """
-        Add your own 1D network.
+        Add your own SubModule.
 
         :param name: str
-        :param net_class: Net1D
+        :param submod_cls: Net1D
         :return:
         """
-        assert issubclass(net_class, Net1D)
-        net_class.check_args_implemented()
-        self.name_to_custom_net[name] = net_class
+        assert issubclass(submod_cls, SubModule1D)
+        submod_cls.check_args_implemented()
+        self.name_to_custom_net[name] = submod_cls
 
-    def register_net2d_class(self, name, net_class):
+    def lookup_custom_net(self, net_name):
         """
-        Add your own 2D network.
-
-        :param name: str
-        :param net_class: Net2D
-        :return:
-        """
-        assert issubclass(net_class, Net2D)
-        net_class.check_args_implemented()
-        self.name_to_custom_net[name] = net_class
-
-    def register_net3d_class(self, name, net_class):
-        """
-        Add your own 3D network.
-
-        :param name: str
-        :param net_class: Net3D
-        :return:
-        """
-        assert issubclass(net_class, Net3D)
-        net_class.check_args_implemented()
-        self.name_to_custom_net[name] = net_class
-
-    def register_net4d_class(self, name, net_class):
-        """
-        Add your own 4D network.
-
-        :param name: str
-        :param net_class: Net4D
-        :return:
-        """
-        assert issubclass(net_class, Net4D)
-        net_class.check_args_implemented()
-        self.name_to_custom_net[name] = net_class
-
-    def lookup_custom_network(self, net_name):
-        """
-        Get a custom network by name.
+        Get a NetworkModule by name.
 
         :param net_name: str
-        :return:
+        :return: NetworkModule.__class__
         """
         return self.name_to_custom_net[net_name]
 
-    def lookup_net1d(self, name):
-        return self.name_to_net1d_cls[name]
-
-    def lookup_net2d(self, name):
-        return self.name_to_net2d_cls[name]
-
-    def lookup_net3d(self, name):
-        return self.name_to_net3d_cls[name]
-
-    def lookup_net4d(self, name):
-        return self.name_to_net4d_cls[name]
-
-    def lookup_netjunc(self, name):
-        return self.name_to_netjunc_cls[name]
-
-    def lookup_netbody(self, name):
-        return self.name_to_netbody_cls[name]
-
-    def lookup_modular_args(self, net1d, net2d, net3d, net4d, netjunc, netbody):
+    def lookup_submodule(self, submodule_name):
         """
-        :param net1d: str
-        :param net2d: str
-        :param net3d: str
-        :param net4d: str
-        :param netjunc: str
-        :param netbody: str
+        Get a SubModule by name.
+
+        :param submodule_name: str
+        :return: SubModule.__class__
+        """
+        return self.name_to_submodule[submodule_name]
+
+    def lookup_modular_args(self, args):
+        """
+        :param args: Dict[name, Any]
         :return: Dict[str, Any]
         """
         return {
-            **self.lookup_net1d(net1d).args,
-            **self.lookup_net2d(net2d).args,
-            **self.lookup_net3d(net3d).args,
-            **self.lookup_net4d(net4d).args,
-            **self.lookup_netjunc(netjunc).args,
-            **self.lookup_netbody(netbody).args
+            **self.lookup_submodule(args.net1d).args,
+            **self.lookup_submodule(args.net2d).args,
+            **self.lookup_submodule(args.net3d).args,
+            **self.lookup_submodule(args.net4d).args,
+            **self.lookup_submodule(args.netbody).args
         }
 
-    def prompt_modular_args(self, net1d, net2d, net3d, net4d, netjunc, netbody):
+    def prompt_modular_args(self, args):
         """
-        :param net1d: str
-        :param net2d: str
-        :param net3d: str
-        :param net4d: str
-        :param netjunc: str
-        :param netbody: str
+        :param args: Dict[name, Any]
         :return: Dict[str, Any]
         """
-        return RequiresArgs._prompt('NetworkModule', self.lookup_modular_args(
-            net1d, net2d, net3d, net4d, netjunc, netbody
-        ))
+        return RequiresArgs._prompt(
+            'ModularNetwork',
+            self.lookup_modular_args(args)
+        )

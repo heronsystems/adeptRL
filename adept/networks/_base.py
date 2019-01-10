@@ -62,11 +62,26 @@ class NetworkHead(torch.nn.Module):
 
 
 class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
-    def __init__(self, junc, body, head):
+    def __init__(
+        self,
+        input_submodules,
+        body_submodule,
+        head_submodules
+    ):
+        """
+        :param input_submodules: List[SubModule]
+        :param body_submodule: SubModule
+        :param head_submodules: List[SubModule]
+        """
         super().__init__()
-        self.junc = junc
-        self.body = body
-        self.head = head
+        self.input_submodules = input_submodules
+        self.body_submodule = body_submodule
+        self.head_submodules = head_submodules
+
+    def _validate_shapes(self):
+        # outputs can't be higher dim than heads
+        # 3d inputs need to be a factor of 2
+        pass
 
     @classmethod
     def from_args(
@@ -127,12 +142,69 @@ class NetworkJunction(torch.nn.Module):
 
 
 class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
-    @property
-    @abc.abstractmethod
-    def output_shape(self):
-        raise NotImplementedError()
+    """
+    SubModule of a ModularNetwork.
+    """
+    def __init__(self, input_shape):
+        super(SubModule, self).__init__()
+        self._input_shape = input_shape
 
     @classmethod
     @abc.abstractmethod
-    def from_args(cls, nb_in_channel, args):
+    def from_args(cls, args, input_shape):
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def output_shape(self, input_shape, dim=None):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _output_shape(self, input_shape):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _forward(self, *input):
+        """
+        :param input: torch.Tensor (1D | 2D | 3D | 4D)
+        :return: Tuple[Result, Internals]
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _to_1d(self, result):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _to_2d(self, result):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _to_3d(self, result):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _to_4d(self, result):
+        raise NotImplementedError
+
+    @property
+    def dim(self):
+        return len(self._input_shape)
+
+    @property
+    def input_shape(self):
+        return self._input_shape
+
+    def forward(self, *input, dim=None):
+        result, internals = self._forward(*input)
+        if dim is None:
+            return result, internals
+        if dim == 1:
+            return self._to_1d(result), internals
+        elif dim == 2:
+            return self._to_2d(result), internals
+        elif dim == 3:
+            return self._to_3d(result), internals
+        elif dim == 4:
+            return self._to_4d(result), internals
+        else:
+            raise ValueError('Invalid dim: {}'.format(dim))
