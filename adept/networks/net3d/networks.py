@@ -22,10 +22,10 @@ from ._resnets import (
     resnet18, resnet18v2, resnet34, resnet34v2, resnet50v2, resnet101,
     resnet101v2, resnet152, resnet152v2
 )
-from .._base import InputNetwork
+from .._base import SubModule
 
 
-class Nature(InputNetwork):
+class Nature(SubModule):
     """
     https://web.stanford.edu/class/psych209/Readings/MnihEtAlHassibis15NatureControlDeepRL.pdf
     """
@@ -70,7 +70,7 @@ class Nature(InputNetwork):
         return xs
 
 
-class Mnih2013(InputNetwork):
+class Mnih2013(SubModule):
     def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
@@ -106,7 +106,7 @@ class Mnih2013(InputNetwork):
         return xs
 
 
-class FourConv(InputNetwork):
+class FourConv(SubModule):
     def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
@@ -152,7 +152,7 @@ class FourConv(InputNetwork):
         return xs
 
 
-class FourConvSpatialAttention(InputNetwork):
+class FourConvSpatialAttention(SubModule):
     """
     https://arxiv.org/pdf/1806.01830.pdf
     """
@@ -235,7 +235,7 @@ class FourConvSpatialAttention(InputNetwork):
         return x
 
 
-class FourConvLarger(InputNetwork):
+class FourConvLarger(SubModule):
     def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize
@@ -281,7 +281,7 @@ class FourConvLarger(InputNetwork):
         return xs
 
 
-class BaseResNet(InputNetwork, metaclass=abc.ABCMeta):
+class BaseResNet(SubModule, metaclass=abc.ABCMeta):
     def __init__(self, in_shape, normalize):
         super().__init__()
         bias = not normalize

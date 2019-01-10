@@ -13,11 +13,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
-from adept.networks._base import InputNetwork
+from adept.networks._base import SubModule
 import abc
 
 
-class Net1D(InputNetwork, metaclass=abc.ABCMeta):
+class Net1D(SubModule, metaclass=abc.ABCMeta):
     def __init__(self):
         super(Net1D, self).__init__()
 
@@ -27,6 +27,10 @@ class Net1D(InputNetwork, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def _forward(self, *input):
+        """
+        :param input:
+        :return: Tuple[Result, Internals]
+        """
         raise NotImplementedError
 
     def forward(self, *input, dim=None):

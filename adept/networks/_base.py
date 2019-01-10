@@ -34,7 +34,7 @@ class BaseNetwork(torch.nn.Module):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def forward(self, name_to_obs, internals):
+    def forward(self, obsname_to_obs, internals):
         raise NotImplementedError
 
 
@@ -95,7 +95,7 @@ class NetworkBody(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def nb_output_channel(self):
+    def output_shape(self):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -104,14 +104,14 @@ class NetworkBody(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
 
 
 class NetworkJunction(torch.nn.Module):
-    def __init__(self, obs_name_to_input_net):
+    def __init__(self, obsname_to_inputnet):
         super().__init__()
 
         nb_output_channel = 0
-        self.pathways = torch.nn.ModuleList()
-        for name, pathway in obs_name_to_input_net.items():
-            nb_output_channel += pathway.nb_output_channel
-            self.pathways.add_module(name, pathway)
+        self.input_nets = torch.nn.ModuleList()
+        for name, input_net in obsname_to_inputnet.items():
+            nb_output_channel += input_net.nb_output_channel
+            self.input_nets.add_module(name, input_net)
         self.nb_output_channel = nb_output_channel
 
     def forward(self, obs_dict):
@@ -121,15 +121,15 @@ class NetworkJunction(torch.nn.Module):
         :return: a Tensor embedding
         """
         embeddings = []
-        for name, pathway in self.pathways.named_children():
-            embeddings.append(pathway.forward(obs_dict[name]))
+        for name, input_net in self.input_nets.named_children():
+            embeddings.append(input_net.forward(obs_dict[name]))
         return torch.cat(embeddings, dim=1)
 
 
-class InputNetwork(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
+class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def nb_output_channel(self):
+    def output_shape(self):
         raise NotImplementedError()
 
     @classmethod

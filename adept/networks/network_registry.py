@@ -27,7 +27,6 @@ class NetworkRegistry:
         self.name_to_netjunc_cls = {}
         self.name_to_netbody_cls = {}
 
-
     def register_custom_net(self, name, net_class):
         """
         Add your custom network.
