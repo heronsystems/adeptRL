@@ -22,10 +22,10 @@ class BaseNetwork(torch.nn.Module):
     @classmethod
     @abc.abstractmethod
     def from_args(
-            cls,
-            args,
-            observation_space,
-            headname_to_output_shape
+        cls,
+        args,
+        observation_space,
+        headname_to_output_shape
     ):
         raise NotImplementedError
 
@@ -47,7 +47,8 @@ class NetworkHead(torch.nn.Module):
         super().__init__()
 
         self.heads = torch.nn.ModuleList()
-        # Must be sorted for mpi methods so that the creation order is deterministic
+        # Must be sorted for mpi methods so that the creation order is
+        # deterministic
         for head_name in sorted(head_dict.keys()):
             head_size = head_dict[head_name]
             self.heads.add_module(
@@ -90,7 +91,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         observation_space,
         headname_to_output_shape
     ):
-        pass  #TODO
+        pass  # TODO
 
     def forward(self, obs_dict, internals):
         embedding = self.junc.forward(obs_dict)
