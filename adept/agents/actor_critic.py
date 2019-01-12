@@ -112,10 +112,10 @@ class ActorCritic(AgentModule):
         self._internals = new_internals
 
     @staticmethod
-    def output_shape(action_space):
+    def output_space(action_space):
         ebn = action_space.entries_by_name
-        actor_outputs = {name: entry.shape[0] for name, entry in ebn.items()}
-        head_dict = {'critic': 1, **actor_outputs}
+        actor_outputs = {name: entry.shape for name, entry in ebn.items()}
+        head_dict = {'critic': (1, ), **actor_outputs}
         return head_dict
 
     def act(self, obs):

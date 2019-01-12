@@ -25,8 +25,9 @@ class Identity1D(SubModule1D):
     def from_args(cls, args, input_shape):
         return cls(input_shape)
 
-    def _output_shape(self, input_shape):
-        return input_shape
+    @property
+    def _output_shape(self):
+        return self.input_shape
 
     def _forward(self, *input):
         return input

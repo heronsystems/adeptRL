@@ -67,4 +67,4 @@ class AgentRegistry:
         :param action_space:
         :return:
         """
-        return self._agent_class_by_id[agent_id].output_shape(action_space)
+        return self._agent_class_by_id[agent_id].output_space(action_space)

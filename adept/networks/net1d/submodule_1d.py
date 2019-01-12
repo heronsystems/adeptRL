@@ -22,45 +22,45 @@ class SubModule1D(SubModule, metaclass=abc.ABCMeta):
         super(SubModule1D, self).__init__(input_shape)
         assert self.dim == 1
 
-    def output_shape(self, input_shape, dim=None):
+    def output_shape(self, dim=None):
         if dim is None or dim == 1:
-            return self._output_shape(input_shape)
+            return self._output_shape
         elif dim == 2:
-            return self._output_shape(input_shape).view(-1, 1)
+            return self._output_shape.view(-1, 1)
         elif dim == 3:
-            return self._output_shape(input_shape).view(-1, 1, 1)
+            return self._output_shape.view(-1, 1, 1)
         elif dim == 4:
-            return self._output_shape(input_shape).view(-1, 1, 1, 1)
+            return self._output_shape.view(-1, 1, 1, 1)
         else:
             raise ValueError('Invalid dim: {}'.format(dim))
 
-    def _to_1d(self, result):
+    def _to_1d(self, submodule_output):
         """
-        :param result: torch.Tensor (1D)
+        :param submodule_output: torch.Tensor (1D)
         :return: torch.Tensor (1D)
         """
-        return result
+        return submodule_output
 
-    def _to_2d(self, result):
+    def _to_2d(self, submodule_output):
         """
-        :param result: torch.Tensor (1D)
+        :param submodule_output: torch.Tensor (1D)
         :return: torch.Tensor (2D)
         """
-        n, f = result.size()
-        return result.view(n, f, 1)
+        n, f = submodule_output.size()
+        return submodule_output.view(n, f, 1)
 
-    def _to_3d(self, result):
+    def _to_3d(self, submodule_output):
         """
-        :param result: torch.Tensor (1D)
+        :param submodule_output: torch.Tensor (1D)
         :return: torch.Tensor (3D)
         """
-        n, f = result.size()
-        return result.view(n, f, 1, 1)
+        n, f = submodule_output.size()
+        return submodule_output.view(n, f, 1, 1)
 
-    def _to_4d(self, result):
+    def _to_4d(self, submodule_output):
         """
-        :param result: torch.Tensor (1D)
+        :param submodule_output: torch.Tensor (1D)
         :return: torch.Tensor (4D)
         """
-        n, f = result.size()
-        return result.view(n, f, 1, 1, 1)
+        n, f = submodule_output.size()
+        return submodule_output.view(n, f, 1, 1, 1)
