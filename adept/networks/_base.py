@@ -26,7 +26,8 @@ class BaseNetwork(torch.nn.Module):
         cls,
         args,
         observation_space,
-        headname_to_output_shape
+        headname_to_output_shape,
+        network_registry
     ):
         raise NotImplementedError
 
@@ -66,13 +67,13 @@ class NetworkHead(torch.nn.Module):
 class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
     def __init__(
         self,
-        obs_key_to_input_net,
+        obs_key_to_submod,
         body_submodule,
         head_submodules,
         output_space
     ):
         """
-        :param obs_key_to_input_net: Dict[ObsKey, SubModule]
+        :param obs_key_to_submod: Dict[ObsKey, SubModule]
         :param body_submodule: SubModule
         :param head_submodules: List[SubModule]
         :param output_space: Dict[OutputKey, Shape]
@@ -81,9 +82,9 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         super().__init__()
 
         # Input Nets
-        self._obs_keys = list(obs_key_to_input_net.keys())
+        self._obs_keys = list(obs_key_to_submod.keys())
         self.obs_key_to_input_submod = torch.nn.ModuleDict(
-            [(key, net) for key, net in obs_key_to_input_net.items()]
+            [(key, net) for key, net in obs_key_to_submod.items()]
         )
 
         # Body
@@ -123,10 +124,19 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                 raise ValueError('Invalid dim {}'.format(dim))
             outputs.append((output_name, layer))
         self.output_key_to_layer = torch.nn.ModuleDict(outputs)
+        self._validate_shapes()
 
     def _validate_shapes(self):
-        # outputs can't be higher dim than heads
-        # 3d input H,W must match body H, W
+        # heads can't be higher dim than body
+        assert all([
+            head.dim <= self.body_submodule.dim
+            for head in self.head_submodules
+        ])
+        # output dims must have a corresponding head of the same dim
+        pass
+        # non feature dims of input submodules must be same
+        pass
+        # non-feature dimensions of heads must match desired output_shape
         pass
 
     @classmethod
@@ -134,9 +144,70 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         cls,
         args,
         observation_space,
-        headname_to_output_shape
+        output_space,
+        network_registry
     ):
-        pass  # TODO
+        """
+        Construct a Modular Network from arguments.
+
+        :param args: Dict[ArgName, Any]
+        :param observation_space: Dict[ObsKey, Shape]
+        :param output_space: Dict[OutputKey, Shape]
+        :param network_registry: NetworkRegistry
+        :return: ModularNetwork
+        """
+        # SubModule ID is ObsKey
+        id = 0
+        # Dict[ObsKey, SubModule]
+        # for shape in observation space, get dim
+        # instantiate input submodule of that dim
+        obs_key_to_submod = {}
+        for obs_key, shape in observation_space.items():
+            dim = len(shape)
+            if dim == 1:
+                submod = network_registry.lookup_submodule(
+                    args.net1d).from_args(args, shape, obs_key)
+            elif dim == 2:
+                submod = network_registry.lookup_submodule(
+                    args.net2d).from_args(args, shape, obs_key)
+            elif dim == 3:
+                submod = network_registry.lookup_submodule(
+                    args.net3d).from_args(args, shape, obs_key)
+            elif dim == 4:
+                submod = network_registry.lookup_submodule(
+                    args.net4d).from_args(args, shape, obs_key)
+            else:
+                raise ValueError('Invalid dim: {}'.format(dim))
+            obs_key_to_submod[obs_key] = submod
+
+        # SubModule
+        input_shape = None  # TODO
+        body_submod = network_registry.lookup_submodule(args.netbody).from_args(
+            args, input_shape, 'body')
+
+        # List[SubModule]
+        # instantiate heads based on output_shapes
+        head_submodules = []
+        for output_key, shape in output_space.items():
+            dim = len(shape)
+            if dim == 1:
+                submod = network_registry.lookup_submodule(
+                    args.head1d).from_args(args, shape, output_key)
+            elif dim == 2:
+                submod = network_registry.lookup_submodule(
+                    args.head2d).from_args(args, shape, output_key)
+            elif dim == 3:
+                submod = network_registry.lookup_submodule(
+                    args.head3d).from_args(args, shape, output_key)
+            elif dim == 4:
+                submod = network_registry.lookup_submodule(
+                    args.head4d).from_args(args, shape, output_key)
+            else:
+                raise ValueError('Invalid dim: {}'.format(dim))
+            head_submodules.append(submod)
+        return cls(
+            obs_key_to_submod, body_submod, head_submodules, output_space
+        )
 
     def forward(self, obs_key_to_obs, internals):
         """
