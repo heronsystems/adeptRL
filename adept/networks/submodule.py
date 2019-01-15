@@ -77,7 +77,7 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
         return self._input_shape
 
     def new_internals(self, device):
-        return {k: v.to(device) for k, v in self._new_internals()}
+        return {k: v.to(device) for k, v in self._new_internals().items()}
 
     def to_dim(self, submodule_output, dim):
         """

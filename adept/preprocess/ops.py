@@ -67,7 +67,7 @@ class GrayScaleAndMoveChannel(Operation):
         super(GrayScaleAndMoveChannel, self).__init__(filter_names, {3})
 
     def update_shape(self, old_shape):
-        return (1, ) + old_shape.shape[:-1]
+        return (1, ) + old_shape[:-1]
 
     def update_obs(self, obs):
         if obs.dim() == 3:

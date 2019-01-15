@@ -48,7 +48,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
 
         # Heads
         self.dim_to_head = torch.nn.ModuleDict(
-            [(submod.dim, submod) for submod in head_submodules]
+            [(str(submod.dim), submod) for submod in head_submodules]
         )
 
         # Outputs
@@ -59,21 +59,21 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             dim = len(shape)
             if dim == 1:
                 layer = torch.nn.Linear(
-                    self.head_submodules[dim].output_shape()[0], shape[0]
+                    self.dim_to_head[str(dim)].output_shape()[0], shape[0]
                 )
             elif dim == 2:
                 layer = torch.nn.Conv1d(
-                    self.head_submodules[dim].output_shape()[0], shape[0],
+                    self.dim_to_head[str(dim)].output_shape()[0], shape[0],
                     kernel_size=1
                 )
             elif dim == 3:
                 layer = torch.nn.Conv2d(
-                    self.head_submodules[dim].output_shape()[0], shape[0],
+                    self.dim_to_head[str(dim)].output_shape()[0], shape[0],
                     kernel_size=1
                 )
             elif dim == 4:
                 layer = torch.nn.Conv3d(
-                    self.head_submodules[dim].output_shape()[0], shape[0],
+                    self.dim_to_head[str(dim)].output_shape()[0], shape[0],
                     kernel_size=1
                 )
             else:
@@ -86,7 +86,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         # heads can't be higher dim than body
         assert all([
             head.dim <= self.body_submodule.dim
-            for head in self.head_submodules
+            for head in self.dim_to_head.values()
         ])
         # output dims must have a corresponding head of the same dim
         pass
@@ -140,14 +140,14 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         # initialize body submodule
         body_cls = network_registry.lookup_submodule(args.netbody)
         nb_body_feature = sum([
-            shape[0]
-            for shape in obs_key_to_submod.values()
+            submod.output_shape(dim=body_cls.dim)[0]
+            for submod in obs_key_to_submod.values()
         ])
         if body_cls.dim > 1:
             other_dims = [
-                shape[1:]
-                for shape in obs_key_to_submod.values()
-                if len(shape) == body_cls.dim
+                submod.output_shape(dim=body_cls.dim)[1:]
+                for submod in obs_key_to_submod.values()
+                if submod.dim == body_cls.dim
             ][0]
         else:
             other_dims = []
@@ -201,14 +201,14 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             nxt_internals.append(nxt_internal)
 
         # Process body
-        body_out, nxt_internal = self.body.forward(
+        body_out, nxt_internal = self.body_submodule.forward(
             torch.cat(processed_inputs, dim=1),
             internals
         )
 
         # Process heads
         head_dim_to_head_out = {}
-        for head_submod in self.head_submodules:
+        for head_submod in self.dim_to_head.values():
             head_out, nxt_internal = head_submod.forward(
                 self.body_submodule.to_dim(body_out, head_submod.dim),
                 internals
@@ -224,8 +224,25 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             )
             output_key_to_output[key] = output
 
-        return output_key_to_output, ChainMap(*internals)
+        merged_internals = {}
+        for internal in nxt_internals:
+            for k, v in internal.items():
+                merged_internals[k] = v
+        return output_key_to_output, merged_internals
 
     def new_internals(self, device):
-        # TODO
-        return self.body.new_internals(device)
+        internals = [
+            submod.new_internals(device)
+            for submod in self.obs_key_to_input_submod.values()
+        ]
+        internals.append(self.body_submodule.new_internals(device))
+        internals += [
+            submod.new_internals(device)
+            for submod in self.dim_to_head.values()
+        ]
+
+        merged_internals = {}
+        for internal in internals:
+            for k, v in internal.items():
+                merged_internals[k] = v
+        return merged_internals

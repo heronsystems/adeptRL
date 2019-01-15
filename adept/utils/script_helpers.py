@@ -14,48 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 
-from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
-from adept.networks._base import NetworkJunction, NetworkHead
-from adept.networks.modular_network import ModularNetwork
-
-
-def make_network(
-    observation_space,
-    network_head_shapes,
-    args,
-    chw_networks=VISION_NETWORKS,
-    c_networks=DISCRETE_NETWORKS,
-    network_bodies=NETWORK_BODIES,
-    embedding_size=512
-):
-    pathways_by_name = {}
-    nbr = observation_space.names_by_rank
-    ebn = observation_space.entries_by_name
-    for rank, names in nbr.items():
-        for name in names:
-            if rank == 1:
-                pathways_by_name[name] = c_networks[args.net1d]\
-                    .from_args(ebn[name].shape, args)
-            elif rank == 2:
-                raise NotImplementedError('Rank 2 inputs not implemented')
-            elif rank == 3:
-                pathways_by_name[name] = chw_networks[args.net3d]\
-                    .from_args(ebn[name].shape, args)
-            elif rank == 4:
-                raise NotImplementedError('Rank 4 inputs not implemented')
-            else:
-                raise NotImplementedError(
-                    'Rank {} inputs not implemented'.format(rank)
-                )
-
-    trunk = NetworkJunction(pathways_by_name)
-    body = network_bodies[args.netbody].from_args(
-        trunk.nb_output_channel, embedding_size, args
-    )
-    head = NetworkHead(body.nb_output_channel, network_head_shapes)
-    network = ModularNetwork(trunk, body, head)
-    return network
-
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)

@@ -49,14 +49,14 @@ Script Options:
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
-    --net2d <str>           Network to use for 2d input [default: Identity]
-    --net3d <str>           Network to use for 3d input [default: FourConv]
-    --net4d <str>           Network to use for 4d input [default: Identity]
+    --net2d <str>           Network to use for 2d input [default: Identity2D]
+    --net3d <str>           Network to use for 3d input [default: Identity3D]
+    --net4d <str>           Network to use for 4d input [default: Identity4D]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
-    --head1d <str>          Network to use for 1d input [default: Identity1D]
-    --head2d <str>          Network to use for 2d input [default: Identity]
-    --head3d <str>          Network to use for 3d input [default: Identity]
-    --head4d <str>          Network to use for 4d input [default: Identity]
+    --head1d <str>          Network to use for 1d output [default: Identity1D]
+    --head2d <str>          Network to use for 2d output [default: Identity2D]
+    --head3d <str>          Network to use for 3d output [default: Identity3D]
+    --head4d <str>          Network to use for 4d output [default: Identity4D]
     --custom-network        Name of custom network class
 
 Optimizer Options:
@@ -85,14 +85,12 @@ from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvModuleRegistry
 from adept.networks.network_registry import NetworkRegistry
 from adept.networks.modular_network import ModularNetwork
-from adept.networks.network_module import NetworkModule
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
     SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    make_network, count_parameters,
-    parse_bool_str, parse_none, LogDirHelper
+    count_parameters, parse_none, LogDirHelper
 )
 from adept.utils.util import DotDict
 
