@@ -11,19 +11,17 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
     """
     dim = None
 
-    def __init__(self, input_shape, id):
-        super(SubModule, self).__init__()
-        self._input_shape = input_shape
-        self._id = id
-
     @classmethod
     @abc.abstractmethod
-    def from_args(cls, args, input_shape):
+    def from_args(cls, args, input_shape, id):
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
     def _output_shape(self):
+        """
+        :return: Tuple[*Dim] Output shape excluding batch dimension
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -31,9 +29,9 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _forward(self, *input):
+    def _forward(self, input, internals, **kwargs):
         """
-        :param input: torch.Tensor (1D | 2D | 3D | 4D)
+        :param input: torch.Tensor (B+1D | B+2D | B+3D | B+4D)
         :return: Tuple[Result, Internals]
         """
         raise NotImplementedError
@@ -54,6 +52,22 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
     def _to_4d(self, submodule_output):
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def _new_internals(self):
+        """
+        :return: Dict[InternalKey, List[torch.Tensor (ND)]]
+        """
+        raise NotImplementedError
+
+    def __init__(self, input_shape, id):
+        """
+        :param input_shape: Tuple[*Dim] Input shape excluding batch dimension
+        :param id: str Unique identifier for this instance
+        """
+        super(SubModule, self).__init__()
+        self._input_shape = input_shape
+        self._id = id
+
     @property
     def id(self):
         return self._id
@@ -61,6 +75,9 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
     @property
     def input_shape(self):
         return self._input_shape
+
+    def new_internals(self, device):
+        return {k: v.to(device) for k, v in self._new_internals()}
 
     def to_dim(self, submodule_output, dim):
         """

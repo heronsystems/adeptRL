@@ -106,52 +106,6 @@ class Mnih2013(SubModule):
         return xs
 
 
-class FourConv(SubModule):
-    def __init__(self, in_shape, normalize):
-        super().__init__()
-        bias = not normalize
-        self._nb_output_channel = 800
-        self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=bias)
-        self.conv2 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
-        self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
-        self.conv4 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
-
-        if normalize:
-            self.bn1 = BatchNorm2d(32)
-            self.bn2 = BatchNorm2d(32)
-            self.bn3 = BatchNorm2d(32)
-            self.bn4 = BatchNorm2d(32)
-        else:
-            self.bn1 = Identity()
-            self.bn2 = Identity()
-            self.bn3 = Identity()
-            self.bn4 = Identity()
-
-        relu_gain = init.calculate_gain('relu')
-        self.conv1.weight.data.mul_(relu_gain)
-        self.conv2.weight.data.mul_(relu_gain)
-        self.conv3.weight.data.mul_(relu_gain)
-        self.conv4.weight.data.mul_(relu_gain)
-
-    @classmethod
-    def from_args(cls, in_shape, args):
-        return cls(in_shape, args.normalize)
-
-    @property
-    def nb_output_channel(self):
-        return self._nb_output_channel
-
-    def forward(self, xs):
-        xs = F.relu(self.bn1(self.conv1(xs)))
-        xs = F.relu(self.bn2(self.conv2(xs)))
-        xs = F.relu(self.bn3(self.conv3(xs)))
-        xs = F.relu(self.bn4(self.conv4(xs)))
-
-        xs = xs.view(xs.size(0), -1)
-
-        return xs
-
-
 class FourConvSpatialAttention(SubModule):
     """
     https://arxiv.org/pdf/1806.01830.pdf

@@ -22,6 +22,38 @@ class NetworkRegistry:
         self.name_to_custom_net = {}
         self.name_to_submodule = {}
 
+        from adept.networks.net1d.identity_1d import Identity1D
+        from adept.networks.net1d.linear import Linear
+        from adept.networks.net1d.lstm import LSTM
+        net_1d_cls_by_name = {
+            'Identity1D': Identity1D,
+            'LSTM': LSTM,
+            'Linear': Linear,
+        }
+        for name, submod_cls in net_1d_cls_by_name.items():
+            self.register_submodule(name, submod_cls)
+
+        from adept.networks.net3d.four_conv import FourConv
+        net_3d_cls_by_name = {
+            'FourConv': FourConv,
+            # 'FourConvSpatialAttention': FourConvSpatialAttention,
+            # 'FourConvLarger': FourConvLarger,
+            # 'Nature': Nature,
+            # 'Mnih2013': Mnih2013,
+            # 'ResNet18': ResNet18,
+            # 'ResNet18V2': ResNet18V2,
+            # 'ResNet34': ResNet34,
+            # 'ResNet34V2': ResNet34V2,
+            # 'ResNet50': ResNet50,
+            # 'ResNet50V2': ResNet50V2,
+            # 'ResNet101': ResNet101,
+            # 'ResNet101V2': ResNet101V2,
+            # 'ResNet152': ResNet152,
+            # 'ResNet152V2': ResNet152V2
+        }
+        for name, submod_cls in net_3d_cls_by_name.items():
+            self.register_submodule(name, submod_cls)
+
     def register_custom_net(self, name, net_cls):
         """
         Add your custom network.

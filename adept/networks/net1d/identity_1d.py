@@ -18,16 +18,19 @@ from adept.networks.net1d.submodule_1d import SubModule1D
 class Identity1D(SubModule1D):
     args = {}
 
-    def __init__(self, input_shape):
-        super().__init__(input_shape)
+    def __init__(self, input_shape, id):
+        super().__init__(input_shape, id)
 
     @classmethod
-    def from_args(cls, args, input_shape):
-        return cls(input_shape)
+    def from_args(cls, args, input_shape, id):
+        return cls(input_shape, id)
 
     @property
     def _output_shape(self):
         return self.input_shape
 
-    def _forward(self, *input):
-        return input
+    def _forward(self, input, internals, **kwargs):
+        return input, {}
+
+    def _new_internals(self):
+        return {}
