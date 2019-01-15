@@ -18,7 +18,7 @@ import torch
 from torch.nn import LSTMCell, functional as F, Linear, BatchNorm1d
 
 from adept.modules import Identity, LSTMCellLayerNorm
-from ._base import NetworkBody
+from adept.networks._base import NetworkBody
 
 
 class LSTMBody(NetworkBody):

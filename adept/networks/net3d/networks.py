@@ -22,7 +22,7 @@ from ._resnets import (
     resnet18, resnet18v2, resnet34, resnet34v2, resnet50v2, resnet101,
     resnet101v2, resnet152, resnet152v2
 )
-from .._base import SubModule
+from adept.networks.submodule import SubModule
 
 
 class Nature(SubModule):

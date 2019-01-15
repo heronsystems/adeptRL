@@ -13,14 +13,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
-from adept.networks._base import SubModule
+from adept.networks.submodule import SubModule
 import abc
 
 
 class SubModule1D(SubModule, metaclass=abc.ABCMeta):
+    dim = 1
+
     def __init__(self, input_shape):
-        super(SubModule1D, self).__init__(input_shape)
-        assert self.dim == 1
+        super(SubModule1D, self).__init__(input_shape, id)
 
     def output_shape(self, dim=None):
         if dim is None or dim == 1:

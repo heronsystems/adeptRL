@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.networks.bodies import LinearBody, LSTMBody, Mnih2013Linear, Mnih2013LSTM
+from adept.networks.net1d.bodies import LinearBody, LSTMBody, Mnih2013Linear, Mnih2013LSTM
 from adept.networks.net1d.identity_1d import Identity1D
 from adept.networks.net3d.networks import (
     FourConv, FourConvSpatialAttention, FourConvLarger, Nature, Mnih2013,

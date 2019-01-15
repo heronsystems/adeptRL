@@ -15,7 +15,8 @@
 import os
 
 from adept.networks import VISION_NETWORKS, DISCRETE_NETWORKS, NETWORK_BODIES
-from adept.networks._base import NetworkJunction, ModularNetwork, NetworkHead
+from adept.networks._base import NetworkJunction, NetworkHead
+from adept.networks.modular_network import ModularNetwork
 
 
 def make_network(
