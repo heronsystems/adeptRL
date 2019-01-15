@@ -12,58 +12,60 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import torch
 from adept.networks.submodule import SubModule
 import abc
+import math
 
 
-class SubModule3D(SubModule, metaclass=abc.ABCMeta):
-    dim = 3
+class SubModule2D(SubModule, metaclass=abc.ABCMeta):
+    dim = 2
 
     def __init__(self, input_shape, id):
-        super(SubModule3D, self).__init__(input_shape, id)
+        super(SubModule2D, self).__init__(input_shape, id)
 
     def output_shape(self, dim=None):
         if dim == 1:
-            f, h, w = self._output_shape
-            return (f * h * w, )
-        elif dim == 2:
-            f, h, w = self._output_shape
-            return (f, h * w)
-        elif dim == 3 or dim is None:
+            f, l = self._output_shape
+            return (f * l, )
+        elif dim == 2 or dim is None:
             return self._output_shape
+        elif dim == 3:
+            f, l = self._output_shape
+            return (f, math.sqrt(l), math.sqrt(l))
         elif dim == 4:
-            f, h, w = self._output_shape
-            return (f, 1, h, w)
+            f, l = self._output_shape
+            return (f, l, 1, 1)
         else:
             raise ValueError('Invalid dim: {}'.format(dim))
 
     def _to_1d(self, submodule_output):
         """
-        :param submodule_output: torch.Tensor (Batch + 3D)
+        :param submodule_output: torch.Tensor (Batch + 2D)
         :return: torch.Tensor (Batch + 1D)
         """
-        n, f, h, w = submodule_output.size()
-        return submodule_output.view(n, f * h * w)
+        n, f, l = submodule_output.size()
+        return submodule_output.view(n, f * l)
 
     def _to_2d(self, submodule_output):
         """
-        :param submodule_output: torch.Tensor (Batch + 3D)
+        :param submodule_output: torch.Tensor (Batch + 2D)
         :return: torch.Tensor (Batch + 2D)
-        """
-        n, f, h, w = submodule_output.size()
-        return submodule_output.view(n, f, h * w)
-
-    def _to_3d(self, submodule_output):
-        """
-        :param submodule_output: torch.Tensor (Batch + 3D)
-        :return: torch.Tensor (Batch + 3D)
         """
         return submodule_output
 
+    def _to_3d(self, submodule_output):
+        """
+        :param submodule_output: torch.Tensor (Batch + 2D)
+        :return: torch.Tensor (Batch + 3D)
+        """
+        n, f, l = submodule_output.size()
+        return submodule_output.view(n, f, math.sqrt(l), math.sqrt(l))
+
     def _to_4d(self, submodule_output):
         """
-        :param submodule_output: torch.Tensor (Batch + 3D)
+        :param submodule_output: torch.Tensor (Batch + 2D)
         :return: torch.Tensor (Batch + 4D)
         """
-        n, f, h, w = submodule_output.size()
-        return submodule_output.view(n, f, 1, h, w)
+        n, f, l = submodule_output.size()
+        return submodule_output.view(n, f, l, 1, 1)

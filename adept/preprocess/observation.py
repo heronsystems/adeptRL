@@ -17,6 +17,10 @@ from copy import deepcopy
 
 class ObsPreprocessor:
     def __init__(self, ops, observation_space):
+        """
+        :param ops: List[Operation]
+        :param observation_space:
+        """
         updated_obs_space = deepcopy(observation_space)
 
         nbr = updated_obs_space.names_by_rank
@@ -26,7 +30,7 @@ class ObsPreprocessor:
             for rank, names in nbr.items():
                 for name in names:
                     if op.filter(name, rank):
-                        ebn[name] = op.update_space(ebn[name])
+                        ebn[name] = op.update_shape(ebn[name])
 
         self.ops = ops
         self.observation_space = updated_obs_space

@@ -48,12 +48,15 @@ Script Options:
     -y, --use-defaults      Skip prompts, use defaults
 
 Network Options:
-    --net1d <str>           Network to use for 1d input [default: Identity]
+    --net1d <str>           Network to use for 1d input [default: Identity1D]
     --net2d <str>           Network to use for 2d input [default: Identity]
     --net3d <str>           Network to use for 3d input [default: FourConv]
     --net4d <str>           Network to use for 4d input [default: Identity]
-    --netjunc <str>         Network junction to merge inputs [default: TODO]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
+    --head1d <str>          Network to use for 1d input [default: Identity1D]
+    --head2d <str>          Network to use for 2d input [default: Identity]
+    --head3d <str>          Network to use for 3d input [default: Identity]
+    --head4d <str>          Network to use for 4d input [default: Identity]
     --custom-network        Name of custom network class
 
 Optimizer Options:

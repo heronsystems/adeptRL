@@ -16,7 +16,7 @@ import gym
 import torch
 from gym import spaces
 
-from adept.environments._spaces import Spaces
+from adept.environments._spaces import Space
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import (
     CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack
@@ -46,7 +46,7 @@ class AdeptGymEnv(EnvModule):
         if do_frame_stack:
             cpu_ops.append(FrameStack(4))
         cpu_preprocessor = ObsPreprocessor(
-            cpu_ops, Spaces.from_gym(env.observation_space)
+            cpu_ops, Space.from_gym(env.observation_space)
         )
 
         # GPU Ops
@@ -54,7 +54,7 @@ class AdeptGymEnv(EnvModule):
             [CastToFloat(), Divide255()], cpu_preprocessor.observation_space
         )
 
-        action_space = Spaces.from_gym(env.action_space)
+        action_space = Space.from_gym(env.action_space)
 
         super(AdeptGymEnv, self).__init__(
             action_space, cpu_preprocessor, gpu_preprocessor
@@ -115,25 +115,19 @@ class AdeptGymEnv(EnvModule):
             one_hot.scatter_(1, longs, 1)
             return self.cpu_preprocessor({'Discrete': one_hot})
         elif isinstance(space, spaces.MultiBinary):
-            return self.cpu_preprocessor(
-                {
-                    'MultiBinary': torch.from_numpy(observation)
-                }
-            )
+            return self.cpu_preprocessor({
+                'MultiBinary': torch.from_numpy(observation)
+            })
         elif isinstance(space, spaces.Dict):
-            return self.cpu_preprocessor(
-                {
-                    name: torch.from_numpy(obs)
-                    for name, obs in observation.items()
-                }
-            )
+            return self.cpu_preprocessor({
+                name: torch.from_numpy(obs)
+                for name, obs in observation.items()
+            })
         elif isinstance(space, spaces.Tuple):
-            return self.cpu_preprocessor(
-                {
-                    idx: torch.from_numpy(obs)
-                    for idx, obs in enumerate(observation)
-                }
-            )
+            return self.cpu_preprocessor({
+                idx: torch.from_numpy(obs)
+                for idx, obs in enumerate(observation)
+            })
         else:
             raise NotImplementedError
 

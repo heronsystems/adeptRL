@@ -27,9 +27,9 @@ from pysc2.lib.features import (
 from pysc2.lib.static_data import UNIT_TYPES
 
 from adept.environments.env_module import EnvModule
-from adept.environments._spaces import Space, Spaces
+from adept.environments._spaces import Space
 from adept.preprocess.observation import ObsPreprocessor
-from adept.preprocess.ops import BaseOp, FlattenSpace, CastToFloat
+from adept.preprocess.ops import Operation, FlattenSpace, CastToFloat
 
 
 class AdeptSC2Env(EnvModule):
@@ -39,50 +39,46 @@ class AdeptSC2Env(EnvModule):
         self.sc2_env = env
         self._max_num_actions = len(FUNCTIONS)
         obs_entries_by_name = {
-            # 'single_select': Space((1, 7), 0., 1., np.float32),
-            # 'multi_select': Space(),
-            # 'build_queue': Space(),
-            # 'cargo': Space(),
-            # 'cargo_slots_available': Space((1,), None, None, None),
-            'net3d':
-                Space((24, 84, 84), None, None, None),
-            # 'player': Space((11,), None, None, None),
-            'control_groups':
-                Space((10, 2), None, None, None),
-            'available_actions':
-                Space((self._max_num_actions, ), 0., 1., np.int32)
+            # 'single_select': (1, 7),
+            # 'multi_select': ,
+            # 'build_queue': ,
+            # 'cargo': ,
+            # 'cargo_slots_available': (1,),
+            'net3d': (24, 84, 84),
+            # 'player': (11,),
+            'control_groups': (10, 2),
+            'available_actions': (self._max_num_actions, )
         }
         act_entries_by_name = {
-            'func_id': Space((524, ), 0., 1., np.float32),
-            'screen_x': Space((80, ), 0., 1., np.float32),
-            'screen_y': Space((80, ), 0., 1., np.float32),
-            'minimap_x': Space((80, ), 0., 1., np.float32),
-            'minimap_y': Space((80, ), 0., 1., np.float32),
-            'screen2_x': Space((80, ), 0., 1., np.float32),
-            'screen2_y': Space((80, ), 0., 1., np.float32),
-            'queued': Space((2, ), 0., 1., np.float32),
-            'control_group_act': Space((4, ), 0., 1., np.float32),
-            'control_group_id': Space((10, ), 0., 1., np.float32),
-            'select_point_act': Space((4, ), 0., 1., np.float32),
-            'select_add': Space((2, ), 0., 1., np.float32),
-            'select_unit_act': Space((4, ), 0., 1., np.float32),
-            'select_unit_id': Space((500, ), 0., 1., np.float32),
-            'select_worker': Space((4, ), 0., 1., np.float32),
-            'unload_id': Space((500, ), 0., 1., np.float32),
-            'build_queue_id': Space((10, ), 0., 1., np.float32),
+            'func_id': (524, ),
+            'screen_x': (80, ),
+            'screen_y': (80, ),
+            'minimap_x': (80, ),
+            'minimap_y': (80, ),
+            'screen2_x': (80, ),
+            'screen2_y': (80, ),
+            'queued': (2, ),
+            'control_group_act': (4, ),
+            'control_group_id': (10, ),
+            'select_point_act': (4, ),
+            'select_add': (2, ),
+            'select_unit_act': (4, ),
+            'select_unit_id': (500, ),
+            'select_worker': (4, ),
+            'unload_id': (500, ),
+            'build_queue_id': (10, )
         }
         # remove_feat_op = SC2RemoveFeatures({'player_id'})
         cpu_preprocessor = ObsPreprocessor(
-            [FlattenSpace({'control_groups'})], Spaces(obs_entries_by_name)
+            [FlattenSpace({'control_groups'})], Space(obs_entries_by_name)
         )
 
         gpu_preprocessor = SC2RemoveAvailableActions(
             # [CastToFloat(), SC2ScaleChannels(24)],
-            [CastToFloat({'control_groups'}),
-             SC2OneHot()],
+            [CastToFloat({'control_groups'}), SC2OneHot()],
             cpu_preprocessor.observation_space
         )
-        action_space = Spaces(act_entries_by_name)
+        action_space = Space(act_entries_by_name)
         self._func_id_to_headnames = SC2ActionLookup()
         super(AdeptSC2Env, self).__init__(
             action_space, cpu_preprocessor, gpu_preprocessor
@@ -167,7 +163,7 @@ class AdeptSC2Env(EnvModule):
         return [FunctionCall(func_id, args)]
 
 
-class SC2RemoveFeatures(BaseOp):
+class SC2RemoveFeatures(Operation):
     def __init__(
         self, feats_to_remove, feats=SCREEN_FEATURES + MINIMAP_FEATURES
     ):
@@ -181,9 +177,8 @@ class SC2RemoveFeatures(BaseOp):
                 self.idxs.append(i)
                 self.features.append(feat)
 
-    def update_space(self, old_space):
-        new_shape = (len(self.idxs), ) + old_space.shape[1:]
-        return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
+    def update_shape(self, old_shape):
+        return (len(self.idxs), ) + old_shape.shape[1:]
 
     def update_obs(self, obs):
         if obs.dim() == 3:
@@ -199,7 +194,7 @@ class SC2RemoveFeatures(BaseOp):
             )
 
 
-class SC2OneHot(BaseOp):
+class SC2OneHot(Operation):
     def __init__(self, feats=SCREEN_FEATURES + MINIMAP_FEATURES):
         super(SC2OneHot, self).__init__({'net3d'})
 
@@ -229,7 +224,7 @@ class SC2OneHot(BaseOp):
                 scales.append(feat.scale)
         self._scales = 1. / torch.tensor(scales).float()
 
-    def update_space(self, old_space):
+    def update_shape(self, old_shape):
         new_shape = (
             len(self._scalar_idxs) + len(
                 reduce(
@@ -237,8 +232,8 @@ class SC2OneHot(BaseOp):
                     self._ranges_by_feature_idx.values()
                 )
             ),
-        ) + old_space.shape[1:]
-        return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
+        ) + old_shape.shape[1:]
+        return new_shape
 
     def update_obs(self, obs):
         if self._scales.device != obs.device:
@@ -296,7 +291,7 @@ class SC2OneHot(BaseOp):
             )
 
 
-class SC2ScaleChannels(BaseOp):
+class SC2ScaleChannels(Operation):
     def __init__(
         self, nb_channel, feats=SCREEN_FEATURES + MINIMAP_FEATURES, mode='all'
     ):
@@ -315,8 +310,8 @@ class SC2ScaleChannels(BaseOp):
                     scales[i] = feat.scale
         self.scales = 1. / torch.tensor(scales).float()
 
-    def update_space(self, old_space):
-        return old_space
+    def update_shape(self, old_shape):
+        return old_shape
 
     def update_obs(self, obs):
         if self.scales.device != obs.device:
@@ -337,7 +332,7 @@ class SC2RemoveAvailableActions(ObsPreprocessor):
         super().__init__(ops, observation_space)
         ebn = self.observation_space.entries_by_name
         ebn = {k: v for k, v in ebn.items() if k != 'available_actions'}
-        self.observation_space = Spaces(ebn)
+        self.observation_space = Space(ebn)
 
     def __call__(self, obs, device=None):
         result = super().__call__(obs, device)
