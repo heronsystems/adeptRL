@@ -16,7 +16,7 @@ import torch
 from torch.nn import Conv2d, Linear, BatchNorm2d, BatchNorm1d, functional as F
 
 from adept.modules import RMCCell, Identity
-from adept.networks._base import NetworkModule
+from adept.networks.network_module import NetworkModule
 
 
 # TODO

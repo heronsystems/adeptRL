@@ -30,17 +30,24 @@ class BaseNetwork(torch.nn.Module):
     ):
         raise NotImplementedError
 
+    @property
+    @abc.abstractmethod
+    def hidden_state_space(self):
+        """
+        :return: Dict[HiddenStateKey, torch.Tensor (ND)]
+        """
+        raise NotImplementedError
+
     @abc.abstractmethod
     def new_internals(self, device):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def reset_internals
+
+    @abc.abstractmethod
     def forward(self, obsname_to_obs, internals):
         raise NotImplementedError
-
-
-class NetworkModule(BaseNetwork, RequiresArgs, metaclass=abc.ABCMeta):
-    pass
 
 
 class NetworkHead(torch.nn.Module):

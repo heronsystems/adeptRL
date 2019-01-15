@@ -124,7 +124,7 @@ def main(
     )
     network = make_network(
         env.observation_space,
-        agent_registry.lookup_output_shape(train_args.agent, env.action_space),
+        agent_registry.lookup_output_space(train_args.agent, env.action_space),
         train_args
     )
 

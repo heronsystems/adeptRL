@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.networks._base import NetworkModule
+from adept.networks.network_module import NetworkModule
 from adept.networks.net1d.submodule_1d import SubModule1D
 from adept.utils.requires_args import RequiresArgs
 

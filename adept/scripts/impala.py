@@ -190,7 +190,7 @@ def main(
     torch.manual_seed(args.seed)
     network = make_network(
         env.observation_space,
-        agent_registry.lookup_output_shape(args.agent, env.action_space),
+        agent_registry.lookup_output_space(args.agent, env.action_space),
         args
     )
 
