@@ -229,6 +229,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             torch.cat(processed_inputs, dim=1),
             internals
         )
+        nxt_internals.append(nxt_internal)
 
         # Process heads
         head_dim_to_head_out = {}
