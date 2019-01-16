@@ -79,7 +79,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             else:
                 raise ValueError('Invalid dim {}'.format(dim))
             outputs.append((output_name, layer))
-        self.output_key_to_layer = torch.nn.ModuleDict(outputs)
+        self.output_layers_by_key = torch.nn.ModuleDict(outputs)
         self._validate_shapes()
 
     def _validate_shapes(self):
@@ -209,7 +209,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         :param internals: Dict[str, torch.Tensor (ND)]
         :return: Tuple[
             Dict[str, torch.Tensor (1D | 2D | 3D | 4D)],
-            ChainMap[str, torch.Tensor (ND)]
+            Dict[str, torch.Tensor (ND)]
         ]
         """
         # Process input networks
@@ -232,30 +232,35 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         nxt_internals.append(nxt_internal)
 
         # Process heads
-        head_dim_to_head_out = {}
+        head_out_by_dim = {}
         for head_submod in self.heads_by_dim.values():
             head_out, nxt_internal = head_submod.forward(
                 self.body.to_dim(body_out, head_submod.dim),
                 internals
             )
-            head_dim_to_head_out[head_submod.dim] = head_out
+            head_out_by_dim[head_submod.dim] = head_out
             nxt_internals.append(nxt_internal)
 
         # Process final outputs
-        output_key_to_output = {}
+        output_by_key = {}
         for key in self._output_keys:
-            output = self.output_key_to_layer[key](
-                head_dim_to_head_out[len(self.output_space[key])]
+            output = self.output_layers_by_key[key](
+                head_out_by_dim[len(self.output_space[key])]
             )
-            output_key_to_output[key] = output
+            output_by_key[key] = output
 
         merged_internals = {}
         for internal in nxt_internals:
             for k, v in internal.items():
                 merged_internals[k] = v
-        return output_key_to_output, merged_internals
+        return output_by_key, merged_internals
 
     def new_internals(self, device):
+        """
+
+        :param device:
+        :return: Dict[
+        """
         internals = [
             submod.new_internals(device)
             for submod in self.inputs_by_key.values()

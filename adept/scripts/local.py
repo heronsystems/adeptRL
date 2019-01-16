@@ -50,7 +50,7 @@ Script Options:
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
     --net2d <str>           Network to use for 2d input [default: Identity2D]
-    --net3d <str>           Network to use for 3d input [default: Identity3D]
+    --net3d <str>           Network to use for 3d input [default: FourConv]
     --net4d <str>           Network to use for 4d input [default: Identity4D]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
     --head1d <str>          Network to use for 1d output [default: Identity1D]
