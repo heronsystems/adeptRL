@@ -39,15 +39,15 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
 
         # Input Nets
         self._obs_keys = list(obs_key_to_submod.keys())
-        self.obs_key_to_input_submod = torch.nn.ModuleDict(
+        self.inputs_by_key = torch.nn.ModuleDict(
             [(key, net) for key, net in obs_key_to_submod.items()]
         )
 
         # Body
-        self.body_submodule = body_submodule
+        self.body = body_submodule
 
         # Heads
-        self.dim_to_head = torch.nn.ModuleDict(
+        self.heads_by_dim = torch.nn.ModuleDict(
             [(str(submod.dim), submod) for submod in head_submodules]
         )
 
@@ -59,21 +59,21 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             dim = len(shape)
             if dim == 1:
                 layer = torch.nn.Linear(
-                    self.dim_to_head[str(dim)].output_shape()[0], shape[0]
+                    self.heads_by_dim[str(dim)].output_shape()[0], shape[0]
                 )
             elif dim == 2:
                 layer = torch.nn.Conv1d(
-                    self.dim_to_head[str(dim)].output_shape()[0], shape[0],
+                    self.heads_by_dim[str(dim)].output_shape()[0], shape[0],
                     kernel_size=1
                 )
             elif dim == 3:
                 layer = torch.nn.Conv2d(
-                    self.dim_to_head[str(dim)].output_shape()[0], shape[0],
+                    self.heads_by_dim[str(dim)].output_shape()[0], shape[0],
                     kernel_size=1
                 )
             elif dim == 4:
                 layer = torch.nn.Conv3d(
-                    self.dim_to_head[str(dim)].output_shape()[0], shape[0],
+                    self.heads_by_dim[str(dim)].output_shape()[0], shape[0],
                     kernel_size=1
                 )
             else:
@@ -85,8 +85,8 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
     def _validate_shapes(self):
         # heads can't be higher dim than body
         assert all([
-            head.dim <= self.body_submodule.dim
-            for head in self.dim_to_head.values()
+            head.dim <= self.body.dim
+            for head in self.heads_by_dim.values()
         ])
         # output dims must have a corresponding head of the same dim
         pass
@@ -103,7 +103,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         args,
         observation_space,
         output_space,
-        network_registry
+        net_reg
     ):
         """
         Construct a Modular Network from arguments.
@@ -111,7 +111,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         :param args: Dict[ArgName, Any]
         :param observation_space: Dict[ObsKey, Shape]
         :param output_space: Dict[OutputKey, Shape]
-        :param network_registry: NetworkRegistry
+        :param net_reg: NetworkRegistry
         :return: ModularNetwork
         """
         # Dict[ObsKey, SubModule]
@@ -121,24 +121,28 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         for obs_key, shape in observation_space.items():
             dim = len(shape)
             if dim == 1:
-                submod = network_registry.lookup_submodule(
-                    args.net1d).from_args(args, shape, obs_key)
+                submod = net_reg.lookup_submodule(args.net1d).from_args(
+                    args, shape, obs_key
+                )
             elif dim == 2:
-                submod = network_registry.lookup_submodule(
-                    args.net2d).from_args(args, shape, obs_key)
+                submod = net_reg.lookup_submodule(args.net2d).from_args(
+                    args, shape, obs_key
+                )
             elif dim == 3:
-                submod = network_registry.lookup_submodule(
-                    args.net3d).from_args(args, shape, obs_key)
+                submod = net_reg.lookup_submodule(args.net3d).from_args(
+                    args, shape, obs_key
+                )
             elif dim == 4:
-                submod = network_registry.lookup_submodule(
-                    args.net4d).from_args(args, shape, obs_key)
+                submod = net_reg.lookup_submodule(args.net4d).from_args(
+                    args, shape, obs_key
+                )
             else:
                 raise ValueError('Invalid dim: {}'.format(dim))
             obs_key_to_submod[obs_key] = submod
 
         # SubModule
         # initialize body submodule
-        body_cls = network_registry.lookup_submodule(args.netbody)
+        body_cls = net_reg.lookup_submodule(args.netbody)
         nb_body_feature = sum([
             submod.output_shape(dim=body_cls.dim)[0]
             for submod in obs_key_to_submod.values()
@@ -160,17 +164,37 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         for output_key, shape in output_space.items():
             dim = len(shape)
             if dim == 1:
-                submod = network_registry.lookup_submodule(
-                    args.head1d).from_args(args, shape, output_key)
+                submod = net_reg.lookup_submodule(
+                    args.head1d
+                ).from_args(
+                    args,
+                    body_submod.output_shape(dim=dim),
+                    output_key
+                )
             elif dim == 2:
-                submod = network_registry.lookup_submodule(
-                    args.head2d).from_args(args, shape, output_key)
+                submod = net_reg.lookup_submodule(
+                    args.head2d
+                ).from_args(
+                    args,
+                    body_submod.output_shape(dim=dim),
+                    output_key
+                )
             elif dim == 3:
-                submod = network_registry.lookup_submodule(
-                    args.head3d).from_args(args, shape, output_key)
+                submod = net_reg.lookup_submodule(
+                    args.head3d
+                ).from_args(
+                    args,
+                    body_submod.output_shape(dim=dim),
+                    output_key
+                )
             elif dim == 4:
-                submod = network_registry.lookup_submodule(
-                    args.head4d).from_args(args, shape, output_key)
+                submod = net_reg.lookup_submodule(
+                    args.head4d
+                ).from_args(
+                    args,
+                    body_submod.output_shape(dim=dim),
+                    output_key
+                )
             else:
                 raise ValueError('Invalid dim: {}'.format(dim))
             head_submodules.append(submod)
@@ -192,25 +216,25 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         nxt_internals = []
         processed_inputs = []
         for key in self._obs_keys:
-            result, nxt_internal = self.obs_key_to_input_submod[key].forward(
+            result, nxt_internal = self.inputs_by_key[key].forward(
                 obs_key_to_obs[key],
                 internals,
-                dim=self.body_submodule.dim
+                dim=self.body.dim
             )
             processed_inputs.append(result)
             nxt_internals.append(nxt_internal)
 
         # Process body
-        body_out, nxt_internal = self.body_submodule.forward(
+        body_out, nxt_internal = self.body.forward(
             torch.cat(processed_inputs, dim=1),
             internals
         )
 
         # Process heads
         head_dim_to_head_out = {}
-        for head_submod in self.dim_to_head.values():
+        for head_submod in self.heads_by_dim.values():
             head_out, nxt_internal = head_submod.forward(
-                self.body_submodule.to_dim(body_out, head_submod.dim),
+                self.body.to_dim(body_out, head_submod.dim),
                 internals
             )
             head_dim_to_head_out[head_submod.dim] = head_out
@@ -233,12 +257,12 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
     def new_internals(self, device):
         internals = [
             submod.new_internals(device)
-            for submod in self.obs_key_to_input_submod.values()
+            for submod in self.inputs_by_key.values()
         ]
-        internals.append(self.body_submodule.new_internals(device))
+        internals.append(self.body.new_internals(device))
         internals += [
             submod.new_internals(device)
-            for submod in self.dim_to_head.values()
+            for submod in self.heads_by_dim.values()
         ]
 
         merged_internals = {}
