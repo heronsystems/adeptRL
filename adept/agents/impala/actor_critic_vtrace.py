@@ -287,40 +287,16 @@ class ActorCriticVtrace(AgentModule):
         log_probs_of_action = []
         entropies = []
 
-        seq_len, batch_size = terminal_masks.shape
-
         # if network is modular,
         # trunk can be sped up by combining batch & seq dim
         def get_results_generator():
-            if isinstance(self.network, ModularNetwork):
-                pathway_dict = self.gpu_preprocessor(obs, self.device)
-                # flatten obs
-                flat_obs = {
-                    k: v.view(-1, *v.shape[2:])
-                    for k, v in pathway_dict.items()
-                }
-                embeddings = self.network.trunk.forward(flat_obs)
-                # add back in seq dim
-                seq_embeddings = embeddings.view(
-                    seq_len, batch_size, embeddings.shape[-1]
-                )
+            obs_on_device = self.seq_obs_to_pathways(obs, self.device)
 
-                def get_results(seq_ind, internals):
-                    embedding = seq_embeddings[seq_ind]
-                    pre_result, internals = self.network.body.forward(
-                        embedding, internals
-                    )
-                    return self.network.head.forward(pre_result, internals)
+            def get_results(seq_ind, internals):
+                obs_of_seq_ind = obs_on_device[seq_ind]
+                return self.network(obs_of_seq_ind, internals)
 
-                return get_results
-            else:
-                obs_on_device = self.seq_obs_to_pathways(obs, self.device)
-
-                def get_results(seq_ind, internals):
-                    obs_of_seq_ind = obs_on_device[seq_ind]
-                    return self.network(obs_of_seq_ind, internals)
-
-                return get_results
+            return get_results
 
         result_fn = get_results_generator()
         for seq_ind in range(terminal_masks.shape[0]):
