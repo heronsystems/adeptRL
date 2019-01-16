@@ -46,16 +46,21 @@ Script Options:
     --min-dynamic-batch <int>  Limit min rollouts in batch [default: 0]
     --info-interval <int>      Write INFO every <int> training frames [default: 100]
     --use-local-buffers        Workers use local buffers (ie. mean/stddev)
+    --load-network <path>      Path to network file
+    --load-optim <path>        Path to optimizer file
+    -y, --use-defaults         Skip prompts, use defaults
 
 Network Options:
-    --net1d <str>              Network to use for 1d input [default: Identity]
-    --net2d <str>              Network to use for 2d input [default: Identity]
-    --net3d <str>              Network to use for 3d input [default: FourConv]
-    --net4d <str>              Network to use for 4d input [default: Identity]
-    --netjunc <str>            Network junction to merge inputs [default: TODO]
-    --netbody <str>            Network to use on merged inputs [default: LSTM]
-    --normalize <bool>         TEMPORARY [default: True]
-    --load-network <path>      Path to network file
+    --net1d <str>           Network to use for 1d input [default: Identity1D]
+    --net2d <str>           Network to use for 2d input [default: Identity2D]
+    --net3d <str>           Network to use for 3d input [default: FourConv]
+    --net4d <str>           Network to use for 4d input [default: Identity4D]
+    --netbody <str>         Network to use on merged inputs [default: LSTM]
+    --head1d <str>          Network to use for 1d output [default: Identity1D]
+    --head2d <str>          Network to use for 2d output [default: Identity2D]
+    --head3d <str>          Network to use for 3d output [default: Identity3D]
+    --head4d <str>          Network to use for 4d output [default: Identity4D]
+    --custom-network        Name of custom network class
 
 Optimizer Options:
     --lr <float>               Learning rate [default: 0.0007]
@@ -81,13 +86,15 @@ from adept.agents.agent_registry import AgentRegistry
 from adept.containers import ImpalaHost, ImpalaWorker
 from adept.environments import SubProcEnvManager, EnvMetaData
 from adept.environments.env_registry import EnvModuleRegistry
+from adept.networks.modular_network import ModularNetwork
+from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args,
     write_args_file, SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    make_network, count_parameters,
-    parse_none, parse_bool_str,
+    count_parameters,
+    parse_none,
     parse_list_str)
 from adept.utils.util import DotDict
 
@@ -100,6 +107,7 @@ comm = mpi.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
+
 def parse_args():
     from docopt import docopt
     args = docopt(__doc__)
@@ -109,7 +117,6 @@ def parse_args():
     args = DotDict(args)
 
     # Network Options
-    args.normalize = parse_bool_str(args.normalize)
 
     # Container Options
     args.gpu_ids = parse_list_str(args.gpu_ids, int)
@@ -140,15 +147,35 @@ def parse_args():
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvModuleRegistry()
+    env_registry=EnvModuleRegistry(),
+    net_registry=NetworkRegistry()
 ):
+    """
+    Run local training.
+
+    :param args: Dict[str, Any]
+    :param agent_registry: AgentRegistry
+    :param env_registry: EnvModuleRegistry
+    :param net_registry: NetworkRegistry
+    :return:
+    """
     # host needs to broadcast timestamp so all procs create the same log dir
     if rank == 0:
-        args = DotDict(args)
-        agent_args = agent_registry.lookup_agent(args.agent).prompt()
-        env_args = env_registry.lookup_env_class(args.env).prompt()
-        args = {**args, **agent_args, **env_args}
-        args = DotDict(args)
+        if args.use_defaults:
+            agent_args = agent_registry.lookup_agent(args.agent).args
+            env_args = env_registry.lookup_env_class(args.env).args
+            if args.custom_network:
+                net_args = net_registry.lookup_custom_net(args.net).args
+            else:
+                net_args = net_registry.lookup_modular_args(args)
+        else:
+            agent_args = agent_registry.lookup_agent(args.agent).prompt()
+            env_args = env_registry.lookup_env_class(args.env).prompt()
+            if args.custom_network:
+                net_args = net_registry.lookup_custom_net(args.net).prompt()
+            else:
+                net_args = net_registry.prompt_modular_args(args)
+        args = DotDict({**args, **agent_args, **env_args, **net_args})
 
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         log_id = make_log_id(
@@ -188,11 +215,23 @@ def main(
 
     # construct network
     torch.manual_seed(args.seed)
-    network = make_network(
-        env.observation_space,
-        agent_registry.lookup_output_space(args.agent, env.action_space),
-        args
+    output_space = agent_registry.lookup_output_space(
+        args.agent, env.action_space
     )
+    if args.custom_network:
+        network = net_registry.lookup_custom_net(args.custom_network).from_args(
+            args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
+    else:
+        network = ModularNetwork.from_args(
+            args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
 
     # possibly load network
     initial_step_count = 0

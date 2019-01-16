@@ -196,19 +196,21 @@ def main(
     output_space = agent_registry.lookup_output_space(
         args.agent, env.action_space
     )
-    network =\
-        net_registry.lookup_custom_net(args.custom_network).from_args(
-            args,
-            env.observation_space,
-            output_space,
-            net_registry
-        ) if args.custom_network \
-        else ModularNetwork.from_args(
+    if args.custom_network:
+        network = net_registry.lookup_custom_net(args.custom_network).from_args(
             args,
             env.observation_space,
             output_space,
             net_registry
         )
+    else:
+        network = ModularNetwork.from_args(
+            args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
+
     # possibly load network
     if args.load_network:
         network.load_state_dict(

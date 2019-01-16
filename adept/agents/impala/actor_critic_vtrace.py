@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py for reference
 from collections import OrderedDict
 import torch
 from torch.nn import functional as F
@@ -25,6 +24,10 @@ from adept.agents.agent_module import AgentModule
 
 
 class ActorCriticVtrace(AgentModule):
+    """
+    Reference implementation:
+    Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py
+    """
     args = {
         'nb_rollout': 20,
         'discount': 0.99,
@@ -112,10 +115,7 @@ class ActorCriticVtrace(AgentModule):
 
     @staticmethod
     def output_space(action_space):
-        ebn = action_space.entries_by_name
-        actor_outputs = {name: entry.shape for name, entry in ebn.items()}
-        head_dict = {'critic': (1, ), **actor_outputs}
-        return head_dict
+        return {'critic': (1, ), **action_space}
 
     def seq_obs_to_pathways(self, obs, device):
         """
