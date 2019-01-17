@@ -16,12 +16,14 @@ from copy import deepcopy
 
 
 class ObsPreprocessor:
-    def __init__(self, ops, observation_space):
+    def __init__(self, ops, observation_space, observation_dtypes=None):
         """
         :param ops: List[Operation]
         :param observation_space: Dict[ObsKey, Shape]
+        :param observation_dtypes: Dict[ObsKey, dtype_str]
         """
         updated_obs_space = deepcopy(observation_space)
+        updated_obs_dtypes = deepcopy(observation_dtypes)
 
         rank_to_names = {1: [], 2: [], 3: [], 4: []}
         for name, shape in updated_obs_space.items():
@@ -34,9 +36,14 @@ class ObsPreprocessor:
                         updated_obs_space[name] = op.update_shape(
                             updated_obs_space[name]
                         )
+                        if updated_obs_dtypes:
+                            updated_obs_dtypes[name] = op.update_dtype(
+                                updated_obs_dtypes[name]
+                            )
 
         self.ops = ops
         self.observation_space = updated_obs_space
+        self.observation_dtypes = updated_obs_dtypes
         self.rank_to_names = rank_to_names
 
     def __call__(self, obs, device=None):

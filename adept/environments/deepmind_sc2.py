@@ -38,18 +38,23 @@ class AdeptSC2Env(EnvModule):
     def __init__(self, env):
         self.sc2_env = env
         self._max_num_actions = len(FUNCTIONS)
-        obs_entries_by_name = {
+        observation_space = {
             # 'single_select': (1, 7),
             # 'multi_select': ,
             # 'build_queue': ,
             # 'cargo': ,
             # 'cargo_slots_available': (1,),
-            'net3d': (24, 84, 84),
+            'screen': (24, 84, 84),
             # 'player': (11,),
             'control_groups': (10, 2),
             'available_actions': (self._max_num_actions, )
         }
-        act_entries_by_name = {
+        observation_dtypes = {
+            'screen': 'int16',
+            'control_groups': 'int32',
+            'available_actions': 'int32'
+        }
+        action_space = {
             'func_id': (524, ),
             'screen_x': (80, ),
             'screen_y': (80, ),
@@ -70,15 +75,17 @@ class AdeptSC2Env(EnvModule):
         }
         # remove_feat_op = SC2RemoveFeatures({'player_id'})
         cpu_preprocessor = ObsPreprocessor(
-            [FlattenSpace({'control_groups'})], Space(obs_entries_by_name)
+            [FlattenSpace({'control_groups'})],
+            observation_space,
+            observation_dtypes
         )
 
         gpu_preprocessor = SC2RemoveAvailableActions(
-            # [CastToFloat(), SC2ScaleChannels(24)],
-            [CastToFloat({'control_groups'}), SC2OneHot()],
-            cpu_preprocessor.observation_space
+            [CastToFloat(), SC2ScaleChannels(24)],
+            # [CastToFloat({'control_groups'}), SC2OneHot()],
+            cpu_preprocessor.observation_space,
+            cpu_preprocessor.observation_dtypes
         )
-        action_space = Space(act_entries_by_name)
         self._func_id_to_headnames = SC2ActionLookup()
         super(AdeptSC2Env, self).__init__(
             action_space, cpu_preprocessor, gpu_preprocessor
@@ -135,7 +142,7 @@ class AdeptSC2Env(EnvModule):
 
     def _wrap_observation(self, observation):
         obs = OrderedDict()
-        obs['net3d'] = torch.cat(
+        obs['screen'] = torch.cat(
             [
                 torch.from_numpy(observation['feature_screen']),
                 torch.from_numpy(observation['feature_minimap'])
@@ -167,7 +174,7 @@ class SC2RemoveFeatures(Operation):
     def __init__(
         self, feats_to_remove, feats=SCREEN_FEATURES + MINIMAP_FEATURES
     ):
-        super(SC2RemoveFeatures, self).__init__({'net3d'})
+        super(SC2RemoveFeatures, self).__init__({'screen'})
 
         self.idxs = []
         self.features = []
@@ -178,7 +185,10 @@ class SC2RemoveFeatures(Operation):
                 self.features.append(feat)
 
     def update_shape(self, old_shape):
-        return (len(self.idxs), ) + old_shape.shape[1:]
+        return (len(self.idxs), ) + old_shape[1:]
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         if obs.dim() == 3:
@@ -196,7 +206,7 @@ class SC2RemoveFeatures(Operation):
 
 class SC2OneHot(Operation):
     def __init__(self, feats=SCREEN_FEATURES + MINIMAP_FEATURES):
-        super(SC2OneHot, self).__init__({'net3d'})
+        super(SC2OneHot, self).__init__({'screen'})
 
         self.features = []
         self._ranges_by_feature_idx = {}
@@ -224,6 +234,9 @@ class SC2OneHot(Operation):
                 scales.append(feat.scale)
         self._scales = 1. / torch.tensor(scales).float()
 
+    def update_dtype(self, old_dtype):
+        return 'float32'
+
     def update_shape(self, old_shape):
         new_shape = (
             len(self._scalar_idxs) + len(
@@ -232,7 +245,7 @@ class SC2OneHot(Operation):
                     self._ranges_by_feature_idx.values()
                 )
             ),
-        ) + old_shape.shape[1:]
+        ) + old_shape[1:]
         return new_shape
 
     def update_obs(self, obs):
@@ -300,7 +313,7 @@ class SC2ScaleChannels(Operation):
         :param feats:
         :param mode: 'all' or 'scalar' to decide which type of features to scale
         """
-        super(SC2ScaleChannels, self).__init__({'net3d'})
+        super(SC2ScaleChannels, self).__init__({'screen'})
         scales = torch.ones(nb_channel)
         for i, feat in enumerate(feats):
             if mode == 'all':
@@ -308,12 +321,17 @@ class SC2ScaleChannels(Operation):
             elif mode == 'scalar':
                 if feat.type == features.FeatureType.SCALAR:
                     scales[i] = feat.scale
-        self.scales = 1. / torch.tensor(scales).float()
+        self.scales = 1. / scales.float()
 
     def update_shape(self, old_shape):
         return old_shape
 
+    def update_dtype(self, old_dtype):
+        return 'float32'
+
     def update_obs(self, obs):
+        obs = obs.float()
+
         if self.scales.device != obs.device:
             self.scales = self.scales.to(obs.device)
 
@@ -328,11 +346,14 @@ class SC2ScaleChannels(Operation):
 
 
 class SC2RemoveAvailableActions(ObsPreprocessor):
-    def __init__(self, ops, observation_space):
-        super().__init__(ops, observation_space)
-        ebn = self.observation_space.entries_by_name
-        ebn = {k: v for k, v in ebn.items() if k != 'available_actions'}
-        self.observation_space = Space(ebn)
+    def __init__(self, ops, observation_space, observation_dtypes=None):
+        super().__init__(ops, observation_space, observation_dtypes)
+        filtered_space = {
+            k: v
+            for k, v in observation_space.items()
+            if k != 'available_actions'
+        }
+        self.observation_space = filtered_space
 
     def __call__(self, obs, device=None):
         result = super().__call__(obs, device)

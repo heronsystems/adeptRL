@@ -17,7 +17,6 @@ from collections import deque
 from functools import reduce
 
 import cv2
-import numpy as np
 import torch
 from torch.nn.functional import upsample
 
@@ -46,6 +45,9 @@ class Operation(abc.ABC):
     def update_shape(self, old_shape):
         raise NotImplementedError
 
+    def update_dtype(self, old_dtype):
+        raise NotImplementedError
+
     @abc.abstractmethod
     def update_obs(self, obs):
         raise NotImplementedError
@@ -58,6 +60,9 @@ class CastToFloat(Operation):
     def update_shape(self, old_shape):
         return old_shape
 
+    def update_dtype(self, old_dtype):
+        return 'float32'
+
     def update_obs(self, obs):
         return obs.float()
 
@@ -68,6 +73,9 @@ class GrayScaleAndMoveChannel(Operation):
 
     def update_shape(self, old_shape):
         return (1, ) + old_shape[:-1]
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         if obs.dim() == 3:
@@ -89,6 +97,9 @@ class ResizeTo84x84(Operation):
 
     def update_shape(self, old_shape):
         return (1, 84, 84)
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         if obs.dim() == 3:
@@ -112,7 +123,11 @@ class Divide255(Operation):
     def update_shape(self, old_shape):
         return old_shape
 
+    def update_dtype(self, old_dtype):
+        return 'float32'
+
     def update_obs(self, obs):
+        obs = obs.float()
         obs *= (1. / 255.)
         return obs
 
@@ -125,6 +140,9 @@ class FrameStack(Operation):
 
     def update_shape(self, old_shape):
         return (old_shape.shape[0] * self.nb_frame,) + old_shape.shape[1:]
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         while len(self.frames) < self.nb_frame:
@@ -147,7 +165,10 @@ class FlattenSpace(Operation):
         super(FlattenSpace, self).__init__(filter_names)
 
     def update_shape(self, old_shape):
-        return (reduce(lambda prev, cur: prev * cur, old_shape.shape), )
+        return (reduce(lambda prev, cur: prev * cur, old_shape), )
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         return obs.view(-1)
@@ -159,6 +180,9 @@ class FromNumpy(Operation):
 
     def update_shape(self, old_shape):
         return old_shape
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         return torch.from_numpy(obs)
