@@ -193,7 +193,6 @@ def main(
             )
         )
         logger.info('Reloaded network from {}'.format(args.load_network))
-    logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
 
     # construct agent
     device = torch.device(
@@ -227,6 +226,7 @@ def main(
             logger.info("Reloaded optimizer from {}".format(args.load_optim))
         return opt
 
+    logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
     container = Local(
         agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
         summary_writer, args.summary_freq, saver

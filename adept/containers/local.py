@@ -78,7 +78,9 @@ class Local(
         return 'reward/train'
 
     def run(self, max_steps=float('inf'), initial_count=0):
-        self.local_step_count = initial_count
+        self.set_local_step_count(initial_count)
+        self.set_next_save(initial_count)
+
         next_obs = self.environment.reset()
         self.start_time = time()
         while self.local_step_count < max_steps:
@@ -97,7 +99,7 @@ class Local(
                 initial_count
             )
             self.write_reward_summaries(terminal_rewards, self.local_step_count)
-            self.possible_save_model(self.local_step_count)
+            self.save_model_if_epoch(self.local_step_count)
 
             # Learn
             if self.exp_cache.is_ready():
