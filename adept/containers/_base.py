@@ -76,6 +76,9 @@ class CountsRewards(abc.ABC):
                 ep_reward.zero_()
         return terminal_rewards, terminal_infos
 
+    def set_local_step_count(self, step_count):
+        self.local_step_count = step_count
+
 
 class LogsRewards(CountsRewards, metaclass=abc.ABCMeta):
     @property
@@ -174,8 +177,15 @@ class WritesSummaries(abc.ABC):
 
 
 class SavesModels(abc.ABC):
-    def __init__(self):
-        self.__next_save_step = 0
+    _next_save = 0
+
+    @property
+    def next_save(self):
+        return self._next_save
+
+    @next_save.setter
+    def next_save(self, step_count):
+        self._next_save = step_count
 
     @property
     @abc.abstractmethod
@@ -197,16 +207,21 @@ class SavesModels(abc.ABC):
     def saver(self):
         raise NotImplementedError
 
-    def possible_save_model(self, step_count):
+    def save_model_if_epoch(self, step_count):
         """
         :param step_count: current step count to check if epoch has been crossed
         :return:
         """
-        if step_count >= self.__next_save_step:
+        if step_count >= self.next_save:
             self.saver.save_state_dicts(
                 self.network, int(step_count), optimizer=self.optimizer
             )
-            self.__next_save_step += self.epoch_len
+            self.next_save += self.epoch_len
+
+    def set_next_save(self, initial_count):
+        if initial_count > 0:
+            while self.next_save <= initial_count:
+                self.next_save += self.epoch_len
 
 
 class HasAgent(abc.ABC):

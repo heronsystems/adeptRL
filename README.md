@@ -1,4 +1,5 @@
 [![Gitter chat](https://badges.gitter.im/adeptRL.png)](https://gitter.im/adeptRL/Lobby)
+[![Build Status](http://ci.heronsystems.com:12345/buildStatus/icon?job=adeptRL/master)](http://ci.heronsystems.com:12345/job/adeptRL/job/master/)
 # adept
 
 adept is a library designed to accelerate reinforcement learning research by providing:
