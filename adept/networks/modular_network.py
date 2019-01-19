@@ -17,12 +17,15 @@ import abc
 import torch
 
 from adept.networks._base import BaseNetwork
+from collections import defaultdict
+from functools import reduce
 
 
 class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
     """
     A neural network comprised of SubModules. Tries to be smart about
-    converting dimensionality.
+    converting dimensionality. Does not need or build submodules for unused
+    source nets or heads.
     """
 
     def __init__(
@@ -38,7 +41,6 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         :param head_submodules: List[SubModule]
         :param output_space: Dict[OutputKey, Shape]
         """
-        # modular network doesn't have networks for unused inputs
         super().__init__()
 
         # Source Nets
@@ -55,10 +57,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         )
 
         # Outputs
-        self.output_nets = self._build_out_layers(
-            output_space,
-            self.heads
-        )
+        self.output_layers = self._build_out_layers(output_space, self.heads)
 
         self._obs_keys = list(source_nets.keys())
         self._output_keys = list(output_space.keys())
@@ -68,7 +67,11 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
     @staticmethod
     def _build_out_layers(output_space, heads):
         """
-        Build output_layers_by_key.
+        Build output_layers to match the desired output space.
+        * For 1D outputs, converts uses a Linear layer
+        * For 2D outputs, uses a Conv1D, kernel size 1
+        * For 3D outputs, uses a 1x1 Conv
+        * For 4D outputs, uses a 1x1x1 Conv
 
         :param output_space: Dict[OutputKey, Shape]
         :param heads: Dict[DimStr, SubModule]
@@ -99,17 +102,47 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             return torch.nn.ModuleDict(outputs)
 
     def _validate_shapes(self):
+        """
+        Ensures SubModule graph is valid.
+        :return:
+        """
         # heads can't be higher dim than body
         assert all([
             head.dim <= self.body.dim
             for head in self.heads.values()
         ])
+
         # output dims must have a corresponding head of the same dim
+        head_dims = set([submod.dim for submod in self.heads.values()])
+        assert all([
+            len(shape) in head_dims
+            for shape in self.output_layers.values()
+        ])
+
+        # non feature dims of source nets match non feature dim of body
+        # Doesn't matter if converting to 1D
+        if self.body.dim != 1:
+            for submod in self.source_nets.values():
+                if submod.dim >= self.body.dim:
+                    shape = submod.output_shape(dim=self.body.dim)
+                    assert shape[1:] == self.body.input_shape[1:], \
+                        'Source-Body Dimension conflict: {}-{}'.format(
+                            shape,
+                            self.body.input_shape
+                        )
+            # non feature dims of body out must match non feature dims of head
+            for submod in self.heads.values():
+                if self.body.dim >= submod.dim:
+                    shape = self.body.output_shape(dim=submod.dim)
+                    assert shape[1:] == submod.input_shape[1:], \
+                        'Body-Head Conflict: {}-{}'.format(
+                            shape,
+                            submod.input_shape
+                        )
+
+        # non-feature dimensions of heads must non-feature dims of output shapes
         pass
-        # non feature dims of input submodules must be same
-        pass
-        # non-feature dimensions of heads must match desired output_shape
-        pass
+
         # there must exist an input submodule such that input_dim == body_dim
         pass
 
@@ -260,7 +293,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         # Process final outputs
         output_by_key = {}
         for key in self._output_keys:
-            output = self.output_nets[key](
+            output = self.output_layers[key](
                 head_out_by_dim[len(self._output_space[key])]
             )
             output_by_key[key] = output
