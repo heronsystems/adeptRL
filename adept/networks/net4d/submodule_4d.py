@@ -59,7 +59,7 @@ class SubModule4D(SubModule, metaclass=abc.ABCMeta):
         :return: torch.Tensor (Batch + 3D)
         """
         n, f, d, h, w = submodule_output.size()
-        return submodule_output.view()
+        return submodule_output.view(n, f * d, h, w)
 
     def _to_4d(self, submodule_output):
         """

@@ -56,6 +56,12 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             [(str(submod.dim), submod) for submod in head_submodules]
         )
 
+        # output dims must have a corresponding head of the same dim
+        head_dims = set([submod.dim for submod in self.heads.values()])
+        for shape in output_space.values():
+            assert len(shape) in head_dims, \
+                'No head for output shape: {}'.format(shape)
+
         # Outputs
         self.output_layers = self._build_out_layers(output_space, self.heads)
 
@@ -107,44 +113,46 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         :return:
         """
         # heads can't be higher dim than body
-        assert all([
-            head.dim <= self.body.dim
-            for head in self.heads.values()
-        ])
-
-        # output dims must have a corresponding head of the same dim
-        head_dims = set([submod.dim for submod in self.heads.values()])
-        assert all([
-            len(shape) in head_dims
-            for shape in self.output_layers.values()
-        ])
+        for head in self.heads.values():
+            assert head.dim <= self.body.dim, \
+                'Head dimensionality cannot be higher than ' \
+                'body dimensionality: {} > {}'.format(head.dim, self.body.dim)
 
         # non feature dims of source nets match non feature dim of body
         # Doesn't matter if converting to 1D
-        if self.body.dim != 1:
+        if self.body.dim > 1:
             for submod in self.source_nets.values():
-                if submod.dim >= self.body.dim:
+                if submod.dim > 1:
                     shape = submod.output_shape(dim=self.body.dim)
-                    assert shape[1:] == self.body.input_shape[1:], \
-                        'Source-Body Dimension conflict: {}-{}'.format(
-                            shape,
-                            self.body.input_shape
-                        )
+                    for a, b in zip(shape[1:], self.body.input_shape[1:]):
+                        assert a == b or a == 1 or b == 1, \
+                            'Source-Body conflict: {} {}'.format(
+                                shape,
+                                self.body.input_shape
+                            )
             # non feature dims of body out must match non feature dims of head
             for submod in self.heads.values():
-                if self.body.dim >= submod.dim:
+                if submod.dim > 1:
                     shape = self.body.output_shape(dim=submod.dim)
-                    assert shape[1:] == submod.input_shape[1:], \
-                        'Body-Head Conflict: {}-{}'.format(
-                            shape,
-                            submod.input_shape
+                    for a, b in zip(shape[1:], submod.input_shape[1:]):
+                        assert a == b or a == 1 or b == 1, \
+                            'Body-Head conflict: {} {}'.format(
+                                shape,
+                                submod.input_shape
+                            )
+
+        # non-feature dims of heads == non-feature dims of output shapes
+        for shape in self._output_space.values():
+            dim = len(shape)
+            if dim > 1:
+                submod = self.heads[str(dim)]
+                head_shp = submod.output_shape()
+                for a, b in zip(shape[1:], head_shp[1:]):
+                    assert a == b, \
+                        'Head-Output conflict: {}-{}'.format(
+                            head_shp,
+                            shape
                         )
-
-        # non-feature dimensions of heads must non-feature dims of output shapes
-        pass
-
-        # there must exist an input submodule such that input_dim == body_dim
-        pass
 
     @classmethod
     def from_args(
@@ -274,6 +282,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             nxt_internals.append(nxt_internal)
 
         # Process body
+        # TODO expand
         body_out, nxt_internal = self.body.forward(
             torch.cat(processed_inputs, dim=1),
             internals
