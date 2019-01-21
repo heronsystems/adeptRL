@@ -9,10 +9,10 @@ from adept.networks.net4d.identity_4d import Identity4D
 
 class TestModularNetwork(unittest.TestCase):
     # Example of valid structure
-    stub_1d = Identity1D((32,), 'stub_1d')
-    stub_2d = Identity2D((32, 32 * 32), 'stub_2d')
-    stub_3d = Identity3D((32, 32, 32), 'stub_3d')
-    stub_4d = Identity4D((32, 32, 32, 32), 'stub_4d')
+    stub_1d = Identity1D((16,), 'stub_1d')
+    stub_2d = Identity2D((16, 32 * 32), 'stub_2d')
+    stub_3d = Identity3D((16, 32, 32), 'stub_3d')
+    stub_4d = Identity4D((16, 32, 32, 32), 'stub_4d')
 
     source_nets = {
         'source_1d': stub_1d,
@@ -23,9 +23,9 @@ class TestModularNetwork(unittest.TestCase):
     body = stub_3d
     heads = [stub_1d, stub_2d, stub_3d]
     output_space = {
-        'output_1d': (32,),
-        'output_2d': (32, 32 * 32),
-        'output_3d': (32, 32, 32),
+        'output_1d': (16,),
+        'output_2d': (16, 32 * 32),
+        'output_3d': (16, 32, 32),
     }
 
     def test_heads_not_higher_dim_than_body(self):
@@ -93,16 +93,16 @@ class TestModularNetwork(unittest.TestCase):
                 self.output_space
             )
         except:
-            self.fail('Unexpectedly raised exception')
+            self.fail('Unexpected exception')
 
     def test_forward(self):
         import torch
-        BATCH = 32
+        BATCH = 8
         obs = {
-            'source_1d': torch.zeros((BATCH, 32,)),
-            'source_2d': torch.zeros((BATCH, 32, 32 * 32)),
-            'source_3d': torch.zeros((BATCH, 32, 32, 32)),
-            'source_4d': torch.zeros((BATCH, 32, 32, 32, 32))
+            'source_1d': torch.zeros((BATCH, 16,)),
+            'source_2d': torch.zeros((BATCH, 16, 32 * 32)),
+            'source_3d': torch.zeros((BATCH, 16, 32, 32)),
+            'source_4d': torch.zeros((BATCH, 16, 32, 32, 32))
         }
         # try:
         net = ModularNetwork(

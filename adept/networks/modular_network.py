@@ -282,7 +282,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             nxt_internals.append(nxt_internal)
 
         # Process body
-        # TODO expand
+        processed_inputs = self._expand_dims(processed_inputs)
         body_out, nxt_internal = self.body.forward(
             torch.cat(processed_inputs, dim=1),
             internals
@@ -312,6 +312,31 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             for k, v in internal.items():
                 merged_internals[k] = v
         return output_by_key, merged_internals
+
+    @staticmethod
+    def _expand_dims(inputs):
+        """
+        Expands dimensions when input dimension is 1.
+
+        :param inputs: List[torch.Tensor]
+        :return: List[torch.Tensor]
+        """
+        if len(inputs[0].shape) <= 2:
+            return inputs
+
+        tmp = [input.shape for input in inputs]
+
+        target_shape = max([inpt.shape[2:] for inpt in inputs])
+        processed_inputs = []
+        for inpt in inputs:
+            if inpt.shape[2:] < target_shape:
+                processed_inputs.append(inpt.expand(-1, -1, *target_shape))
+            else:
+                processed_inputs.append(inpt)
+
+        expanded = [input.shape for input in processed_inputs]
+
+        return processed_inputs
 
     def new_internals(self, device):
         """
