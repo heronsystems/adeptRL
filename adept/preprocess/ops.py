@@ -17,16 +17,14 @@ from collections import deque
 from functools import reduce
 
 import cv2
-import numpy as np
 import torch
 from torch.nn.functional import upsample
-
-from adept.environments._spaces import Space
+import numpy as np
 
 cv2.ocl.setUseOpenCL(False)
 
 
-class BaseOp(abc.ABC):
+class Operation(abc.ABC):
     def __init__(self, filter_names=frozenset(), filter_ranks=frozenset()):
         if filter_names:
             self.filters = frozenset(filter_names)
@@ -45,7 +43,10 @@ class BaseOp(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def update_space(self, old_space):
+    def update_shape(self, old_shape):
+        raise NotImplementedError
+
+    def update_dtype(self, old_dtype):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -53,26 +54,29 @@ class BaseOp(abc.ABC):
         raise NotImplementedError
 
 
-class CastToFloat(BaseOp):
+class CastToFloat(Operation):
     def __init__(self, filter_names=set()):
         super(CastToFloat, self).__init__(filter_names)
 
-    def update_space(self, old_space):
-        return Space(old_space.shape, old_space.low, old_space.high, np.float32)
+    def update_shape(self, old_shape):
+        return old_shape
+
+    def update_dtype(self, old_dtype):
+        return torch.float32
 
     def update_obs(self, obs):
         return obs.float()
 
 
-class GrayScaleAndMoveChannel(BaseOp):
+class GrayScaleAndMoveChannel(Operation):
     def __init__(self, filter_names=set()):
         super(GrayScaleAndMoveChannel, self).__init__(filter_names, {3})
 
-    def update_space(self, old_space):
-        return Space(
-            (1, ) + old_space.shape[:-1], old_space.low, old_space.high,
-            old_space.dtype
-        )
+    def update_shape(self, old_shape):
+        return (1, ) + old_shape[:-1]
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         if obs.dim() == 3:
@@ -88,14 +92,15 @@ class GrayScaleAndMoveChannel(BaseOp):
             )
 
 
-class ResizeTo84x84(BaseOp):
+class ResizeTo84x84(Operation):
     def __init__(self, filter_names=set()):
         super().__init__(filter_names, {3})
 
-    def update_space(self, old_space):
-        return Space(
-            (1, 84, 84), old_space.low, old_space.high, old_space.dtype
-        )
+    def update_shape(self, old_shape):
+        return (1, 84, 84)
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         if obs.dim() == 3:
@@ -112,27 +117,33 @@ class ResizeTo84x84(BaseOp):
             )
 
 
-class Divide255(BaseOp):
+class Divide255(Operation):
     def __init__(self, filter_names=set()):
         super().__init__(filter_names, {3})
 
-    def update_space(self, old_space):
-        return Space(old_space.shape, 0., 1., np.float32)
+    def update_shape(self, old_shape):
+        return old_shape
+
+    def update_dtype(self, old_dtype):
+        return torch.float32
 
     def update_obs(self, obs):
+        obs = obs.float()
         obs *= (1. / 255.)
         return obs
 
 
-class FrameStack(BaseOp):
+class FrameStack(Operation):
     def __init__(self, nb_frame, filter_names=set()):
         super(FrameStack, self).__init__(filter_names, {3})
         self.nb_frame = nb_frame
         self.frames = deque([], maxlen=nb_frame)
 
-    def update_space(self, old_space):
-        new_shape = (old_space.shape[0] * self.nb_frame, ) + old_space.shape[1:]
-        return Space(new_shape, old_space.low, old_space.high, old_space.dtype)
+    def update_shape(self, old_shape):
+        return (old_shape.shape[0] * self.nb_frame,) + old_shape.shape[1:]
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         while len(self.frames) < self.nb_frame:
@@ -150,28 +161,46 @@ class FrameStack(BaseOp):
         self.frames = deque([], maxlen=self.nb_frame)
 
 
-class FlattenSpace(BaseOp):
+class FlattenSpace(Operation):
     def __init__(self, filter_names=set()):
         super(FlattenSpace, self).__init__(filter_names)
 
-    def update_space(self, old_space):
-        return Space(
-            (reduce(lambda prev, cur: prev * cur, old_space.shape), ),
-            old_space.low, old_space.high, old_space.dtype
-        )
+    def update_shape(self, old_shape):
+        return (reduce(lambda prev, cur: prev * cur, old_shape), )
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
 
     def update_obs(self, obs):
         return obs.view(-1)
 
 
-class FromNumpy(BaseOp):
+class FromNumpy(Operation):
     def __init__(self, filter_names=set()):
         super().__init__(filter_names)
 
-    def update_space(self, old_space):
-        return Space(
-            old_space.shape, old_space.low, old_space.high, old_space.dtype
-        )
+    def update_shape(self, old_shape):
+        return old_shape
+
+    def update_dtype(self, old_dtype):
+        if old_dtype == np.float32:
+            return torch.float32
+        elif old_dtype == np.float64:
+            return torch.float64
+        elif old_dtype == np.float16:
+            return torch.float16
+        elif old_dtype == np.uint8:
+            return torch.uint8
+        elif old_dtype == np.int8:
+            return torch.int8
+        elif old_dtype == np.int16:
+            return torch.int16
+        elif old_dtype == np.int32:
+            return torch.int32
+        elif old_dtype == np.int16:
+            return torch.int16
+        else:
+            raise ValueError('Unsupported dtype {}'.format(old_dtype))
 
     def update_obs(self, obs):
         return torch.from_numpy(obs)

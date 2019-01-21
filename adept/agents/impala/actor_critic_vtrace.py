@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py for reference
 from collections import OrderedDict
 import torch
 from torch.nn import functional as F
@@ -20,11 +19,14 @@ from torch.nn import functional as F
 from adept.environments.env_registry import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
-from adept.networks._base import ModularNetwork
 from adept.agents.agent_module import AgentModule
 
 
 class ActorCriticVtrace(AgentModule):
+    """
+    Reference implementation:
+    Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py
+    """
     args = {
         'nb_rollout': 20,
         'discount': 0.99,
@@ -65,7 +67,7 @@ class ActorCriticVtrace(AgentModule):
         )
         self._device = device
         self.action_space = action_space
-        self._action_keys = list(sorted(action_space.entries_by_name.keys()))
+        self._action_keys = list(sorted(action_space.keys()))
         self._func_id_to_headnames = None
         if self.engine == Engines.SC2:
             from adept.environments.deepmind_sc2 import SC2ActionLookup
@@ -111,11 +113,8 @@ class ActorCriticVtrace(AgentModule):
         self._internals = new_internals
 
     @staticmethod
-    def output_shape(action_space):
-        ebn = action_space.entries_by_name
-        actor_outputs = {name: entry.shape[0] for name, entry in ebn.items()}
-        head_dict = {'critic': 1, **actor_outputs}
-        return head_dict
+    def output_space(action_space):
+        return {'critic': (1, ), **action_space}
 
     def seq_obs_to_pathways(self, obs, device):
         """
@@ -287,40 +286,16 @@ class ActorCriticVtrace(AgentModule):
         log_probs_of_action = []
         entropies = []
 
-        seq_len, batch_size = terminal_masks.shape
-
         # if network is modular,
         # trunk can be sped up by combining batch & seq dim
         def get_results_generator():
-            if isinstance(self.network, ModularNetwork):
-                pathway_dict = self.gpu_preprocessor(obs, self.device)
-                # flatten obs
-                flat_obs = {
-                    k: v.view(-1, *v.shape[2:])
-                    for k, v in pathway_dict.items()
-                }
-                embeddings = self.network.trunk.forward(flat_obs)
-                # add back in seq dim
-                seq_embeddings = embeddings.view(
-                    seq_len, batch_size, embeddings.shape[-1]
-                )
+            obs_on_device = self.seq_obs_to_pathways(obs, self.device)
 
-                def get_results(seq_ind, internals):
-                    embedding = seq_embeddings[seq_ind]
-                    pre_result, internals = self.network.body.forward(
-                        embedding, internals
-                    )
-                    return self.network.head.forward(pre_result, internals)
+            def get_results(seq_ind, internals):
+                obs_of_seq_ind = obs_on_device[seq_ind]
+                return self.network(obs_of_seq_ind, internals)
 
-                return get_results
-            else:
-                obs_on_device = self.seq_obs_to_pathways(obs, self.device)
-
-                def get_results(seq_ind, internals):
-                    obs_of_seq_ind = obs_on_device[seq_ind]
-                    return self.network(obs_of_seq_ind, internals)
-
-                return get_results
+            return get_results
 
         result_fn = get_results_generator()
         for seq_ind in range(terminal_masks.shape[0]):

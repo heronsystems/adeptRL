@@ -55,7 +55,7 @@ def parse_args():
         exit(call(['python', '-m', 'adept.scripts.local'] + argv, env=env))
     elif args['<command>'] == 'towered':
         nb_mpi_proc = input('Enter number of GPU workers [default: 2]\n')
-        nb_mpi_proc = 2 if not nb_mpi_proc else nb_mpi_proc
+        nb_mpi_proc = 2 if not nb_mpi_proc else int(nb_mpi_proc)
         exit(call([
             'mpiexec',
             '-n',
@@ -66,7 +66,7 @@ def parse_args():
         ] + argv, env=env))
     elif args['<command>'] == 'impala':
         nb_mpi_proc = input('Enter number of GPU workers [default: 2]\n')
-        nb_mpi_proc = 2 if not nb_mpi_proc else nb_mpi_proc
+        nb_mpi_proc = 2 if not nb_mpi_proc else int(nb_mpi_proc)
         exit(call([
               'mpiexec',
               '-n',

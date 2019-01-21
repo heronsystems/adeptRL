@@ -19,7 +19,7 @@ class RequiresArgs:
     args = None
 
     @classmethod
-    def check_defaults(cls):
+    def check_args_implemented(cls):
         if cls.args is None:
             raise NotImplementedError(
                 'Subclass must define class attribute "args"'
@@ -32,22 +32,33 @@ class RequiresArgs:
 
         :return: Dict[str, Any] Updated config dictionary.
         """
-        if not cls.args:
-            return cls.args
+        return cls._prompt(cls.__name__, cls.args)
+
+    @staticmethod
+    def _prompt(name, args):
+        """
+        Display defaults as JSON, prompt user for changes.
+
+        :param name: str Name of class
+        :param args: Dict[str, Any]
+        :return: Dict[str, Any] Updated config dictionary.
+        """
+        if not args:
+            return args
 
         user_input = input(
             '\n{} Defaults:\n{}\n'
             'Press ENTER to use defaults. Otherwise, '
             'modify JSON keys then press ENTER.\n'.format(
-                cls.__name__,
-                json.dumps(cls.args, indent=2, sort_keys=True)
+                name,
+                json.dumps(args, indent=2, sort_keys=True)
             ) + 'Example: {"some_key": <new_value>, "another_key": '
                 '<new_value>}\n'
         )
 
         # use defaults if no changes specified
         if user_input == '':
-            return cls.args
+            return args
 
         updates = json.loads(user_input)
-        return {**cls.args, **updates}
+        return {**args, **updates}

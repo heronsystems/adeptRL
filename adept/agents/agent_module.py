@@ -60,7 +60,7 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
 
     @staticmethod
     @abc.abstractmethod
-    def output_shape(action_space):
+    def output_space(action_space):
         raise NotImplementedError
 
     @abc.abstractmethod

@@ -47,7 +47,7 @@ class AgentRegistry:
         :return:
         """
         assert issubclass(agent_class, AgentModule)
-        agent_class.check_defaults()
+        agent_class.check_args_implemented()
         self._agent_class_by_id[agent_id] = agent_class
 
     def lookup_agent(self, agent_id):
@@ -59,7 +59,7 @@ class AgentRegistry:
         """
         return self._agent_class_by_id[agent_id]
 
-    def lookup_output_shape(self, agent_id, action_space):
+    def lookup_output_space(self, agent_id, action_space):
         """
         For a given agent_id, determine the shapes of the outputs.
 
@@ -67,4 +67,4 @@ class AgentRegistry:
         :param action_space:
         :return:
         """
-        return self._agent_class_by_id[agent_id].output_shape(action_space)
+        return self._agent_class_by_id[agent_id].output_space(action_space)

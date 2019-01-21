@@ -12,45 +12,62 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from collections.__init__ import namedtuple
-
-import numpy as np
 from gym import spaces
 
-Space = namedtuple('Space', ['shape', 'low', 'high', 'dtype'])
 
-
-class Spaces:
+class Space(dict):
     def __init__(self, entries_by_name):
-        self.entries_by_name = entries_by_name
-        self.names_by_rank = {1: [], 2: [], 3: [], 4: []}
-        for name, entry in entries_by_name.items():
-            self.names_by_rank[len(entry.shape)].append(name)
+        super(Space, self).__init__(entries_by_name)
 
     @classmethod
     def from_gym(cls, gym_space):
-        entries_by_name = Spaces._detect_gym_spaces(gym_space)
+        entries_by_name = Space._detect_gym_spaces(gym_space)
         return cls(entries_by_name)
 
     @staticmethod
-    def _detect_gym_spaces(space):
-        if isinstance(space, spaces.Discrete):
-            return {'Discrete': Space([space.n], 0, 1, np.float32)}
-        elif isinstance(space, spaces.MultiDiscrete):
+    def _detect_gym_spaces(gym_space):
+        if isinstance(gym_space, spaces.Discrete):
+            return {'Discrete': (gym_space.n,)}
+        elif isinstance(gym_space, spaces.MultiDiscrete):
             raise NotImplementedError
-        elif isinstance(space, spaces.MultiBinary):
-            return {'MultiBinary': Space([space.n], 0, 1, space.dtype)}
-        elif isinstance(space, spaces.Box):
+        elif isinstance(gym_space, spaces.MultiBinary):
+            return {'MultiBinary': (gym_space.n,)}
+        elif isinstance(gym_space, spaces.Box):
             return {
-                'Box': Space(space.shape, 0., 255., space.dtype)
-            }  # TODO, is it okay to hardcode 0, 255
-        elif isinstance(space, spaces.Dict):
-            return {
-                name: list(Spaces._detect_gym_spaces(s).values())[0]
-                for name, s in space.spaces.items()
+                'Box': gym_space.shape
             }
-        elif isinstance(space, spaces.Tuple):
+        elif isinstance(gym_space, spaces.Dict):
             return {
-                idx: list(Spaces._detect_gym_spaces(s).values())[0]
-                for idx, s in enumerate(space.spaces)
+                name: list(Space._detect_gym_spaces(s).values())[0]
+                for name, s in gym_space.spaces.items()
             }
+        elif isinstance(gym_space, spaces.Tuple):
+            return {
+                idx: list(Space._detect_gym_spaces(s).values())[0]
+                for idx, s in enumerate(gym_space.spaces)
+            }
+
+    @staticmethod
+    def dtypes_from_gym(gym_space):
+        if isinstance(gym_space, spaces.Discrete):
+            return {'Discrete': gym_space.dtype}
+        elif isinstance(gym_space, spaces.MultiDiscrete):
+            raise NotImplementedError
+        elif isinstance(gym_space, spaces.MultiBinary):
+            return {'MultiBinary': gym_space.dtype}
+        elif isinstance(gym_space, spaces.Box):
+            return {
+                'Box': gym_space.dtype
+            }
+        elif isinstance(gym_space, spaces.Dict):
+            return {
+                name: Space.dtypes_from_gym(s)
+                for name, s in gym_space.spaces.items()
+            }
+        elif isinstance(gym_space, spaces.Tuple):
+            return {
+                idx: Space.dtypes_from_gym(s)
+                for idx, s in enumerate(gym_space.spaces)
+            }
+        else:
+            raise NotImplementedError

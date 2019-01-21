@@ -48,13 +48,16 @@ Script Options:
     -y, --use-defaults      Skip prompts, use defaults
 
 Network Options:
-    --net1d <str>           Network to use for 1d input [default: Identity]
-    --net2d <str>           Network to use for 2d input [default: Identity]
+    --net1d <str>           Network to use for 1d input [default: Identity1D]
+    --net2d <str>           Network to use for 2d input [default: Identity2D]
     --net3d <str>           Network to use for 3d input [default: FourConv]
-    --net4d <str>           Network to use for 4d input [default: Identity]
-    --netjunc <str>         Network junction to merge inputs [default: TODO]
+    --net4d <str>           Network to use for 4d input [default: Identity4D]
     --netbody <str>         Network to use on merged inputs [default: LSTM]
-    --normalize <bool>      TEMPORARY [default: True]
+    --head1d <str>          Network to use for 1d output [default: Identity1D]
+    --head2d <str>          Network to use for 2d output [default: Identity2D]
+    --head3d <str>          Network to use for 3d output [default: Identity3D]
+    --head4d <str>          Network to use for 4d output [default: Identity4D]
+    --custom-network        Name of custom network class
 
 Optimizer Options:
     --lr <float>            Learning rate [default: 0.0007]
@@ -80,13 +83,14 @@ from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvModuleRegistry
+from adept.networks.network_registry import NetworkRegistry
+from adept.networks.modular_network import ModularNetwork
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
     SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    make_network, count_parameters,
-    parse_bool_str, parse_none, LogDirHelper
+    count_parameters, parse_none, LogDirHelper
 )
 from adept.utils.util import DotDict
 
@@ -117,14 +121,14 @@ def parse_args():
     args.lr = float(args.lr)
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
-    args.normalize = parse_bool_str(args.normalize)
     return args
 
 
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvModuleRegistry()
+    env_registry=EnvModuleRegistry(),
+    net_registry=NetworkRegistry()
 ):
     """
     Run local training.
@@ -132,6 +136,7 @@ def main(
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvModuleRegistry
+    :param net_registry: NetworkRegistry
     :return:
     """
 
@@ -155,10 +160,18 @@ def main(
         if args.use_defaults:
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
+            if args.custom_network:
+                net_args = net_registry.lookup_custom_net(args.net).args
+            else:
+                net_args = net_registry.lookup_modular_args(args)
         else:
             agent_args = agent_registry.lookup_agent(args.agent).prompt()
             env_args = env_registry.lookup_env_class(args.env).prompt()
-        args = DotDict({**args, **agent_args, **env_args})
+            if args.custom_network:
+                net_args = net_registry.lookup_custom_net(args.net).prompt()
+            else:
+                net_args = net_registry.prompt_modular_args(args)
+        args = DotDict({**args, **agent_args, **env_args, **net_args})
 
         # construct logging objects
         log_id = make_log_id(
@@ -180,11 +193,24 @@ def main(
 
     # construct network
     torch.manual_seed(args.seed)
-    network = make_network(
-        env.observation_space,
-        agent_registry.lookup_output_shape(args.agent, env.action_space),
-        args
+    output_space = agent_registry.lookup_output_space(
+        args.agent, env.action_space
     )
+    if args.custom_network:
+        network = net_registry.lookup_custom_net(args.custom_network).from_args(
+            args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
+    else:
+        network = ModularNetwork.from_args(
+            args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
+
     # possibly load network
     if args.load_network:
         network.load_state_dict(
@@ -242,11 +268,19 @@ def main(
             nb_env=args.nb_eval_env,
             registry=env_registry
         )
-        eval_net = make_network(
-            eval_env.observation_space,
-            agent_registry.lookup_output_shape(args.agent, env.action_space),
-            args
-        )
+        eval_net = \
+            net_registry.lookup_custom_net(args.custom_network).from_args(
+                args,
+                eval_env.observation_space,
+                output_space,
+                net_registry
+            ) if args.custom_network \
+            else ModularNetwork.from_args(
+                args,
+                eval_env.observation_space,
+                output_space,
+                net_registry
+            )
         eval_agent = agent_registry.lookup_agent(args.agent).from_args(
             args,
             eval_net,

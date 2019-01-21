@@ -12,30 +12,25 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import abc
-
-import torch
+from adept.networks.net2d.submodule_2d import SubModule2D
 
 
-class BaseNetwork(torch.nn.Module):
+class Identity2D(SubModule2D):
+    args = {}
+
+    def __init__(self, input_shape, id):
+        super().__init__(input_shape, id)
+
     @classmethod
-    @abc.abstractmethod
-    def from_args(
-        cls,
-        args,
-        observation_space,
-        headname_to_output_shape,
-        network_registry
-    ):
-        raise NotImplementedError
+    def from_args(cls, args, input_shape, id):
+        return cls(input_shape, id)
 
-    @abc.abstractmethod
-    def new_internals(self, device):
-        """
-        :return: Dict[InternalKey, torch.Tensor (ND)]
-        """
-        raise NotImplementedError
+    @property
+    def _output_shape(self):
+        return self.input_shape
 
-    @abc.abstractmethod
-    def forward(self, obsname_to_obs, internals):
-        raise NotImplementedError
+    def _forward(self, input, internals, **kwargs):
+        return input, {}
+
+    def _new_internals(self):
+        return {}

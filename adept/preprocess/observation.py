@@ -16,26 +16,40 @@ from copy import deepcopy
 
 
 class ObsPreprocessor:
-    def __init__(self, ops, observation_space):
+    def __init__(self, ops, observation_space, observation_dtypes=None):
+        """
+        :param ops: List[Operation]
+        :param observation_space: Dict[ObsKey, Shape]
+        :param observation_dtypes: Dict[ObsKey, dtype_str]
+        """
         updated_obs_space = deepcopy(observation_space)
+        updated_obs_dtypes = deepcopy(observation_dtypes)
 
-        nbr = updated_obs_space.names_by_rank
-        ebn = updated_obs_space.entries_by_name
+        rank_to_names = {1: [], 2: [], 3: [], 4: []}
+        for name, shape in updated_obs_space.items():
+            rank_to_names[len(shape)].append(name)
 
         for op in ops:
-            for rank, names in nbr.items():
+            for rank, names in rank_to_names.items():
                 for name in names:
                     if op.filter(name, rank):
-                        ebn[name] = op.update_space(ebn[name])
+                        updated_obs_space[name] = op.update_shape(
+                            updated_obs_space[name]
+                        )
+                        if updated_obs_dtypes:
+                            updated_obs_dtypes[name] = op.update_dtype(
+                                updated_obs_dtypes[name]
+                            )
 
         self.ops = ops
         self.observation_space = updated_obs_space
+        self.observation_dtypes = updated_obs_dtypes
+        self.rank_to_names = rank_to_names
 
     def __call__(self, obs, device=None):
-        nbr = self.observation_space.names_by_rank
-        processed_obs = {k: v for k, v in obs.items()}
+        processed_obs = deepcopy(obs)
         for op in self.ops:
-            for rank, names in nbr.items():
+            for rank, names in self.rank_to_names.items():
                 for name in names:
                     if device is not None:
                         processed_obs[name] = processed_obs[name].to(device)

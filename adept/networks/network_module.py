@@ -14,28 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
 
-import torch
+from adept.networks._base import BaseNetwork
+from adept.utils.requires_args import RequiresArgs
 
 
-class BaseNetwork(torch.nn.Module):
-    @classmethod
-    @abc.abstractmethod
-    def from_args(
-        cls,
-        args,
-        observation_space,
-        headname_to_output_shape,
-        network_registry
-    ):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def new_internals(self, device):
-        """
-        :return: Dict[InternalKey, torch.Tensor (ND)]
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def forward(self, obsname_to_obs, internals):
-        raise NotImplementedError
+class NetworkModule(BaseNetwork, RequiresArgs, metaclass=abc.ABCMeta):
+    pass

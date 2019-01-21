@@ -12,21 +12,25 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from .._base import InputNetwork
+from adept.networks.net3d.submodule_3d import SubModule3D
 
 
-class DiscreteIdentity(InputNetwork):
-    def __init__(self, nb_in_channel):
-        super().__init__()
-        self._nb_output_channel = nb_in_channel[0]
+class Identity3D(SubModule3D):
+    args = {}
+
+    def __init__(self, input_shape, id):
+        super().__init__(input_shape, id)
 
     @classmethod
-    def from_args(cls, nb_in_channel, args):
-        return cls(nb_in_channel)
+    def from_args(cls, args, input_shape, id):
+        return cls(input_shape, id)
 
     @property
-    def nb_output_channel(self):
-        return self._nb_output_channel
+    def _output_shape(self):
+        return self.input_shape
 
-    def forward(self, x):
-        return x
+    def _forward(self, input, internals, **kwargs):
+        return input, {}
+
+    def _new_internals(self):
+        return {}

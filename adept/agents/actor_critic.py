@@ -65,7 +65,7 @@ class ActorCritic(AgentModule):
         )
         self._device = device
         self.action_space = action_space
-        self._action_keys = list(sorted(action_space.entries_by_name.keys()))
+        self._action_keys = list(sorted(action_space.keys()))
         self._func_id_to_headnames = None
         if self.engine == Engines.SC2:
             from adept.environments.deepmind_sc2 import SC2ActionLookup
@@ -112,10 +112,8 @@ class ActorCritic(AgentModule):
         self._internals = new_internals
 
     @staticmethod
-    def output_shape(action_space):
-        ebn = action_space.entries_by_name
-        actor_outputs = {name: entry.shape[0] for name, entry in ebn.items()}
-        head_dict = {'critic': 1, **actor_outputs}
+    def output_space(action_space):
+        head_dict = {'critic': (1, ), **action_space}
         return head_dict
 
     def act(self, obs):
