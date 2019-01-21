@@ -9,23 +9,22 @@ from adept.networks.net4d.identity_4d import Identity4D
 
 class TestModularNetwork(unittest.TestCase):
     # Example of valid structure
-    stub_1d = Identity1D((16,), 'stub_1d')
-    stub_2d = Identity2D((16, 32 * 32), 'stub_2d')
-    stub_3d = Identity3D((16, 32, 32), 'stub_3d')
-    stub_4d = Identity4D((16, 32, 32, 32), 'stub_4d')
-
     source_nets = {
-        'source_1d': stub_1d,
-        'source_2d': stub_2d,
-        'source_3d': stub_3d,
-        'source_4d': stub_4d
+        'source_1d': Identity1D((16,), 'source_1d'),
+        'source_2d': Identity2D((16, 8 * 8), 'source_2d'),
+        'source_3d': Identity3D((16, 8, 8), 'source_3d'),
+        'source_4d': Identity4D((16, 8, 8, 8), 'source_4d')
     }
-    body = stub_3d
-    heads = [stub_1d, stub_2d, stub_3d]
+    body = Identity3D((176, 8, 8), 'body')
+    heads = [
+        Identity1D((11264, ), 'head1d'),
+        Identity2D((176, 64), 'head2d'),
+        Identity3D((176, 8, 8), 'head3d')
+    ]
     output_space = {
         'output_1d': (16,),
-        'output_2d': (16, 32 * 32),
-        'output_3d': (16, 32, 32),
+        'output_2d': (16, 8 * 8),
+        'output_3d': (16, 8, 8),
     }
 
     def test_heads_not_higher_dim_than_body(self):
@@ -97,24 +96,23 @@ class TestModularNetwork(unittest.TestCase):
 
     def test_forward(self):
         import torch
-        BATCH = 8
+        BATCH = 32
         obs = {
             'source_1d': torch.zeros((BATCH, 16,)),
-            'source_2d': torch.zeros((BATCH, 16, 32 * 32)),
-            'source_3d': torch.zeros((BATCH, 16, 32, 32)),
-            'source_4d': torch.zeros((BATCH, 16, 32, 32, 32))
+            'source_2d': torch.zeros((BATCH, 16, 8 * 8)),
+            'source_3d': torch.zeros((BATCH, 16, 8, 8)),
+            'source_4d': torch.zeros((BATCH, 16, 8, 8, 8))
         }
-        # try:
-        net = ModularNetwork(
-            self.source_nets,
-            self.body,
-            self.heads,
-            self.output_space
-        )
-        outputs, _ = net.forward(obs, {})
-        print(outputs)
-        # except:
-        #     pass
+        try:
+            net = ModularNetwork(
+                self.source_nets,
+                self.body,
+                self.heads,
+                self.output_space
+            )
+            outputs, _ = net.forward(obs, {})
+        except:
+            self.fail('Unexpected exception')
 
 
 if __name__ == '__main__':

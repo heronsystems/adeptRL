@@ -105,7 +105,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             else:
                 raise ValueError('Invalid dim {}'.format(dim))
             outputs.append((output_name, layer))
-            return torch.nn.ModuleDict(outputs)
+        return torch.nn.ModuleDict(outputs)
 
     def _validate_shapes(self):
         """
@@ -228,6 +228,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                     body_submod.output_shape(dim=dim),
                     output_key
                 )
+                print()
             elif dim == 2:
                 submod = net_reg.lookup_submodule(
                     args.head2d
@@ -302,7 +303,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         # Process final outputs
         output_by_key = {}
         for key in self._output_keys:
-            output = self.output_layers[key](
+            output = self.output_layers[key].forward(
                 head_out_by_dim[len(self._output_space[key])]
             )
             output_by_key[key] = output
@@ -324,8 +325,6 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         if len(inputs[0].shape) <= 2:
             return inputs
 
-        tmp = [input.shape for input in inputs]
-
         target_shape = max([inpt.shape[2:] for inpt in inputs])
         processed_inputs = []
         for inpt in inputs:
@@ -333,8 +332,6 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                 processed_inputs.append(inpt.expand(-1, -1, *target_shape))
             else:
                 processed_inputs.append(inpt)
-
-        expanded = [input.shape for input in processed_inputs]
 
         return processed_inputs
 

@@ -19,7 +19,6 @@ from torch.nn import functional as F
 from adept.environments.env_registry import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
-from adept.networks.modular_network import ModularNetwork
 from adept.agents.agent_module import AgentModule
 
 
