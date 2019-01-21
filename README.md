@@ -54,12 +54,12 @@ pip install .[mpi,sc2,profiler]
 ```
 
 ## Performance
-* Atari/SC2 scores pending
 * ~ 3000 TFPS / 12000 FPS (Local Mode / 64 environments / GeForce 2080 Ti / 
 Ryzen 2700x 8-core)
 * Used to win a 
 [Doom competition](http://vizdoom.cs.put.edu.pl/competition-cig-2018/competition-results) 
 (Ben Bell / Marv2in)
+![architecture](images/benchmark.png)
 
 ## Examples
 If you write your own scripts, you can provide your own agents or networks, but 
