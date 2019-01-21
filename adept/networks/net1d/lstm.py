@@ -47,8 +47,8 @@ class LSTM(SubModule1D):
         return (self._nb_hidden, )
 
     def _forward(self, xs, internals, **kwargs):
-        hxs = torch.stack(internals['hx'])
-        cxs = torch.stack(internals['cx'])
+        hxs = self.stacked_internals('hx', internals)
+        cxs = self.stacked_internals('cx', internals)
         hxs, cxs = self.lstm(xs, (hxs, cxs))
 
         return (

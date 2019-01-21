@@ -25,24 +25,49 @@ class Space(dict):
         return cls(entries_by_name)
 
     @staticmethod
-    def _detect_gym_spaces(space):
-        if isinstance(space, spaces.Discrete):
-            return {'Discrete': (space.n, )}
-        elif isinstance(space, spaces.MultiDiscrete):
+    def _detect_gym_spaces(gym_space):
+        if isinstance(gym_space, spaces.Discrete):
+            return {'Discrete': (gym_space.n,)}
+        elif isinstance(gym_space, spaces.MultiDiscrete):
             raise NotImplementedError
-        elif isinstance(space, spaces.MultiBinary):
-            return {'MultiBinary': (space.n, )}
-        elif isinstance(space, spaces.Box):
+        elif isinstance(gym_space, spaces.MultiBinary):
+            return {'MultiBinary': (gym_space.n,)}
+        elif isinstance(gym_space, spaces.Box):
             return {
-                'Box': space.shape
+                'Box': gym_space.shape
             }
-        elif isinstance(space, spaces.Dict):
+        elif isinstance(gym_space, spaces.Dict):
             return {
                 name: list(Space._detect_gym_spaces(s).values())[0]
-                for name, s in space.spaces.items()
+                for name, s in gym_space.spaces.items()
             }
-        elif isinstance(space, spaces.Tuple):
+        elif isinstance(gym_space, spaces.Tuple):
             return {
                 idx: list(Space._detect_gym_spaces(s).values())[0]
-                for idx, s in enumerate(space.spaces)
+                for idx, s in enumerate(gym_space.spaces)
             }
+
+    @staticmethod
+    def dtypes_from_gym(gym_space):
+        if isinstance(gym_space, spaces.Discrete):
+            return {'Discrete': gym_space.dtype}
+        elif isinstance(gym_space, spaces.MultiDiscrete):
+            raise NotImplementedError
+        elif isinstance(gym_space, spaces.MultiBinary):
+            return {'MultiBinary': gym_space.dtype}
+        elif isinstance(gym_space, spaces.Box):
+            return {
+                'Box': gym_space.dtype
+            }
+        elif isinstance(gym_space, spaces.Dict):
+            return {
+                name: Space.dtypes_from_gym(s)
+                for name, s in gym_space.spaces.items()
+            }
+        elif isinstance(gym_space, spaces.Tuple):
+            return {
+                idx: Space.dtypes_from_gym(s)
+                for idx, s in enumerate(gym_space.spaces)
+            }
+        else:
+            raise NotImplementedError

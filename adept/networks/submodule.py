@@ -11,6 +11,16 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
     """
     dim = None
 
+    def __init__(self, input_shape, id):
+        """
+        :param input_shape: Tuple[*Dim] Input shape excluding batch dimension
+        :param id: str Unique identifier for this instance
+        """
+        super(SubModule, self).__init__()
+        assert len(input_shape) == self.dim
+        self._input_shape = input_shape
+        self._id = id
+
     @classmethod
     @abc.abstractmethod
     def from_args(cls, args, input_shape, id):
@@ -59,16 +69,6 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    def __init__(self, input_shape, id):
-        """
-        :param input_shape: Tuple[*Dim] Input shape excluding batch dimension
-        :param id: str Unique identifier for this instance
-        """
-        super(SubModule, self).__init__()
-        assert len(input_shape) == self.dim
-        self._input_shape = input_shape
-        self._id = id
-
     @property
     def id(self):
         return self._id
@@ -78,7 +78,12 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
         return self._input_shape
 
     def new_internals(self, device):
-        return {k: v.to(device) for k, v in self._new_internals().items()}
+        return {
+            self.id + k: v.to(device) for k, v in self._new_internals().items()
+        }
+
+    def stacked_internals(self, key, internals):
+        return torch.stack(internals[self.id + key])
 
     def to_dim(self, submodule_output, dim):
         """
@@ -101,14 +106,17 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
     def forward(self, *input, dim=None):
         submodule_output, internals = self._forward(*input)
         if dim is None:
-            return submodule_output, internals
+            return submodule_output, self._id_internals(internals)
         if dim == 1:
-            return self._to_1d(submodule_output), internals
+            return self._to_1d(submodule_output), self._id_internals(internals)
         elif dim == 2:
-            return self._to_2d(submodule_output), internals
+            return self._to_2d(submodule_output), self._id_internals(internals)
         elif dim == 3:
-            return self._to_3d(submodule_output), internals
+            return self._to_3d(submodule_output), self._id_internals(internals)
         elif dim == 4:
-            return self._to_4d(submodule_output), internals
+            return self._to_4d(submodule_output), self._id_internals(internals)
         else:
             raise ValueError('Invalid dim: {}'.format(dim))
+
+    def _id_internals(self, internals):
+        return {self.id + k: v for k, v in internals.items()}

@@ -221,37 +221,28 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         for output_key, shape in output_space.items():
             dim = len(shape)
             if dim == 1:
-                submod = net_reg.lookup_submodule(
-                    args.head1d
-                ).from_args(
+                submod = net_reg.lookup_submodule(args.head1d).from_args(
                     args,
                     body_submod.output_shape(dim=dim),
-                    output_key
+                    'head' + str(dim) + 'd'
                 )
-                print()
             elif dim == 2:
-                submod = net_reg.lookup_submodule(
-                    args.head2d
-                ).from_args(
+                submod = net_reg.lookup_submodule(args.head2d).from_args(
                     args,
                     body_submod.output_shape(dim=dim),
-                    output_key
+                    'head' + str(dim) + 'd'
                 )
             elif dim == 3:
-                submod = net_reg.lookup_submodule(
-                    args.head3d
-                ).from_args(
+                submod = net_reg.lookup_submodule(args.head3d).from_args(
                     args,
                     body_submod.output_shape(dim=dim),
-                    output_key
+                    'head' + str(dim) + 'd'
                 )
             elif dim == 4:
-                submod = net_reg.lookup_submodule(
-                    args.head4d
-                ).from_args(
+                submod = net_reg.lookup_submodule(args.head4d).from_args(
                     args,
                     body_submod.output_shape(dim=dim),
-                    output_key
+                    'head' + str(dim) + 'd'
                 )
             else:
                 raise ValueError('Invalid dim: {}'.format(dim))

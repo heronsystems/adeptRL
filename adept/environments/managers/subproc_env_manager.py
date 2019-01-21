@@ -160,20 +160,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
         if shape is not None:
             if dtypes is None:
                 tensor = torch.FloatTensor(*shape)
-            elif dtypes[name] == 'float' or dtypes[name] == 'float32':
-                tensor = torch.FloatTensor(*shape)
-            elif dtypes[name] == 'long' or dtypes[name] == 'int64':
-                tensor = torch.LongTensor(*shape)
-            elif dtypes[name] == 'int' or dtypes[name] == 'int32':
-                tensor = torch.IntTensor(*shape)
-            elif dtypes[name] == 'short' or dtypes[name] == 'int16':
-                tensor = torch.ShortTensor(*shape)
-            elif dtypes[name] == 'int8':
-                tensor = torch.CharTensor(*shape)
-            elif dtypes[name] == 'uint8':
-                tensor = torch.ByteTensor(*shape)
             else:
-                raise ValueError('Unsupported dtype: {}'.format(dtypes[name]))
+                tensor = torch.zeros(*shape, dtype=dtypes[name])
             shared_memory[name] = tensor
 
     while True:

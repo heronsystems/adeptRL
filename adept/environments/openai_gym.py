@@ -19,8 +19,8 @@ from gym import spaces
 from adept.environments._spaces import Space
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import (
-    CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack
-)
+    CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack,
+    FromNumpy)
 from adept.environments.env_module import EnvModule
 from ._gym_wrappers import (
     NoopResetEnv, MaxAndSkipEnv, EpisodicLifeEnv, FireResetEnv
@@ -42,16 +42,20 @@ class AdeptGymEnv(EnvModule):
     def __init__(self, env, do_frame_stack):
         # Define the preprocessing operations to be performed on observations
         # CPU Ops
-        cpu_ops = [GrayScaleAndMoveChannel(), ResizeTo84x84()]
+        cpu_ops = [FromNumpy(), GrayScaleAndMoveChannel(), ResizeTo84x84()]
         if do_frame_stack:
             cpu_ops.append(FrameStack(4))
         cpu_preprocessor = ObsPreprocessor(
-            cpu_ops, Space.from_gym(env.observation_space)
+            cpu_ops,
+            Space.from_gym(env.observation_space),
+            Space.dtypes_from_gym(env.observation_space)
         )
 
         # GPU Ops
         gpu_preprocessor = ObsPreprocessor(
-            [CastToFloat(), Divide255()], cpu_preprocessor.observation_space
+            [CastToFloat(), Divide255()],
+            cpu_preprocessor.observation_space,
+            cpu_preprocessor.observation_dtypes
         )
 
         action_space = Space.from_gym(env.action_space)
@@ -100,7 +104,7 @@ class AdeptGymEnv(EnvModule):
     def _wrap_observation(self, observation):
         space = self._gym_obs_space
         if isinstance(space, spaces.Box):
-            return self.cpu_preprocessor({'Box': torch.from_numpy(observation)})
+            return self.cpu_preprocessor({'Box': observation})
         elif isinstance(space, spaces.Discrete):
             # one hot encode net1d inputs
             longs = torch.from_numpy(observation)
@@ -113,19 +117,19 @@ class AdeptGymEnv(EnvModule):
                 longs = longs.unsqueeze(1)
             one_hot = torch.zeros(observation.size(0), space.n)
             one_hot.scatter_(1, longs, 1)
-            return self.cpu_preprocessor({'Discrete': one_hot})
+            return self.cpu_preprocessor({'Discrete': one_hot.numpy()})
         elif isinstance(space, spaces.MultiBinary):
             return self.cpu_preprocessor({
-                'MultiBinary': torch.from_numpy(observation)
+                'MultiBinary': observation
             })
         elif isinstance(space, spaces.Dict):
             return self.cpu_preprocessor({
-                name: torch.from_numpy(obs)
+                name: obs
                 for name, obs in observation.items()
             })
         elif isinstance(space, spaces.Tuple):
             return self.cpu_preprocessor({
-                idx: torch.from_numpy(obs)
+                idx: obs
                 for idx, obs in enumerate(observation)
             })
         else:

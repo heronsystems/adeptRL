@@ -50,9 +50,9 @@ class AdeptSC2Env(EnvModule):
             'available_actions': (self._max_num_actions, )
         }
         observation_dtypes = {
-            'screen': 'int16',
-            'control_groups': 'int32',
-            'available_actions': 'int32'
+            'screen': torch.int16,
+            'control_groups': torch.int32,
+            'available_actions': torch.int32
         }
         action_space = {
             'func_id': (524, ),
@@ -235,7 +235,7 @@ class SC2OneHot(Operation):
         self._scales = 1. / torch.tensor(scales).float()
 
     def update_dtype(self, old_dtype):
-        return 'float32'
+        return torch.float32
 
     def update_shape(self, old_shape):
         new_shape = (
@@ -327,7 +327,7 @@ class SC2ScaleChannels(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return 'float32'
+        return torch.float32
 
     def update_obs(self, obs):
         obs = obs.float()

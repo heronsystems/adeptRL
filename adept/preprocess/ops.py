@@ -19,6 +19,7 @@ from functools import reduce
 import cv2
 import torch
 from torch.nn.functional import upsample
+import numpy as np
 
 cv2.ocl.setUseOpenCL(False)
 
@@ -61,7 +62,7 @@ class CastToFloat(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return 'float32'
+        return torch.float32
 
     def update_obs(self, obs):
         return obs.float()
@@ -124,7 +125,7 @@ class Divide255(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return 'float32'
+        return torch.float32
 
     def update_obs(self, obs):
         obs = obs.float()
@@ -182,7 +183,24 @@ class FromNumpy(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return old_dtype
+        if old_dtype == np.float32:
+            return torch.float32
+        elif old_dtype == np.float64:
+            return torch.float64
+        elif old_dtype == np.float16:
+            return torch.float16
+        elif old_dtype == np.uint8:
+            return torch.uint8
+        elif old_dtype == np.int8:
+            return torch.int8
+        elif old_dtype == np.int16:
+            return torch.int16
+        elif old_dtype == np.int32:
+            return torch.int32
+        elif old_dtype == np.int16:
+            return torch.int16
+        else:
+            raise ValueError('Unsupported dtype {}'.format(old_dtype))
 
     def update_obs(self, obs):
         return torch.from_numpy(obs)

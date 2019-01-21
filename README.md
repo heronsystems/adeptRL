@@ -100,13 +100,17 @@ training frames, since we are interested in sample efficiency.
 
 ## API Reference
 ![architecture](images/architecture.png)
+### Containers
+Containers hold all of the application state. Each subprocess gets a container 
+in Towered and IMPALA modes.
 ### Agents
 An Agent acts on and observes the environment.
 Currently only ActorCritic is supported. Other agents, such as DQN or ACER may 
 be added later.
-### Containers
-Containers hold all of the application state. Each subprocess gets a container 
-in Towered and IMPALA modes.
+### Networks
+Networks are not PyTorch modules, they need to implement our abstract 
+NetworkModule or ModularNetwork classes. A ModularNetwork consists of a 
+source nets, body, and heads.
 ### Environments
 Environments run in subprocesses and send their observation, rewards,
 terminals, and infos to the host process. They work pretty much the same way as 
@@ -114,16 +118,6 @@ OpenAI's code.
 ### Experience Caches
 An Experience Cache is a Rollout or Experience Replay that is written to after 
 stepping and read before learning.
-### Modules
-Modules are generally useful PyTorch modules used in Networks.
-### Networks
-Networks are not PyTorch modules, they need to implement our abstract 
-NetworkInterface or ModularNetwork classes. A ModularNetwork consists of a 
-trunk, body, and head. The Trunk can consist of multiple networks for vision 
-or discrete data. It flattens these into an embedding. The Body network 
-operates on the flattened embedding and would typically be an LSTM, Linear 
-layer, or a combination. The Head depends on the Environment and Agent and is 
-created accordingly.
 
 ## Acknowledgements
 We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and 
