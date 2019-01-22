@@ -77,7 +77,7 @@ From docker:
   * GeForce 2080 Ti
   * Ryzen 2700x 8-core
 * Used to win a 
-[Doom competition](http://vizdoom.cs.put.edu.pl/competition-cig-2018/competition-results) 
+[Doom competition](https://www.crowdai.org/challenges/visual-doom-ai-competition-2018-track-2) 
 (Ben Bell / Marv2in)
 ![architecture](images/benchmark.png)
 * Up to 30 no-ops at start of each episode
