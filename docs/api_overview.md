@@ -1,5 +1,5 @@
 ## API Reference
-![architecture](images/architecture.png)
+![architecture](../images/architecture.png)
 ### Containers
 Containers hold all of the application state. Each subprocess gets a container 
 in Towered and IMPALA modes.
