@@ -15,14 +15,14 @@ rendering
 This code is early-access, expect rough edges. Interfaces subject to change. 
 We're happy to accept feedback and contributions.
 
-| Read More | Documentation | Examples |
-| :---: | :---: | :---: |
-| * [Features](#features) | * [API Overview](docs/api_overview.md) | * [Custom network stub](examples/custom_network_stub.py) |
-| * [Installation](#installation) | * ModularNetwork* | * [Custom submodule stub](examples/custom_submodule_stub.py)
-| * [Performance](#performance) | | * Custom agent* |
-| * [Train an Agent](#train-an-agent) | | * Custom environment* |
-| | | * Resume training* |
-| | | * Evaluate a trained model* |
+Read More | Documentation | Examples
+--- | --- | ---
+[Features](#features) | * [API Overview](docs/api_overview.md) | * [Custom network stub](examples/custom_network_stub.py)
+[Installation](#installation) | * ModularNetwork* | * [Custom submodule stub](examples/custom_submodule_stub.py)
+[Performance](#performance) | | * Custom agent*
+[Train an Agent](#train-an-agent) | | * Custom environment*
+| | * Resume training*
+| | * Evaluate a trained model*
 Coming soon*
 
 ## Features
