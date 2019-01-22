@@ -60,7 +60,7 @@ class MyCustomNetwork(NetworkModule):
 
         :param observation: Dict[ObsKey, torch.Tensor]
         :param internals: Dict[InternalKey, torch.Tensor (ND)]
-        :return:
+        :return: torch.Tensor
         """
         pass
 
@@ -73,4 +73,4 @@ if __name__ == '__main__':
     main(args, net_registry=network_reg)
 
     # Call script like this to train agent:
-    # python -m custom_network.py --custom-net MyCustomNetwork
+    # python -m custom_network_stub.py --custom-net MyCustomNetwork

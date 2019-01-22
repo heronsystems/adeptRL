@@ -15,23 +15,15 @@ rendering
 This code is early-access, expect rough edges. Interfaces subject to change. 
 We're happy to accept feedback and contributions.
 
-Read More:
-* [Features](#features)
-* [Installation](#installation)
-* [Performance](#performance)
-* [Train an Agent](#train-an-agent)
-
-Documentation:
-* [API Overview](./docs/api_overview.md)
-* ModularNetwork (coming soon)
-
-Examples:
-* [Custom network](./examples/custom_network.py)
-* Custom submodule (coming soon)
-* Custom agent (coming soon)
-* Custom environment (coming soon)
-* Resume training (coming soon)
-* Evaluate a trained model (coming soon)
+| Read More | Documentation | Examples |
+| :---: | :---: | :---: |
+| * [Features](#features) | * [API Overview](docs/api_overview.md) | * [Custom network stub](examples/custom_network_stub.py) |
+| * [Installation](#installation) | * ModularNetwork* | * [Custom submodule stub](examples/custom_submodule_stub.py)
+| * [Performance](#performance) | | * Custom agent* |
+| * [Train an Agent](#train-an-agent) | | * Custom environment* |
+| | | * Resume training* |
+| | | * Evaluate a trained model* |
+Coming soon*
 
 ## Features
 Agents / Networks
@@ -82,7 +74,8 @@ From docker:
 ![architecture](images/benchmark.png)
 * Up to 30 no-ops at start of each episode
 * Evaluated on different seeds than trained on
-* Architecture: Four Convs (F=32) followed by an LSTM (F=512)
+* Architecture: [Four Convs](./adept/networks/net3d/four_conv.py) (F=32) 
+followed by an [LSTM](./adept/networks/net1d/lstm.py) (F=512)
 * Reproduce with `python -m adept.app local --logdir ~/local64_benchmark --eval 
 -y --env <env-id>`
 
