@@ -31,14 +31,14 @@ class NetworkRegistry:
             'Linear': Linear,
         }
         for name, submod_cls in net_1d_cls_by_name.items():
-            self.register_submodule(name, submod_cls)
+            self.register_submodule(submod_cls)
 
         from adept.networks.net2d.identity_2d import Identity2D
         net_2d_cls_by_name = {
             'Identity2D': Identity2D
         }
         for name, submod_cls in net_2d_cls_by_name.items():
-            self.register_submodule(name, submod_cls)
+            self.register_submodule(submod_cls)
 
         from adept.networks.net3d.identity_3d import Identity3D
         from adept.networks.net3d.four_conv import FourConv
@@ -61,16 +61,16 @@ class NetworkRegistry:
             # 'ResNet152V2': ResNet152V2
         }
         for name, submod_cls in net_3d_cls_by_name.items():
-            self.register_submodule(name, submod_cls)
+            self.register_submodule(submod_cls)
 
         from adept.networks.net4d.identity_4d import Identity4D
         net_4d_cls_by_name = {
             'Identity4D': Identity4D
         }
         for name, submod_cls in net_4d_cls_by_name.items():
-            self.register_submodule(name, submod_cls)
+            self.register_submodule(submod_cls)
 
-    def register_custom_net(self, name, net_cls):
+    def register_custom_net(self, net_cls):
         """
         Add your custom network.
 
@@ -80,9 +80,10 @@ class NetworkRegistry:
         """
         assert issubclass(net_cls, NetworkModule)
         net_cls.check_args_implemented()
-        self.name_to_custom_net[name] = net_cls
+        self.name_to_custom_net[net_cls.__name__] = net_cls
+        return self
 
-    def register_submodule(self, name, submod_cls):
+    def register_submodule(self, submod_cls):
         """
         Add your own SubModule.
 
@@ -92,7 +93,8 @@ class NetworkRegistry:
         """
         assert issubclass(submod_cls, SubModule)
         submod_cls.check_args_implemented()
-        self.name_to_submodule[name] = submod_cls
+        self.name_to_submodule[submod_cls.__name__] = submod_cls
+        return self
 
     def lookup_custom_net(self, net_name):
         """

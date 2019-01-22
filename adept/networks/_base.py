@@ -24,8 +24,8 @@ class BaseNetwork(torch.nn.Module):
         cls,
         args,
         observation_space,
-        headname_to_output_shape,
-        network_registry
+        output_space,
+        net_reg
     ):
         raise NotImplementedError
 
@@ -37,5 +37,5 @@ class BaseNetwork(torch.nn.Module):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def forward(self, obsname_to_obs, internals):
+    def forward(self, observation, internals):
         raise NotImplementedError

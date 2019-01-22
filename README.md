@@ -2,15 +2,36 @@
 [![Build Status](http://ci.heronsystems.com:12345/buildStatus/icon?job=adeptRL/master)](http://ci.heronsystems.com:12345/job/adeptRL/job/master/)
 # adept
 
-adept is a library designed to accelerate reinforcement learning research by providing:
+adept is a library designed to accelerate reinforcement learning research by 
+providing:
 * baseline reinforcement learning models and algorithms for PyTorch
-* multi-GPU compute options
+* multi-GPU support
 * access to various environments
-* built-in tensorboard logging, model saving, reloading, evaluation, and rendering
-* abstractions for building custom networks, agents, execution modes, and experiments
+* built-in tensorboard logging, model saving, reloading, evaluation, and 
+rendering
+* modular interface for using custom networks, agents, and environments
 * proven hyperparameter defaults
 
-This code is alpha, expect rough edges.
+This code is early-access, expect rough edges. Interfaces subject to change. 
+We're happy to accept feedback and contributions.
+
+Read More:
+* [Features](#features)
+* [Installation](#installation)
+* [Performance](#performance)
+* [Train an Agent](#train-an-agent)
+
+Documentation:
+* [API Overview](./docs/api_overview.md)
+* ModularNetwork (coming soon)
+
+Examples:
+* [Custom network](./examples/custom_network.py)
+* Custom submodule (coming soon)
+* Custom agent (coming soon)
+* Custom environment (coming soon)
+* Resume training (coming soon)
+* Evaluate a trained model (coming soon)
 
 ## Features
 Agents / Networks
@@ -28,46 +49,48 @@ Environments
 * OpenAI Gym
 * StarCraft 2 (alpha, impala mode does not work with SC2 yet)
 
-We designed this library to be flexible and extensible. Plugging in novel 
-research ideas should be doable.
-
-## Major Dependencies
+## Installation
+Dependencies:
 * gym
 * PyTorch 1.x
 * Python 3.5+
-* We use CUDA 10, pytorch 1.0, python 3.6
-
-## Installation
-From docker:
-* [docker instructions](./docker/)
+* We recommend CUDA 10, pytorch 1.0, python 3.6
 
 From source:
 * Follow instructions for [PyTorch](https://pytorch.org/)
 * (Optional) Follow instructions for 
 [StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
-
-```
+```bash
 git clone https://github.com/heronsystems/adeptRL
 cd adeptRL
 # Remove mpi, sc2, profiler if you don't plan on using these features:
 pip install .[mpi,sc2,profiler]
 ```
 
+From docker:
+* [docker instructions](./docker/)
+
 ## Performance
-* ~ 3000 TFPS / 12000 FPS (Local Mode / 64 environments / GeForce 2080 Ti / 
-Ryzen 2700x 8-core)
+* ~ 3,000 Steps/second = 12,000 FPS
+  * Local Mode
+  * 64 environments
+  * GeForce 2080 Ti
+  * Ryzen 2700x 8-core
 * Used to win a 
 [Doom competition](http://vizdoom.cs.put.edu.pl/competition-cig-2018/competition-results) 
 (Ben Bell / Marv2in)
 ![architecture](images/benchmark.png)
+* Up to 30 no-ops at start of each episode
+* Evaluated on different seeds than trained on
+* Architecture: Four Convs (F=32) followed by an LSTM (F=512)
+* Reproduce with `python -m adept.app local --logdir ~/local64_benchmark --eval 
+-y --env <env-id>`
 
-## Examples
-If you write your own scripts, you can provide your own agents or networks, but 
-we have some presets you can run out of the box. Logs go to 
-`/tmp/adept_logs/` by default. The log directory contains the tensorboard 
-file, saved models, and other metadata.
+## Train an Agent
+Logs go to `/tmp/adept_logs/` by default. The log directory contains the 
+tensorboard file, saved models, and other metadata.
 
-```
+```bash
 # Local Mode (A2C)
 # We recommend 4GB+ GPU memory, 8GB+ RAM, 4+ Cores
 python -m adept.app local --env BeamRiderNoFrameskip-v4
@@ -88,36 +111,6 @@ python -m adept.app local --env CollectMineralShards
 python -m adept.app -h
 python -m adept.app help <command>
 ```
-## Important Terminology
-* **Training Frame** - An environment frame that is trained on
-* **Frame** - A raw environment frame, including skipped frames. A skipped 
-frame is a frame that is not trained on. By default, Atari only trains on 
-every fourth frame.
-* **FPS** - Frames per second.
-* **TFPS** - Training frames per second.
-Typically research papers report raw environment frames. Our logs report 
-training frames, since we are interested in sample efficiency.
-
-## API Reference
-![architecture](images/architecture.png)
-### Containers
-Containers hold all of the application state. Each subprocess gets a container 
-in Towered and IMPALA modes.
-### Agents
-An Agent acts on and observes the environment.
-Currently only ActorCritic is supported. Other agents, such as DQN or ACER may 
-be added later.
-### Networks
-Networks are not PyTorch modules, they need to implement our abstract 
-NetworkModule or ModularNetwork classes. A ModularNetwork consists of a 
-source nets, body, and heads.
-### Environments
-Environments run in subprocesses and send their observation, rewards,
-terminals, and infos to the host process. They work pretty much the same way as 
-OpenAI's code.
-### Experience Caches
-An Experience Cache is a Rollout or Experience Replay that is written to after 
-stepping and read before learning.
 
 ## Acknowledgements
 We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and 
