@@ -22,41 +22,42 @@ We're happy to accept feedback and contributions.
 * [Train an Agent](#train-an-agent)
 
 **Documentation**
-* [API Overview](docs/api_overview.md)
-* ModularNetwork
-* Resume training*
-* Evaluate a trained model*
+* [Architecture Overview](docs/api_overview.md)
+* ModularNetwork Overview
+* Resume training
+* Evaluate a model
+* Render environment
 
 **Examples**
-* Custom Network [Stub](examples/custom_network_stub.py) | Example
-* Custom SubModule [Stub](examples/custom_submodule_stub.py) | Example
-* Custom Agent Stub | Example
-* Custom Environment Stub | Example
+* Custom Network ([stub](examples/custom_network_stub.py) | example)
+* Custom SubModule ([stub](examples/custom_submodule_stub.py) | [example](adept/networks/net1d/lstm.py))
+* Custom Agent (stub | [example](adept/agents/actor_critic.py))
+* Custom Environment (stub | [example](adept/environments/openai_gym.py))
 
 ## Features
-Agents / Networks
+**Agents / Networks**
 * Actor Critic with Generalized Advantage Estimation
 * Stateful networks (ie. LSTMs)
 * Batch norm
 
-Execution Modes
+**Scripts**
 * Local (Single-GPU, A2C)
 * Towered (Multi-GPU, A3C-variant)
 * Importance Weighted Actor Learner Architectures, 
 [IMPALA](https://arxiv.org/pdf/1802.01561.pdf) (Faster Multi-GPU)
 
-Environments
+**Environments**
 * OpenAI Gym
 * StarCraft 2 (alpha, impala mode does not work with SC2 yet)
 
 ## Installation
-Dependencies:
+**Dependencies:**
 * gym
 * PyTorch 1.x
 * Python 3.5+
 * We recommend CUDA 10, pytorch 1.0, python 3.6
 
-From source:
+**From source:**
 * Follow instructions for [PyTorch](https://pytorch.org/)
 * (Optional) Follow instructions for 
 [StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
@@ -67,7 +68,7 @@ cd adeptRL
 pip install .[mpi,sc2,profiler]
 ```
 
-From docker:
+**From docker:**
 * [docker instructions](./docker/)
 
 ## Performance

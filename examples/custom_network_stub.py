@@ -1,8 +1,7 @@
 """
 Use a custom network.
 """
-from adept.networks import NetworkModule
-from adept.networks import NetworkRegistry
+from adept.networks import NetworkModule, NetworkRegistry
 from adept.scripts.local import parse_args, main
 
 

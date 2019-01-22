@@ -19,7 +19,6 @@ from adept.environments.env_registry import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
-from adept.utils.util import listd_to_dlist
 from adept.agents.agent_module import AgentModule
 
 
@@ -49,22 +48,23 @@ class ActorCritic(AgentModule):
         normalize_advantage,
         entropy_weight
     ):
+        super(ActorCritic, self).__init__(
+            network,
+            device,
+            reward_normalizer,
+            gpu_preprocessor,
+            engine,
+            action_space,
+            nb_env
+        )
         self.discount, self.gae, self.tau = discount, gae, tau
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
-        self.gpu_preprocessor = gpu_preprocessor
-        self.engine = engine
 
-        self._network = network.to(device)
         self._exp_cache = RolloutCache(
             nb_rollout, device, reward_normalizer,
             ['values', 'log_probs', 'entropies']
         )
-        self._internals = listd_to_dlist(
-            [self.network.new_internals(device) for _ in range(nb_env)]
-        )
-        self._device = device
-        self.action_space = action_space
         self._action_keys = list(sorted(action_space.keys()))
         self._func_id_to_headnames = None
         if self.engine == Engines.SC2:
@@ -94,22 +94,6 @@ class ActorCritic(AgentModule):
     @property
     def exp_cache(self):
         return self._exp_cache
-
-    @property
-    def network(self):
-        return self._network
-
-    @property
-    def device(self):
-        return self._device
-
-    @property
-    def internals(self):
-        return self._internals
-
-    @internals.setter
-    def internals(self, new_internals):
-        self._internals = new_internals
 
     @staticmethod
     def output_space(action_space):
