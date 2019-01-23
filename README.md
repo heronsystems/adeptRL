@@ -1,7 +1,7 @@
 ![banner](images/banner.png)
 
-[![Gitter chat](https://badges.gitter.im/adeptRL.png)](https://gitter.im/adeptRL/Lobby)
 [![Build Status](http://ci.heronsystems.com:12345/buildStatus/icon?job=adeptRL/master)](http://ci.heronsystems.com:12345/job/adeptRL/job/master/)
+[![Gitter chat](https://badges.gitter.im/adeptRL.png)](https://gitter.im/adeptRL/Lobby)
 
 adept is a library designed to accelerate reinforcement learning research by 
 providing:
@@ -32,7 +32,7 @@ We're happy to accept feedback and contributions.
 **Examples**
 * Custom Network ([stub](examples/custom_network_stub.py) | example)
 * Custom SubModule ([stub](examples/custom_submodule_stub.py) | [example](adept/networks/net1d/lstm.py))
-* Custom Agent (stub | [example](adept/agents/actor_critic.py))
+* Custom Agent ([stub](examples/custom_agent_stub.py) | [example](adept/agents/actor_critic.py))
 * Custom Environment (stub | [example](adept/environments/openai_gym.py))
 
 ## Features

@@ -38,6 +38,9 @@ class MyCustomAgent(AgentModule):
     def from_args(cls, args, network, device, reward_normalizer,
                   gpu_preprocessor, engine, action_space, **kwargs):
         """
+
+        ArgName = str
+
         :param args: Dict[ArgName, Any]
         :param network: BaseNetwork
         :param device: torch.device
