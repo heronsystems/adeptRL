@@ -18,12 +18,6 @@ from adept.utils.normalizers import Clip, Scale
 from collections import defaultdict
 
 
-class Engines(IntEnum):
-    GYM = 0
-    DOOM = 1
-    SC2 = 2
-
-
 SC2_ENVS = [
     'BuildMarines', 'CollectMineralShards', 'DefeatRoaches',
     'DefeatZerglingsAndBanelings', 'FindAndDefeatZerglings', 'MoveToBeacon'
@@ -111,10 +105,10 @@ class EnvRegistry:
         self._reward_norm_by_env_id = defaultdict(lambda: Clip())
 
         from adept.environments.openai_gym import AdeptGymEnv
-        self.register_env(Engines.GYM, AdeptGymEnv, ATARI_ENVS)
+        self.register_env(AdeptGymEnv, ATARI_ENVS)
         try:
             from adept.environments.deepmind_sc2 import AdeptSC2Env
-            self.register_env(Engines.SC2, AdeptSC2Env, SC2_ENVS)
+            self.register_env(AdeptSC2Env, SC2_ENVS)
             self.register_reward_normalizer('DefeatRoaches', Scale(0.1))
             self.register_reward_normalizer(
                 'DefeatZerglingsAndBanelings', Scale(0.2)
@@ -122,12 +116,24 @@ class EnvRegistry:
         except ImportError:
             print('StarCraft 2 Environment not detected.')
 
-    def register_env(self, engine_id, env_module_class, env_id_set):
+    def register_env(self, env_module_class, env_id_set):
+        """
+        Register an environment class.
+
+        EnvID = str
+
+        :param env_module_class:
+        :param env_id_set: List[EnvID], list of environment ids supported by
+        the provided module.
+        :return: EnvRegistry
+        """
+        engine_id = env_module_class.__name__
         # TODO assert no duplicate env_ids
         assert issubclass(env_module_class, EnvModule)
         env_module_class.check_args_implemented()
         self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
         self._module_class_by_engine_id[engine_id] = env_module_class
+        return self
 
     def lookup_env_class(self, env_id):
         engine = self.lookup_engine(env_id)
@@ -151,6 +157,7 @@ class EnvRegistry:
         :return:
         """
         self._reward_norm_by_env_id[env_id] = normalizer
+        return self
 
     def lookup_reward_normalizer(self, env_id):
         """

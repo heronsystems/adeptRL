@@ -15,7 +15,6 @@
 from collections import OrderedDict
 
 import torch
-from adept.environments.env_registry import Engines
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
@@ -67,7 +66,7 @@ class ActorCritic(AgentModule):
         )
         self._action_keys = list(sorted(action_space.keys()))
         self._func_id_to_headnames = None
-        if self.engine == Engines.SC2:
+        if self.engine == 'AdeptSC2Env':
             from adept.environments.deepmind_sc2 import SC2ActionLookup
             self._func_id_to_headnames = SC2ActionLookup()
 
@@ -103,12 +102,10 @@ class ActorCritic(AgentModule):
     def act(self, obs):
         self.network.train()
 
-        if self.engine == Engines.GYM:
-            return self._act_gym(obs)
-        elif self.engine == Engines.SC2:
+        if self.engine == 'AdeptSC2Env':
             return self._act_sc2(obs)
         else:
-            raise NotImplementedError()
+            return self._act_gym(obs)
 
     def _act_gym(self, obs):
         predictions, internals = self.network(
@@ -204,12 +201,10 @@ class ActorCritic(AgentModule):
     def act_eval(self, obs):
         self.network.eval()
 
-        if self.engine == Engines.GYM:
-            return self._act_eval_gym(obs)
-        elif self.engine == Engines.SC2:
+        if self.engine == 'AdeptSC2Env':
             return self._act_eval_sc2(obs)
         else:
-            raise NotImplementedError()
+            return self._act_eval_gym(obs)
 
     def _act_eval_gym(self, obs):
         with torch.no_grad():

@@ -166,7 +166,8 @@ if __name__ == '__main__':
 ```
 * Call your script like this: `python my_script.py --agent MyAgent --env MyEnv 
 --custom-network MyNet`
-* You can see all the args [here](adept/scripts/local.py)
+* You can see all the args [here](adept/scripts/local.py) or how to implement
+ the stubs [here](#examples)
 
 ## Acknowledgements
 We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and 

@@ -95,7 +95,7 @@ def main(
         train_args = DotDict(json.load(args_file))
 
     engine = env_registry.lookup_engine(train_args.env)
-    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
+    assert engine == 'AdeptSC2Env', "replay_gen_sc2.py is only for SC2."
 
     # construct env
     env = SubProcEnvManager.from_args(
