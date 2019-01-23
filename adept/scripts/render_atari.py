@@ -44,9 +44,11 @@ import torch
 from adept.agents.agent_registry import AgentRegistry
 from adept.containers import AtariRenderer
 from adept.environments import SimpleEnvManager
-from adept.environments.env_registry import EnvModuleRegistry, Engines
+from adept.environments.env_registry import EnvModuleRegistry
+from adept.networks import NetworkRegistry
+from adept.networks.modular_network import ModularNetwork
 from adept.utils.logging import print_ascii_logo
-from adept.utils.script_helpers import make_network, LogDirHelper
+from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import DotDict
 
 
@@ -66,14 +68,16 @@ def parse_args():
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvModuleRegistry()
+    env_registry=EnvModuleRegistry(),
+    net_registry=NetworkRegistry()
 ):
     """
-    Run an evaluation.
+    Run an evaluation training.
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
-    :param env_registry: EnvModuleRegistry
+    :param env_registry: EnvRegistry
+    :param net_registry: NetworkRegistry
     :return:
     """
     # construct logging objects
@@ -86,18 +90,31 @@ def main(
         train_args = DotDict(json.load(args_file))
 
     engine = env_registry.lookup_engine(train_args.env)
-    assert engine == Engines.GYM, "render_atari.py is only for Atari."
+    assert engine == 'AdeptGymEnv', "render_atari.py is only for Atari."
 
     env = SimpleEnvManager.from_args(
         train_args, seed=args.seed, nb_env=1, registry=env_registry
     )
 
     # construct network
-    network = make_network(
-        env.observation_space,
-        agent_registry.lookup_output_space(train_args.agent, env.action_space),
-        train_args
+    torch.manual_seed(args.seed)
+    output_space = agent_registry.lookup_output_space(
+        args.agent, env.action_space
     )
+    if args.custom_network:
+        network = net_registry.lookup_custom_net(args.custom_network).from_args(
+            train_args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
+    else:
+        network = ModularNetwork.from_args(
+            train_args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
     network.load_state_dict(
         torch.load(
             log_dir_helper.network_path_at_epoch(args.epoch),
