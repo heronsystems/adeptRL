@@ -3,14 +3,14 @@
 [![Build Status](http://ci.heronsystems.com:12345/buildStatus/icon?job=adeptRL/master)](http://ci.heronsystems.com:12345/job/adeptRL/job/master/)
 [![Gitter chat](https://badges.gitter.im/adeptRL.png)](https://gitter.im/adeptRL/Lobby)
 
-adept is a library designed to accelerate reinforcement learning research by 
-providing:
+adept is a reinforcement learning framework designed to accelerate research 
+by providing:
+* a modular interface for using custom networks, agents, and environments
 * baseline reinforcement learning models and algorithms for PyTorch
 * multi-GPU support
 * access to various environments
 * built-in tensorboard logging, model saving, reloading, evaluation, and 
 rendering
-* modular interface for using custom networks, agents, and environments
 * proven hyperparameter defaults
 
 This code is early-access, expect rough edges. Interfaces subject to change. 
@@ -20,7 +20,7 @@ We're happy to accept feedback and contributions.
 * [Features](#features)
 * [Installation](#installation)
 * [Performance](#performance)
-* [Quickstart](#train-an-agent)
+* [Quickstart](#quickstart)
 
 **Documentation**
 * [Architecture Overview](docs/api_overview.md)
@@ -49,7 +49,7 @@ We're happy to accept feedback and contributions.
 
 **Environments**
 * OpenAI Gym
-* StarCraft 2 (alpha, impala mode does not work with SC2 yet)
+* StarCraft 2 (unstable)
 
 ## Installation
 **Dependencies:**
@@ -73,7 +73,7 @@ pip install .[mpi,sc2,profiler]
 * [docker instructions](./docker/)
 
 ## Performance
-* ~ 3,000 Steps/second = 12,000 FPS
+* ~ 3,000 Steps/second = 12,000 FPS (Atari)
   * Local Mode
   * 64 environments
   * GeForce 2080 Ti
@@ -82,6 +82,7 @@ pip install .[mpi,sc2,profiler]
 [Doom competition](https://www.crowdai.org/challenges/visual-doom-ai-competition-2018-track-2) 
 (Ben Bell / Marv2in)
 ![architecture](images/benchmark.png)
+* Trained for 50M Steps / 200M Frames
 * Up to 30 no-ops at start of each episode
 * Evaluated on different seeds than trained on
 * Architecture: [Four Convs](./adept/networks/net3d/four_conv.py) (F=32) 
