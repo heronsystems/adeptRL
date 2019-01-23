@@ -90,7 +90,7 @@ followed by an [LSTM](./adept/networks/net1d/lstm.py) (F=512)
 -y --env <env-id>`
 
 ## Quickstart
-**Train an Agent**
+**Train an Agent**  
 Logs go to `/tmp/adept_logs/` by default. The log directory contains the 
 tensorboard file, saved models, and other metadata.
 
@@ -116,8 +116,15 @@ python -m adept.app -h
 python -m adept.app help <command>
 ```
 
-**Use your own Agent, Environment, Network, or SubModule**
+**Use your own Agent, Environment, Network, or SubModule**  
+* Call the script like this: `python my_script.py --agent MyAgent --env MyEnv 
+--custom-network MyNet`
 ```python
+"""
+my_script.py
+
+Train an agent on a single GPU. See ``python -m adept.app help local`` for args.
+"""
 from adept.scripts.local import parse_args, main
 from adept.networks import NetworkModule, NetworkRegistry, SubModule1D
 from adept.agents import AgentModule, AgentRegistry
@@ -157,7 +164,6 @@ if __name__ == '__main__':
         env_registry=env_registry,
         net_registry=network_registry
     )
-    # call this script with: --agent MyAgent --env MyEnv --custom-network MyNet
 ```
 
 ## Acknowledgements
