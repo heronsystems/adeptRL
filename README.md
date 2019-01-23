@@ -33,7 +33,7 @@ We're happy to accept feedback and contributions.
 * Custom Network ([stub](examples/custom_network_stub.py) | example)
 * Custom SubModule ([stub](examples/custom_submodule_stub.py) | [example](adept/networks/net1d/lstm.py))
 * Custom Agent ([stub](examples/custom_agent_stub.py) | [example](adept/agents/actor_critic.py))
-* Custom Environment (stub | [example](adept/environments/openai_gym.py))
+* Custom Environment ([stub](examples/custom_environment_stub.py) | [example](adept/environments/openai_gym.py))
 
 ## Features
 **Agents / Networks**
