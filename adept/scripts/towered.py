@@ -78,7 +78,7 @@ from tensorboardX import SummaryWriter
 from adept.agents.agent_registry import AgentRegistry
 from adept.containers import ToweredHost, ToweredWorker
 from adept.environments import SubProcEnvManager, EnvMetaData
-from adept.environments.env_registry import EnvModuleRegistry
+from adept.environments.env_registry import EnvRegistry
 from adept.networks.modular_network import ModularNetwork
 from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
@@ -124,7 +124,7 @@ def parse_args():
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvModuleRegistry(),
+    env_registry=EnvRegistry(),
     net_registry=NetworkRegistry()
 ):
     """
@@ -132,7 +132,7 @@ def main(
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
-    :param env_registry: EnvModuleRegistry
+    :param env_registry: EnvRegistry
     :param net_registry: NetworkRegistry
     :return:
     """

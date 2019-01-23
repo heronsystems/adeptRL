@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from adept.environments._env import HasEnvMetaData
-from adept.environments.env_registry import EnvModuleRegistry
+from adept.environments.env_registry import EnvRegistry
 
 
 class EnvMetaData(HasEnvMetaData):
@@ -34,7 +34,7 @@ class EnvMetaData(HasEnvMetaData):
         self._gpu_preprocessor = dummy_env.gpu_preprocessor
 
     @classmethod
-    def from_args(cls, args, registry=EnvModuleRegistry()):
+    def from_args(cls, args, registry=EnvRegistry()):
         """
         Mimic the EnvModule.from_args API to simplify interface.
 

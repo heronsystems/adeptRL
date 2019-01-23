@@ -20,7 +20,7 @@ We're happy to accept feedback and contributions.
 * [Features](#features)
 * [Installation](#installation)
 * [Performance](#performance)
-* [Train an Agent](#train-an-agent)
+* [Quickstart](#train-an-agent)
 
 **Documentation**
 * [Architecture Overview](docs/api_overview.md)
@@ -89,7 +89,8 @@ followed by an [LSTM](./adept/networks/net1d/lstm.py) (F=512)
 * Reproduce with `python -m adept.app local --logdir ~/local64_benchmark --eval 
 -y --env <env-id>`
 
-## Train an Agent
+## Quickstart
+**Train an Agent**
 Logs go to `/tmp/adept_logs/` by default. The log directory contains the 
 tensorboard file, saved models, and other metadata.
 
@@ -113,6 +114,50 @@ python -m adept.app local --env CollectMineralShards
 # To see a full list of options:
 python -m adept.app -h
 python -m adept.app help <command>
+```
+
+**Use your own Agent, Environment, Network, or SubModule**
+```python
+from adept.scripts.local import parse_args, main
+from adept.networks import NetworkModule, NetworkRegistry, SubModule1D
+from adept.agents import AgentModule, AgentRegistry
+from adept.environments import EnvModule, EnvRegistry
+
+
+class MyAgent(AgentModule):
+    pass  # Implement
+
+
+class MyEnv(EnvModule):
+    pass  # Implement
+
+
+class MyNet(NetworkModule):
+    pass  # Implement
+
+
+class MySubModule1D(SubModule1D):
+    pass  # Implement
+
+
+if __name__ == '__main__':
+    agent_registry = AgentRegistry()
+    agent_registry.register_agent(MyAgent)
+    
+    env_registry = EnvRegistry()
+    env_registry.register_env()  # TODO user-friendliness
+    
+    network_registry = NetworkRegistry()
+    network_registry.register_custom_net(MyNet)
+    network_registry.register_submodule(MySubModule1D)
+    
+    main(
+        parse_args(),
+        agent_registry=agent_registry,
+        env_registry=env_registry,
+        net_registry=network_registry
+    )
+    # call this script with: --agent MyAgent --env MyEnv --custom-network MyNet
 ```
 
 ## Acknowledgements

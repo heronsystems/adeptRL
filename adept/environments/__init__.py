@@ -17,3 +17,4 @@ from adept.environments.managers.subproc_env_manager import SubProcEnvManager
 from adept.environments.managers.simple_env_manager import SimpleEnvManager
 from adept.environments._metadata import EnvMetaData
 from adept.environments.env_module import EnvModule
+from adept.environments.env_registry import EnvRegistry

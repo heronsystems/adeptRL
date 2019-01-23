@@ -100,7 +100,7 @@ ATARI_ENVS = [
 ]
 
 
-class EnvModuleRegistry:
+class EnvRegistry:
     """
     Keeps track of supported environment modules.
     """
