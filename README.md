@@ -151,7 +151,7 @@ if __name__ == '__main__':
     agent_registry.register_agent(MyAgent)
     
     env_registry = EnvRegistry()
-    env_registry.register_env()  # TODO user-friendliness
+    env_registry.register_env(MyEnv, ['env-id-1', 'env-id-2'])
     
     network_registry = NetworkRegistry()
     network_registry.register_custom_net(MyNet)

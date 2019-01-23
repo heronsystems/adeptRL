@@ -99,10 +99,12 @@ def main(
     # construct network
     torch.manual_seed(args.seed)
     output_space = agent_registry.lookup_output_space(
-        args.agent, env.action_space
+        train_args.agent, env.action_space
     )
-    if args.custom_network:
-        network = net_registry.lookup_custom_net(args.custom_network).from_args(
+    if train_args.custom_network:
+        network = net_registry.lookup_custom_net(
+            train_args.custom_network
+        ).from_args(
             train_args,
             env.observation_space,
             output_space,

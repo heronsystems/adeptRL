@@ -122,7 +122,7 @@ class EnvRegistry:
 
         EnvID = str
 
-        :param env_module_class:
+        :param env_module_class: EnvModule
         :param env_id_set: List[EnvID], list of environment ids supported by
         the provided module.
         :return: EnvRegistry

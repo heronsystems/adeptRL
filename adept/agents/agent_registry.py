@@ -40,7 +40,6 @@ class AgentRegistry:
         """
         Add your own agent class.
 
-        :param agent_id: str Name of your agent.
         :param agent_class: adept.agents.AgentModule. Your custom class.
         :return:
         """
