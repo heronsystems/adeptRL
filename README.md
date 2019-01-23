@@ -117,13 +117,11 @@ python -m adept.app help <command>
 ```
 
 **Use your own Agent, Environment, Network, or SubModule**  
-Call the script like this: `python my_script.py --agent MyAgent --env MyEnv 
---custom-network MyNet`
 ```python
 """
 my_script.py
 
-Train an agent on a single GPU. See ``python -m adept.app help local`` for args.
+Train an agent on a single GPU.
 """
 from adept.scripts.local import parse_args, main
 from adept.networks import NetworkModule, NetworkRegistry, SubModule1D
@@ -165,6 +163,9 @@ if __name__ == '__main__':
         net_registry=network_registry
     )
 ```
+* Call your script like this: `python my_script.py --agent MyAgent --env MyEnv 
+--custom-network MyNet`
+* You all the args [here](adept/scripts/local.py)
 
 ## Acknowledgements
 We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and 
