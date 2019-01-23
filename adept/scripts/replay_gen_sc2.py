@@ -47,7 +47,7 @@ from absl import flags
 from adept.agents.agent_registry import AgentRegistry
 from adept.containers import ReplayGenerator
 from adept.environments import SubProcEnvManager
-from adept.environments.env_registry import EnvModuleRegistry, Engines
+from adept.environments.env_registry import EnvRegistry, Engines
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import (
     make_network, LogDirHelper
@@ -75,14 +75,14 @@ def parse_args():
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvModuleRegistry()
+    env_registry=EnvRegistry()
 ):
     """
     Run an evaluation.
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
-    :param env_registry: EnvModuleRegistry
+    :param env_registry: EnvRegistry
     :return:
     """
 
@@ -95,7 +95,7 @@ def main(
         train_args = DotDict(json.load(args_file))
 
     engine = env_registry.lookup_engine(train_args.env)
-    assert engine == Engines.SC2, "replay_gen_sc2.py is only for SC2."
+    assert engine == 'AdeptSC2Env', "replay_gen_sc2.py is only for SC2."
 
     # construct env
     env = SubProcEnvManager.from_args(

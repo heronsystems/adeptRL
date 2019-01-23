@@ -104,5 +104,4 @@ class SimpleEnvManager(EnvManager):
         return [e.render(mode=mode) for e in self.envs]
 
     def _is_tensor_key(self, key):
-        ebn = self.cpu_preprocessor.observation_space.entries_by_name
-        return None not in ebn[key].shape
+        return None not in self.cpu_preprocessor.observation_space[key]

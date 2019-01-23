@@ -44,7 +44,7 @@ import torch
 from adept.agents.agent_registry import AgentRegistry
 from adept.containers import AtariRenderer
 from adept.environments import SimpleEnvManager
-from adept.environments.env_registry import EnvModuleRegistry
+from adept.environments.env_registry import EnvRegistry
 from adept.networks import NetworkRegistry
 from adept.networks.modular_network import ModularNetwork
 from adept.utils.logging import print_ascii_logo
@@ -68,7 +68,7 @@ def parse_args():
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvModuleRegistry(),
+    env_registry=EnvRegistry(),
     net_registry=NetworkRegistry()
 ):
     """
@@ -99,10 +99,12 @@ def main(
     # construct network
     torch.manual_seed(args.seed)
     output_space = agent_registry.lookup_output_space(
-        args.agent, env.action_space
+        train_args.agent, env.action_space
     )
-    if args.custom_network:
-        network = net_registry.lookup_custom_net(args.custom_network).from_args(
+    if train_args.custom_network:
+        network = net_registry.lookup_custom_net(
+            train_args.custom_network
+        ).from_args(
             train_args,
             env.observation_space,
             output_space,

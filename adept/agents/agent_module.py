@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+
+from adept.utils import listd_to_dlist
 from adept.utils.requires_args import RequiresArgs
 
 
@@ -20,6 +22,25 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
     """
     An Agent interacts with the environment and accumulates experience.
     """
+    def __init__(
+        self,
+        network,
+        device,
+        reward_normalizer,
+        gpu_preprocessor,
+        engine,
+        action_space,
+        nb_env
+    ):
+        self._network = network.to(device)
+        self._internals = listd_to_dlist(
+            [self.network.new_internals(device) for _ in range(nb_env)]
+        )
+        self._device = device
+        self._reward_normalizer = reward_normalizer
+        self._gpu_preprocessor = gpu_preprocessor
+        self._engine = engine
+        self._action_space = action_space
 
     @classmethod
     @abc.abstractmethod
@@ -33,29 +54,6 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def exp_cache(self):
         """Get experience cache"""
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def device(self):
-        """Get experience cache"""
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def network(self):
-        """Get network"""
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def internals(self):
-        """A list of internals"""
-        raise NotImplementedError
-
-    @internals.setter
-    @abc.abstractmethod
-    def internals(self, new_internals):
         raise NotImplementedError
 
     @staticmethod
@@ -74,6 +72,40 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def act_eval(self, obs):
         raise NotImplementedError
+
+    @property
+    def device(self):
+        """Get experience cache"""
+        return self._device
+
+    @property
+    def network(self):
+        """Get network"""
+        return self._network
+
+    @property
+    def internals(self):
+        """A list of internals"""
+        return self._internals
+
+    @internals.setter
+    def internals(self, new_internals):
+        self._internals = new_internals
+
+    @property
+    def engine(self):
+        """Get network"""
+        return self._engine
+
+    @property
+    def gpu_preprocessor(self):
+        """Get network"""
+        return self._gpu_preprocessor
+
+    @property
+    def action_space(self):
+        """Get network"""
+        return self._action_space
 
     def observe(self, obs, rewards, terminals, infos):
         self.exp_cache.write_env(obs, rewards, terminals, infos)

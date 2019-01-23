@@ -16,7 +16,6 @@ from collections import OrderedDict
 import torch
 from torch.nn import functional as F
 
-from adept.environments.env_registry import Engines
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.agents.agent_module import AgentModule
@@ -50,26 +49,27 @@ class ActorCriticVtrace(AgentModule):
         minimum_importance_policy,
         entropy_weight
     ):
+        super(ActorCriticVtrace, self).__init__(
+            network,
+            device,
+            reward_normalizer,
+            gpu_preprocessor,
+            engine,
+            action_space,
+            nb_env
+        )
         self.discount = discount
-        self.gpu_preprocessor = gpu_preprocessor
-        self.engine = engine
         self.minimum_importance_value = minimum_importance_value
         self.minimum_importance_policy = minimum_importance_policy
         self.entropy_weight = entropy_weight
 
-        self._network = network.to(device)
         self._exp_cache = RolloutCache(
             nb_rollout, device, reward_normalizer,
             ['log_prob_of_action', 'sampled_action']
         )
-        self._internals = listd_to_dlist(
-            [self.network.new_internals(device) for _ in range(nb_env)]
-        )
-        self._device = device
-        self.action_space = action_space
         self._action_keys = list(sorted(action_space.keys()))
         self._func_id_to_headnames = None
-        if self.engine == Engines.SC2:
+        if self.engine == 'AdeptSC2Env':
             from adept.environments.deepmind_sc2 import SC2ActionLookup
             self._func_id_to_headnames = SC2ActionLookup()
 
@@ -96,22 +96,6 @@ class ActorCriticVtrace(AgentModule):
     def exp_cache(self):
         return self._exp_cache
 
-    @property
-    def network(self):
-        return self._network
-
-    @property
-    def device(self):
-        return self._device
-
-    @property
-    def internals(self):
-        return self._internals
-
-    @internals.setter
-    def internals(self, new_internals):
-        self._internals = new_internals
-
     @staticmethod
     def output_space(action_space):
         return {'critic': (1, ), **action_space}
@@ -129,12 +113,10 @@ class ActorCriticVtrace(AgentModule):
         # requested to use the learned parameters instead of per batch stats
         # self.network.train()
 
-        if self.engine == Engines.GYM:
-            return self._act_gym(obs)
-        elif self.engine == Engines.SC2:
+        if self.engine == 'AdeptSC2Env':
             return self._act_sc2(obs)
         else:
-            raise NotImplementedError()
+            return self._act_gym(obs)
 
     def _act_gym(self, obs):
         """
@@ -242,13 +224,10 @@ class ActorCriticVtrace(AgentModule):
 
     def act_eval(self, obs):
         self.network.eval()
-
-        if self.engine == Engines.GYM:
-            return self._act_eval_gym(obs)
-        elif self.engine == Engines.SC2:
+        if self.engine == 'AdeptSC2Env':
             return self._act_eval_sc2(obs)
         else:
-            raise NotImplementedError()
+            return self._act_eval_gym(obs)
 
     def _act_eval_gym(self, obs):
         with torch.no_grad():
@@ -328,13 +307,13 @@ class ActorCriticVtrace(AgentModule):
     def _predictions_to_logprobs_ents_host(
         self, seq_ind, obs, predictions, actions_taken
     ):
-        if self.engine == Engines.GYM:
-            return self.__predictions_to_logprobs_ents_host_gym(
-                predictions, actions_taken
-            )
-        if self.engine == Engines.SC2:
+        if self.engine == 'AdeptSC2Env':
             return self.__predictions_to_logprobs_ents_host_sc2(
                 seq_ind, obs, predictions, actions_taken
+            )
+        else:
+            return self.__predictions_to_logprobs_ents_host_gym(
+                predictions, actions_taken
             )
 
     def __predictions_to_logprobs_ents_host_gym(

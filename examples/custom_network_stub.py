@@ -1,8 +1,7 @@
 """
 Use a custom network.
 """
-from adept.networks import NetworkModule
-from adept.networks import NetworkRegistry
+from adept.networks import NetworkModule, NetworkRegistry
 from adept.scripts.local import parse_args, main
 
 
@@ -28,10 +27,10 @@ class MyCustomNetwork(NetworkModule):
         """
         Construct a MyCustomNetwork from arguments.
 
-        ArgName=str
-        ObsKey=str
-        OutputKey=str
-        Shape=Tuple[*int]
+        ArgName = str
+        ObsKey = str
+        OutputKey = str
+        Shape = Tuple[*int]
 
         :param args: Dict[ArgName, Any]
         :param observation_space: Dict[ObsKey, Shape]
@@ -58,9 +57,9 @@ class MyCustomNetwork(NetworkModule):
         ObsKey = str
         InternalKey = str
 
-        :param observation: Dict[ObsKey, torch.Tensor]
+        :param observation: Dict[ObsKey, torch.Tensor (1D | 2D | 3D | 4D)]
         :param internals: Dict[InternalKey, torch.Tensor (ND)]
-        :return:
+        :return: torch.Tensor
         """
         pass
 
@@ -73,4 +72,4 @@ if __name__ == '__main__':
     main(args, net_registry=network_reg)
 
     # Call script like this to train agent:
-    # python -m custom_network.py --custom-net MyCustomNetwork
+    # python -m custom_network_stub.py --custom-net MyCustomNetwork

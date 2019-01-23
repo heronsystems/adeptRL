@@ -23,10 +23,8 @@ class AgentRegistry:
     def __init__(self):
         self._agent_class_by_id = {}
 
-        self.register_agent('ActorCritic', self._load_actor_critic())
-        self.register_agent(
-            'ActorCriticVtrace', self._load_actor_critic_vtrace()
-        )
+        self.register_agent(self._load_actor_critic())
+        self.register_agent(self._load_actor_critic_vtrace())
 
     @staticmethod
     def _load_actor_critic():
@@ -38,17 +36,16 @@ class AgentRegistry:
         from adept.agents.impala.actor_critic_vtrace import ActorCriticVtrace
         return ActorCriticVtrace
 
-    def register_agent(self, agent_id, agent_class):
+    def register_agent(self, agent_class):
         """
         Add your own agent class.
 
-        :param agent_id: str Name of your agent.
         :param agent_class: adept.agents.AgentModule. Your custom class.
         :return:
         """
         assert issubclass(agent_class, AgentModule)
         agent_class.check_args_implemented()
-        self._agent_class_by_id[agent_id] = agent_class
+        self._agent_class_by_id[agent_class.__name__] = agent_class
 
     def lookup_agent(self, agent_id):
         """
