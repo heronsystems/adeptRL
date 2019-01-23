@@ -117,7 +117,7 @@ python -m adept.app help <command>
 ```
 
 **Use your own Agent, Environment, Network, or SubModule**  
-* Call the script like this: `python my_script.py --agent MyAgent --env MyEnv 
+Call the script like this: `python my_script.py --agent MyAgent --env MyEnv 
 --custom-network MyNet`
 ```python
 """
