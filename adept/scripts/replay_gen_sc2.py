@@ -124,7 +124,7 @@ def main(
         )
     else:
         network = ModularNetwork.from_args(
-            args,
+            train_args,
             env.observation_space,
             output_space,
             net_registry
