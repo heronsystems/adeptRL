@@ -86,7 +86,7 @@ from adept.utils.logging import (
     log_args, write_args_file, SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    count_parameters, parse_list_str, parse_none
+    count_parameters, parse_list_str, parse_none, parse_path
 )
 from adept.utils.util import DotDict
 from datetime import datetime
@@ -108,6 +108,7 @@ def parse_args():
     del args['h']
     del args['help']
     args = DotDict(args)
+    args.logdir = parse_path(args.logdir)
     args.gpu_ids = parse_list_str(args.gpu_ids, int)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)

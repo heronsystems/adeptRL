@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from enum import IntEnum
 from adept.environments.env_module import EnvModule
 from adept.utils.normalizers import Clip, Scale
 from collections import defaultdict

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
+from os.path import abspath
 
 
 def count_parameters(model):
@@ -44,6 +45,14 @@ def parse_none(none_str):
         return None
     else:
         return none_str
+
+
+def parse_path(rel_path):
+    """
+    :param rel_path: (str) relative path
+    :return: (str) absolute path
+    """
+    return abspath(rel_path)
 
 
 class LogDirHelper:

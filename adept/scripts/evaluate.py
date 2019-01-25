@@ -52,8 +52,9 @@ from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Evaluation
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvRegistry
+from adept.networks.modular_network import ModularNetwork
+from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.script_helpers import make_network
 from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
@@ -81,7 +82,8 @@ SelectedModel = namedtuple('SelectedModel', ['epoch', 'model_id'])
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry()
+    env_registry=EnvRegistry(),
+    net_registry=NetworkRegistry()
 ):
     """
     Run an evaluation.
@@ -89,6 +91,7 @@ def main(
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvRegistry
+    :param net_registry: NetworkRegistry
     :return:
     """
     args = DotDict(args)
@@ -122,11 +125,25 @@ def main(
         if (torch.cuda.is_available() and args.gpu_id >= 0)
         else "cpu"
     )
-    network = make_network(
-        env.observation_space,
-        agent_registry.lookup_output_space(train_args.agent, env.action_space),
-        train_args
+    output_space = agent_registry.lookup_output_space(
+        train_args.agent, env.action_space
     )
+    if args.custom_network:
+        network = net_registry.lookup_custom_net(
+            train_args.custom_network
+        ).from_args(
+            train_args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
+    else:
+        network = ModularNetwork.from_args(
+            train_args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
 
     results = []
     selected_models = []

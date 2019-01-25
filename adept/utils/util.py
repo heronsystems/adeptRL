@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import argparse
 import json
 import heapq
 from collections import OrderedDict
@@ -57,15 +56,6 @@ def dlist_to_listd(dict_of_lists):
             temp_d[k] = dict_of_lists[k][i]
         new_list.append(temp_d)
     return new_list
-
-
-def parse_bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def json_to_dict(file_path):
