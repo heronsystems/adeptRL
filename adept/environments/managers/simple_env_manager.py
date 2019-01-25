@@ -12,10 +12,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import numpy as np
 import torch
 
 from adept.environments.managers._manager import EnvManager
-from adept.environments.managers.subproc_env_manager import dummy_handle_ob
 from adept.utils import listd_to_dlist
 
 
@@ -105,3 +105,13 @@ class SimpleEnvManager(EnvManager):
 
     def _is_tensor_key(self, key):
         return None not in self.cpu_preprocessor.observation_space[key]
+
+
+def dummy_handle_ob(ob):
+    new_ob = {}
+    for k, v in ob.items():
+        if isinstance(v, np.ndarray):
+            new_ob[k] = torch.from_numpy(v)
+        else:
+            new_ob[k] = v
+    return new_ob

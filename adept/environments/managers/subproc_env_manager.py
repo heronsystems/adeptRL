@@ -16,7 +16,6 @@
 import pickle
 
 import cloudpickle
-import numpy as np
 import torch
 from torch import multiprocessing as mp
 
@@ -133,16 +132,6 @@ class SubProcEnvManager(EnvManager):
         for p in self.ps:
             p.join()
         self.closed = True
-
-
-def dummy_handle_ob(ob):
-    new_ob = {}
-    for k, v in ob.items():
-        if isinstance(v, np.ndarray):
-            new_ob[k] = torch.from_numpy(v)
-        else:
-            new_ob[k] = v
-    return new_ob
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
