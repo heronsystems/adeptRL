@@ -164,10 +164,10 @@ if __name__ == '__main__':
         net_registry=network_registry
     )
 ```
-* Call your script like this: `python my_script.py --agent MyAgent --env MyEnv 
---custom-network MyNet`
+* Call your script like this: `python my_script.py --agent MyAgent --env 
+env-id-1 --custom-network MyNet`
 * You can see all the args [here](adept/scripts/local.py) or how to implement
- the stubs [here](#examples)
+ the stubs in the examples section above.
 
 ## Acknowledgements
 We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and 
