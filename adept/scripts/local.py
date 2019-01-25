@@ -83,14 +83,14 @@ from adept.agents.agent_registry import AgentRegistry
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvRegistry
-from adept.networks.network_registry import NetworkRegistry
 from adept.networks.modular_network import ModularNetwork
+from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
     SimpleModelSaver
 )
 from adept.utils.script_helpers import (
-    count_parameters, parse_none, LogDirHelper
+    count_parameters, parse_none, LogDirHelper, parse_path
 )
 from adept.utils.util import DotDict
 
@@ -111,6 +111,7 @@ def parse_args():
     if args.resume:
         return args
 
+    args.logdir = parse_path(args.logdir)
     args.gpu_id = int(args.gpu_id)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)

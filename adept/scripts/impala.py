@@ -95,7 +95,9 @@ from adept.utils.logging import (
 from adept.utils.script_helpers import (
     count_parameters,
     parse_none,
-    parse_list_str)
+    parse_list_str,
+    parse_path
+)
 from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
@@ -119,6 +121,7 @@ def parse_args():
     # Network Options
 
     # Container Options
+    args.logdir = parse_path(args.logdir)
     args.gpu_ids = parse_list_str(args.gpu_ids, int)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)

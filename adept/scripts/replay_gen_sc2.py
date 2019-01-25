@@ -39,7 +39,6 @@ Options:
     --render                Render environment
 """
 import json
-import os
 
 import torch
 from absl import flags
@@ -47,11 +46,13 @@ from absl import flags
 from adept.agents.agent_registry import AgentRegistry
 from adept.containers import ReplayGenerator
 from adept.environments import SubProcEnvManager
-from adept.environments.env_registry import EnvRegistry, Engines
+from adept.environments.env_registry import EnvRegistry
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import (
-    make_network, LogDirHelper
+    LogDirHelper
 )
+from adept.networks.modular_network import ModularNetwork
+from adept.networks.network_registry import NetworkRegistry
 from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
@@ -75,14 +76,16 @@ def parse_args():
 def main(
     args,
     agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry()
+    env_registry=EnvRegistry(),
+    net_registry=NetworkRegistry()
 ):
     """
-    Run an evaluation.
+    Generate SC2 replays.
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvRegistry
+    :param net_registry: NetworkRegistry
     :return:
     """
 
@@ -107,18 +110,25 @@ def main(
         sc2_render=args.render
     )
 
-    # construct network
-    network = make_network(
-        env.observation_space,
-        agent_registry.lookup_output_space(train_args.agent, env.action_space),
-        train_args
+    output_space = agent_registry.lookup_output_space(
+        train_args.agent, env.action_space
     )
-    network.load_state_dict(
-        torch.load(
-            log_dir_helper.network_path_at_epoch(args.epoch),
-            map_location=lambda storage, loc: storage
+    if args.custom_network:
+        network = net_registry.lookup_custom_net(
+            train_args.custom_network
+        ).from_args(
+            train_args,
+            env.observation_space,
+            output_space,
+            net_registry
         )
-    )
+    else:
+        network = ModularNetwork.from_args(
+            args,
+            env.observation_space,
+            output_space,
+            net_registry
+        )
 
     # create an agent (add act_eval method)
     device = torch.device(
