@@ -56,12 +56,12 @@ class AdeptSC2Env(EnvModule):
         }
         action_space = {
             'func_id': (524, ),
-            'screen_x': (80, ),
-            'screen_y': (80, ),
-            'minimap_x': (80, ),
-            'minimap_y': (80, ),
-            'screen2_x': (80, ),
-            'screen2_y': (80, ),
+            'screen_x': (84, ),
+            'screen_y': (84, ),
+            'minimap_x': (84, ),
+            'minimap_y': (84, ),
+            'screen2_x': (84, ),
+            'screen2_y': (84, ),
             'queued': (2, ),
             'control_group_act': (4, ),
             'control_group_id': (10, ),
