@@ -29,10 +29,11 @@ from adept.networks.modular_network import ModularNetwork
 from adept.utils.script_helpers import (
     count_parameters, parse_none, LogDirHelper, parse_path, parse_bool_str
 )
-from adept.utils.logging import make_logger
+from adept.utils.logging import make_logger, SimpleModelSaver
 from adept.utils.util import DotDict
 import json
 from tensorboardX import SummaryWriter
+from adept.containers.distrib import DistribHost, DistribWorker
 
 
 MODE = 'Distrib'
@@ -148,18 +149,19 @@ def main(
             )
             logger.info("Reloaded optimizer from {}".format(args.load_optim))
         return opt
-
     if LOCAL_RANK == 0:
         summary_writer = SummaryWriter(
             os.path.join(log_id_dir, 'rank{}'.format(GLOBAL_RANK))
         )
         container = DistribHost(
             agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
-            summary_writer, args.summary_freq, saver
+            summary_writer, args.summary_freq, SimpleModelSaver(log_id_dir),
+            WORLD_SIZE
         )
     else:
         container = DistribWorker(
-
+            agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
+            WORLD_SIZE
         )
     initial_step_count = helper.latest_epoch()
     container.run(args.nb_train_frame, initial_count=initial_step_count)

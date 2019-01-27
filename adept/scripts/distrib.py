@@ -37,7 +37,7 @@ Usage:
 Distributed Options:
     --nb-node <int>         Number of distributed nodes [default: 1]
     --node-rank <int>       ID of the node for multi-node training [default: 0]
-    --nb-proc <int>         Number of processes per node [default: 1]
+    --nb-proc <int>         Number of processes per node [default: 2]
     --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
     --master-port <int>     Master node (rank 0's) comm port [default: 29500]
 
@@ -93,7 +93,7 @@ from adept.environments.env_registry import EnvRegistry
 from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo,
-    log_args, write_args_file, SimpleModelSaver
+    log_args, write_args_file
 )
 
 
@@ -201,7 +201,7 @@ def main(
             sys.executable,
             "-u",
             "-m",
-            "adept.scripts._distributed",
+            "adept.scripts._distrib",
             "--log-id-dir={}".format(log_id_dir)
         ]
 
