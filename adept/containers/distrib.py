@@ -1,6 +1,3 @@
-# Copyright (C) 2018 Heron Systems, Inc.
-#
-# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
@@ -12,19 +9,22 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import torch
 from time import time
 
-from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, LogsAndSummarizesRewards
+import torch
+import torch.distributed as dist
+
+from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, \
+    LogsAndSummarizesRewards
 
 
-class Local(
+class DistribHost(
     HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
     SavesModels
 ):
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        summary_writer, summary_frequency, saver
+        summary_writer, summary_frequency, saver, world_size
     ):
         super().__init__()
         self._agent = agent
@@ -36,6 +36,7 @@ class Local(
         self._summary_writer = summary_writer
         self._saver = saver
         self._summary_frequency = summary_frequency
+        self._world_size = world_size
 
     @property
     def agent(self):
@@ -77,10 +78,6 @@ class Local(
     def summary_name(self):
         return 'reward/train'
 
-    @property
-    def world_size(self):
-        return 1
-
     def run(self, max_steps=float('inf'), initial_count=0):
         self.set_local_step_count(initial_count)
         self.set_next_save(initial_count)
@@ -98,8 +95,9 @@ class Local(
             terminal_rewards, terminal_infos = self.update_buffers(
                 rewards, terminals, infos
             )
+            global_step_count = self.local_step_count * self._world_size
             self.log_episode_results(
-                terminal_rewards, terminal_infos, self.local_step_count,
+                terminal_rewards, terminal_infos, global_step_count,
                 initial_count
             )
             self.write_reward_summaries(terminal_rewards, self.local_step_count)
@@ -119,6 +117,13 @@ class Local(
 
         self.optimizer.zero_grad()
         total_loss.backward()
+        dist.barrier()
+        dist.all_reduce_multigpu([
+            p.grad
+            for p in self.network.parameters()
+            # if p.grad is not None
+        ])
+
         self.optimizer.step()
 
         self.exp_cache.clear()
@@ -128,3 +133,5 @@ class Local(
         self.write_summaries(
             total_loss, loss_dict, metric_dict, self.local_step_count
         )
+
+    def 

@@ -96,7 +96,7 @@ class LogsRewards(CountsRewards, metaclass=abc.ABCMeta):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
             self.logger.info(
-                'train_frames: {} reward: {} avg_train_fps: {}'.format(
+                'steps taken: {} reward: {} steps per second: {}'.format(
                     step_count, ep_reward, (step_count - initial_step_count) /
                     (time() - self.start_time)
                 )

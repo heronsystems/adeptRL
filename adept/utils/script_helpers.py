@@ -63,12 +63,14 @@ class LogDirHelper:
         self._log_id_path = log_id_path
 
     def epochs(self):
-        return [
-            int(epoch)
-            for epoch in os.listdir(self._log_id_path)
-            if os.path.isdir(os.path.join(self._log_id_path, epoch))
-               and 'rank' not in os.path.join(self._log_id_path, epoch)
-        ]
+        epochs = []
+        for item in os.listdir(self._log_id_path):
+            item_path = os.path.join(self._log_id_path, item)
+            if os.path.isdir(item_path):
+                # check if numeric
+                if item.lower() == item.upper():
+                    epochs.append(int(item))
+        return epochs
 
     def latest_epoch(self):
         epochs = self.epochs()

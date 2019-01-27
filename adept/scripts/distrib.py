@@ -25,6 +25,10 @@ Distributed Mode
 
 Train an agent with multiple GPUs locally or on a cluster.
 
+More info:
+* https://pytorch.org/docs/stable/distributed.html
+* https://pytorch.org/tutorials/intermediate/dist_tuto.html
+
 Usage:
     distrib [options]
     distrib --resume <path>
@@ -106,7 +110,7 @@ def parse_args():
     args = DotDict(args)
 
     if args.resume:
-        return args
+        raise NotImplementedError
 
     args.nb_node = int(args.nb_node)
     args.node_rank = int(args.node_rank)
@@ -151,6 +155,10 @@ def main(
 
     if args.resume:
         log_id_dir = args.resume
+        helper = LogDirHelper(log_id_dir)
+        # TODO make this work
+        args.load_network = helper.latest_network_path()
+        args.load_optim = helper.latest_optim_path()
     else:
         if args.use_defaults:
             agent_args = agent_registry.lookup_agent(args.agent).args
@@ -194,8 +202,7 @@ def main(
             "-u",
             "-m",
             "adept.scripts._distributed",
-            "--log-id-dir={}".format(log_id_dir),
-            "--local_rank={}".format(local_rank)
+            "--log-id-dir={}".format(log_id_dir)
         ]
 
         process = subprocess.Popen(cmd, env=current_env)
