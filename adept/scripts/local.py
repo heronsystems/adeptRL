@@ -140,7 +140,7 @@ def main(
     :param net_registry: NetworkRegistry
     :return:
     """
-
+    args = DotDict(args)
     initial_step_count = 0
     if args.resume:
         log_dir_helper = LogDirHelper(args.resume)
@@ -157,7 +157,6 @@ def main(
             timestamp=log_dir_helper.timestamp()
         )
     else:
-        args = DotDict(args)
         if args.use_defaults:
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args

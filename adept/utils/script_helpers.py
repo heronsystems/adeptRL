@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
-from os.path import abspath
 
 
 def count_parameters(model):
@@ -52,7 +51,7 @@ def parse_path(rel_path):
     :param rel_path: (str) relative path
     :return: (str) absolute path
     """
-    return abspath(rel_path)
+    return os.path.abspath(rel_path)
 
 
 class LogDirHelper:
@@ -60,6 +59,7 @@ class LogDirHelper:
         """
         :param log_id_path: str Path to Log ID
         """
+
         self._log_id_path = log_id_path
 
     def epochs(self):
@@ -67,10 +67,12 @@ class LogDirHelper:
             int(epoch)
             for epoch in os.listdir(self._log_id_path)
             if os.path.isdir(os.path.join(self._log_id_path, epoch))
+               and 'rank' not in os.path.join(self._log_id_path, epoch)
         ]
 
     def latest_epoch(self):
-        return max(self.epochs())
+        epochs = self.epochs()
+        return max(epochs) if epochs else 0
 
     def latest_epoch_path(self):
         return os.path.join(self._log_id_path, str(self.latest_epoch()))
