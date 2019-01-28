@@ -88,8 +88,8 @@ def main(
     logger.info('Rank {} initialized.'.format(GLOBAL_RANK))
     seed = args.seed \
         if GLOBAL_RANK == 0 \
-        else args.seed + args.nb_env * (GLOBAL_RANK - 1)
-
+        else args.seed + args.nb_env * GLOBAL_RANK
+    logger.info('Using {} for rank {} seed.'.format(seed, GLOBAL_RANK))
     env = SubProcEnvManager.from_args(
         args,
         seed=seed,
