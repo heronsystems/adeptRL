@@ -81,10 +81,11 @@ class DistribHost(
     def run(self, max_steps=float('inf'), initial_count=0):
         self.set_local_step_count(initial_count)
         self.set_next_save(initial_count)
+        global_step_count = initial_count
 
         next_obs = self.environment.reset()
         self.start_time = time.time()
-        while self.local_step_count < max_steps:
+        while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
             actions = self.agent.act(obs)
@@ -121,7 +122,7 @@ class DistribHost(
         handles = []
         for param in self.network.parameters():
             handles.append(
-                dist.all_reduce(param.grad, async_op=True))
+                dist.all_reduce_multigpu([param.grad], async_op=True))
         for handle in handles:
             handle.wait()
         for param in self.network.parameters():
@@ -177,10 +178,11 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
 
     def run(self, max_steps=float('inf'), initial_count=0):
         self.set_local_step_count(initial_count)
+        global_step_count = initial_count
 
         next_obs = self.environment.reset()
         self.start_time = time.time()
-        while self.local_step_count < max_steps:
+        while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
             actions = self.agent.act(obs)
@@ -215,7 +217,7 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
         handles = []
         for param in self.network.parameters():
             handles.append(
-                dist.all_reduce(param.grad, async_op=True))
+                dist.all_reduce_multigpu([param.grad], async_op=True))
         for handle in handles:
             handle.wait()
         for param in self.network.parameters():
