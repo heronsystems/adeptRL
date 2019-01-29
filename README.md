@@ -152,10 +152,9 @@ passes.
 * On Atari we achieve ~4k SPS = ~16k FPS with two GPUs and an 8-core CPU.
 * "Note that the shallow IMPALA experiment completes training over 200 
 million frames in less than one hour."
-* Our implementation: 2000 frame / (s * core) DeepMind implementation: 1157 
-frame / (s * core)
-* Does not yet support multiple nodes or direct GPU memory transfers via 
-NVLINK.
+* IMPALA official experiments use 48 cores.
+* Ours: 2000 frame / (second * # CPU core) DeepMind : 1157 frame / (second * # CPU core)
+* Does not yet support multiple nodes or direct GPU memory transfers.
 
 ### Agents
 * Advantage Actor Critic, A2C ([paper](https://arxiv.org/pdf/1708.05144.pdf) | [code](adept/agents/actor_critic.py))
