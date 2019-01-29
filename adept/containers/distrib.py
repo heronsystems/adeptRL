@@ -98,8 +98,11 @@ class DistribHost(
             )
             global_step_count = self.local_step_count * self._world_size
             self.log_episode_results(
-                terminal_rewards, terminal_infos, global_step_count,
-                initial_count
+                terminal_rewards,
+                terminal_infos,
+                global_step_count,
+                self.local_step_count,
+                initial_step_count=initial_count
             )
             self.write_reward_summaries(terminal_rewards, global_step_count)
             self.save_model_if_epoch(global_step_count)
@@ -195,8 +198,11 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
             )
             global_step_count = self.local_step_count * self._world_size
             self.log_episode_results(
-                terminal_rewards, terminal_infos, global_step_count,
-                initial_count
+                terminal_rewards,
+                terminal_infos,
+                global_step_count,
+                self.local_step_count,
+                initial_step_count=initial_count
             )
 
             # Learn

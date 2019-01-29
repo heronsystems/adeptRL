@@ -35,7 +35,8 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         use_local_buffers=False
     ):
         """
-            use_local_buffers: bool If true does not send the network's buffers to the workers (noisy batch norm)
+        use_local_buffers: bool If true does not send the network's buffers to
+        the workers (noisy batch norm)
         """
         self._agent = agent
         self._optimizer = make_optimizer(self.network.parameters())
@@ -88,7 +89,8 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
             A thread that listens to a mpi worker and
             appends to the shared self.recieved_rollouts list
         """
-        # iterative wait time to make sure the host doesn't get behind and not be able to recover
+        # iterative wait time to make sure the host doesn't get behind and not
+        # be able to recover
         worker_wait_time.fill(0.0)
         # setup rollout buffers
         rollout_buffer = np.empty(self.rollout_flattener.total_size, np.float32)
@@ -101,7 +103,8 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
             while len(
                 self.received_rollouts
             ) > max_items_in_queue and not self._threads_should_be_done:
-                # random wait time to ensure that threads can uniformly add when max_queue size is reached
+                # random wait time to ensure that threads can uniformly add
+                # when max_queue size is reached
                 how_long_to_wait = float(np.random.uniform(0.1, 1))
                 time.sleep(how_long_to_wait)
                 worker_wait_time += how_long_to_wait
@@ -206,8 +209,9 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         saver_thread = Thread(target=self._saver_thread)
         saver_thread.start()
 
-        # this runs a "busy" loop assuming that loss.backward takes longer than accumulating batches
-        # removing the need for the threads to notify of new batches
+        # this runs a "busy" loop assuming that loss.backward takes longer than
+        # accumulating batches removing the need for the threads to notify of
+        # new batches
         variable_buffer = np.empty(
             self.variable_flattener.total_size, np.float32
         )
@@ -422,7 +426,11 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
                 rewards, terminals, infos
             )
             self.log_episode_results(
-                terminal_rewards, terminal_infos, self.local_step_count
+                terminal_rewards,
+                terminal_infos,
+                self.global_step,
+                self.local_step_count,
+                initial_step_count=initial_count
             )
             self.write_reward_summaries(terminal_rewards, self.global_step)
 
@@ -465,7 +473,8 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
             self.mpi_helper = MPIHelper(
                 shapes, parameter_shapes, 0, self.max_parameter_skip,
                 self.send_warning_time, self.recv_warning_time, float('inf')
-            )  # workers wait on send which waits on queue len so no warnings for # of recv updates are needed
+            )  # workers wait on send which waits on queue len so no warnings
+            # for # of recv updates are needed
 
         # TODO: mpi_helper send should accept list of lists of tensors
         # then don't have to torch stack

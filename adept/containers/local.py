@@ -100,7 +100,7 @@ class Local(
             )
             self.log_episode_results(
                 terminal_rewards, terminal_infos, self.local_step_count,
-                initial_count
+                initial_step_count=initial_count
             )
             self.write_reward_summaries(terminal_rewards, self.local_step_count)
             self.save_model_if_epoch(self.local_step_count)
