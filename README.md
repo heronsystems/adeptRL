@@ -147,7 +147,6 @@ server or host process.
 * InfiniBand untested since we do not have a setup to test on.
 
 **Importance Weighted Actor Learner Architectures, IMPALA (Single Node Multi-GPU)**
-* [paper](https://arxiv.org/pdf/1802.01561.pdf)
 * Our implementation uses GPU workers rather than CPU workers for forward 
 passes. Evidence suggests this is faster; on Atari we achieve ~4k SPS = ~16k 
 FPS with two GPUs and 8-core CPU.
