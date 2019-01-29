@@ -153,7 +153,7 @@ passes.
 * "Note that the shallow IMPALA experiment completes training over 200 
 million frames in less than one hour."
 * IMPALA official experiments use 48 cores.
-* Ours: 2000 frame / (second * # CPU core) DeepMind : 1157 frame / (second * # CPU core)
+* Ours: 2000 frame / (second * # CPU core) DeepMind: 1157 frame / (second * # CPU core)
 * Does not yet support multiple nodes or direct GPU memory transfers.
 
 ### Agents
