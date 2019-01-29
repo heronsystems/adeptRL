@@ -146,10 +146,14 @@ server or host process.
 * Supports NVLINK and InfiniBand to reduce communication overhead
 * InfiniBand untested since we do not have a setup to test on.
 
-**Importance Weighted Actor Learner Architectures, IMPALA (Single Node Multi-GPU)**
+**Importance Weighted Actor Learner Architectures, IMPALA (Single Node, Multi-GPU)**
 * Our implementation uses GPU workers rather than CPU workers for forward 
-passes. Evidence suggests this is faster; on Atari we achieve ~4k SPS = ~16k 
-FPS with two GPUs and 8-core CPU.
+passes.
+* On Atari we achieve ~4k SPS = ~16k FPS with two GPUs and an 8-core CPU.
+* "Note that the shallow IMPALA experiment completes training over 200 
+million frames in less than one hour."
+* Our implementation: 2000 frame / (s * core) DeepMind implementation: 1157 
+frame / (s * core)
 * Does not yet support multiple nodes or direct GPU memory transfers via 
 NVLINK.
 
