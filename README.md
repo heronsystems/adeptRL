@@ -156,7 +156,7 @@ NVLINK.
 
 ### Agents
 * Advantage Actor Critic, A2C ([paper](https://arxiv.org/pdf/1708.05144.pdf) | [code](adept/agents/actor_critic.py))
-* Actor Critic Vtrace, IMPALA ([paper](https://arxiv.org/pdf/1802.01561.pdf) | [code]())
+* Actor Critic Vtrace, IMPALA ([paper](https://arxiv.org/pdf/1802.01561.pdf) | [code](https://arxiv.org/pdf/1802.01561.pdf))
 
 ### Networks
 * Modular Network Interface: supports arbitrary input and output shapes up to
