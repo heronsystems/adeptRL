@@ -74,10 +74,6 @@ class Local(
         return self._saver
 
     @property
-    def summary_name(self):
-        return 'reward/train'
-
-    @property
     def world_size(self):
         return 1
 

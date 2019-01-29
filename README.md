@@ -42,10 +42,20 @@ We're happy to accept feedback and contributions.
 * Batch norm
 
 **Scripts**
-* Local (Single-GPU, A2C)
-* Towered (Multi-GPU, A3C-variant)
+* Local (Single-node, Single-GPU)
+  * Best place to start if you're trying to understand code.
+* Distributed (Multi-node, Multi-GPU)
+  * Uses NCCL backend to all-reduce gradients across GPUs without a parameter 
+  server or host process.
+  * Supports NVLINK and InfiniBand to reduce communication overhead
+  * InfiniBand untested since we do not have a setup to test on.
 * Importance Weighted Actor Learner Architectures, 
-[IMPALA](https://arxiv.org/pdf/1802.01561.pdf) (Faster Multi-GPU)
+[IMPALA](https://arxiv.org/pdf/1802.01561.pdf) (Single Node Multi-GPU)
+  * Our implementation uses GPU workers rather than CPU workers for forward 
+  passes. Evidence suggests this is faster; on Atari we achieve ~4k SPS = ~16k 
+  FPS with two GPUs and 8-core CPU.
+  * Does not yet support multiple nodes or direct GPU memory transfers via 
+  NVLINK.
 
 **Environments**
 * OpenAI Gym
@@ -100,13 +110,13 @@ tensorboard file, saved models, and other metadata.
 # We recommend 4GB+ GPU memory, 8GB+ RAM, 4+ Cores
 python -m adept.app local --env BeamRiderNoFrameskip-v4
 
-# Towered Mode (A3C Variant, requires mpi4py)
+# Distributed Mode (A2C, requires NCCL)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-python -m adept.app towered --env BeamRiderNoFrameskip-v4
+python -m adept.app distrib --env BeamRiderNoFrameskip-v4
 
 # IMPALA (requires mpi4py and is resource intensive)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-python -m adept.app impala --env BeamRiderNoFrameskip-v4
+python -m adept.app impala --agent ActorCriticVtrace --env BeamRiderNoFrameskip-v4
 
 # StarCraft 2 (IMPALA not supported yet)
 # Warning: much more resource intensive than Atari
