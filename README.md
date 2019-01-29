@@ -41,21 +41,24 @@ We're happy to accept feedback and contributions.
 * Stateful networks (ie. LSTMs)
 * Batch norm
 
-**Scripts**
-* Local (Single-node, Single-GPU)
-  * Best place to start if you're trying to understand code.
-* Distributed (Multi-node, Multi-GPU)
-  * Uses NCCL backend to all-reduce gradients across GPUs without a parameter 
-  server or host process.
-  * Supports NVLINK and InfiniBand to reduce communication overhead
-  * InfiniBand untested since we do not have a setup to test on.
-* Importance Weighted Actor Learner Architectures, 
-[IMPALA](https://arxiv.org/pdf/1802.01561.pdf) (Single Node Multi-GPU)
-  * Our implementation uses GPU workers rather than CPU workers for forward 
-  passes. Evidence suggests this is faster; on Atari we achieve ~4k SPS = ~16k 
-  FPS with two GPUs and 8-core CPU.
-  * Does not yet support multiple nodes or direct GPU memory transfers via 
-  NVLINK.
+**Scripts**  
+
+__Local (Single-node, Single-GPU)__  
+* Best place to start if you're trying to understand code.
+
+__Distributed (Multi-node, Multi-GPU)__  
+* Uses NCCL backend to all-reduce gradients across GPUs without a parameter 
+server or host process.
+* Supports NVLINK and InfiniBand to reduce communication overhead
+* InfiniBand untested since we do not have a setup to test on.
+
+__Importance Weighted Actor Learner Architectures, 
+[IMPALA](https://arxiv.org/pdf/1802.01561.pdf) (Single Node Multi-GPU)__  
+* Our implementation uses GPU workers rather than CPU workers for forward 
+passes. Evidence suggests this is faster; on Atari we achieve ~4k SPS = ~16k 
+FPS with two GPUs and 8-core CPU.
+* Does not yet support multiple nodes or direct GPU memory transfers via 
+NVLINK.
 
 **Environments**
 * OpenAI Gym
@@ -101,7 +104,7 @@ followed by an [LSTM](./adept/networks/net1d/lstm.py) (F=512)
 -y --env <env-id>`
 
 ## Quickstart
-**Train an Agent**  
+**Train an Agent**
 Logs go to `/tmp/adept_logs/` by default. The log directory contains the 
 tensorboard file, saved models, and other metadata.
 
