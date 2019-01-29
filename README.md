@@ -16,20 +16,20 @@ rendering
 This code is early-access, expect rough edges. Interfaces subject to change. 
 We're happy to accept feedback and contributions.
 
-**Read More**
+### Read More
 * [Features](#features)
 * [Installation](#installation)
 * [Performance](#performance)
 * [Quickstart](#quickstart)
 
-**Documentation**
+### Documentation
 * [Architecture Overview](docs/api_overview.md)
 * ModularNetwork Overview
 * Resume training
 * Evaluate a model
 * Render environment
 
-**Examples**
+### Examples
 * Custom Network ([stub](examples/custom_network_stub.py) | example)
 * Custom SubModule ([stub](examples/custom_submodule_stub.py) | [example](adept/networks/net1d/lstm.py))
 * Custom Agent ([stub](examples/custom_agent_stub.py) | [example](adept/agents/actor_critic.py))
@@ -41,19 +41,18 @@ We're happy to accept feedback and contributions.
 * Stateful networks (ie. LSTMs)
 * Batch norm
 
-**Scripts**  
+### Scripts
 
-__Local (Single-node, Single-GPU)__  
+#### Local (Single-node, Single-GPU)
 * Best place to start if you're trying to understand code.
 
-__Distributed (Multi-node, Multi-GPU)__  
+#### Distributed (Multi-node, Multi-GPU)
 * Uses NCCL backend to all-reduce gradients across GPUs without a parameter 
 server or host process.
 * Supports NVLINK and InfiniBand to reduce communication overhead
 * InfiniBand untested since we do not have a setup to test on.
 
-__Importance Weighted Actor Learner Architectures, 
-[IMPALA](https://arxiv.org/pdf/1802.01561.pdf) (Single Node Multi-GPU)__  
+#### Importance Weighted Actor Learner Architectures, [IMPALA](https://arxiv.org/pdf/1802.01561.pdf) (Single Node Multi-GPU)
 * Our implementation uses GPU workers rather than CPU workers for forward 
 passes. Evidence suggests this is faster; on Atari we achieve ~4k SPS = ~16k 
 FPS with two GPUs and 8-core CPU.
