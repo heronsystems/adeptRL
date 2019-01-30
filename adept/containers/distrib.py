@@ -22,9 +22,14 @@ class DistribHost(
     HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
     SavesModels
 ):
+    """
+    DistribHost saves models and writes summaries. This is the only difference
+    from the worker.
+    """
+
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        summary_writer, summary_frequency, saver, world_size
+        summary_writer, summary_frequency, saver, global_rank, world_size
     ):
         super().__init__()
         self._agent = agent
@@ -36,6 +41,7 @@ class DistribHost(
         self._summary_writer = summary_writer
         self._saver = saver
         self._summary_frequency = summary_frequency
+        self._global_rank = global_rank
         self._world_size = world_size
 
     @property
@@ -102,6 +108,7 @@ class DistribHost(
                 terminal_infos,
                 global_step_count,
                 self.local_step_count,
+                self._global_rank,
                 initial_step_count=initial_count
             )
             self.write_reward_summaries(terminal_rewards, global_step_count)
@@ -144,7 +151,7 @@ class DistribHost(
 class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        world_size
+        global_rank, world_size
     ):
         super().__init__()
         self._agent = agent
@@ -153,6 +160,7 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
         self._epoch_len = epoch_len
         self._nb_env = nb_env
         self._logger = logger
+        self._global_rank = global_rank
         self._world_size = world_size
 
     @property
@@ -202,6 +210,7 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
                 terminal_infos,
                 global_step_count,
                 self.local_step_count,
+                self._global_rank,
                 initial_step_count=initial_count
             )
 

@@ -156,18 +156,18 @@ def main(
         container = DistribHost(
             agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
             summary_writer, args.summary_freq, SimpleModelSaver(log_id_dir),
-            WORLD_SIZE
+            GLOBAL_RANK, WORLD_SIZE
         )
     else:
         container = DistribWorker(
             agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
-            WORLD_SIZE
+            GLOBAL_RANK, WORLD_SIZE
         )
     initial_step_count = helper.latest_epoch()
-    container.run(args.nb_train_frame, initial_count=initial_step_count)
+    container.run(args.nb_step, initial_count=initial_step_count)
     env.close()
 
-    if args.eval:
+    if args.eval and GLOBAL_RANK == 0:
         import subprocess
         exit(subprocess.call([
             'python',
@@ -176,7 +176,9 @@ def main(
             '--log-id-dir',
             log_id_dir,
             '--gpu-id',
-            str(args.gpu_id)
+            str(0),
+            '--nb-episode',
+            str(32)  # TODO
         ], env=os.environ))
 
 

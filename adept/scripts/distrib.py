@@ -50,7 +50,7 @@ Environment Options:
 Script Options:
     --nb-env <int>          Number of parallel environments [default: 64]
     --seed <int>            Seed for random variables [default: 0]
-    --nb-train-frame <int>  Number of frames to train on [default: 10e6]
+    --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
     --load-optim <path>     Path to optimizer file
     --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
@@ -119,7 +119,7 @@ def parse_args():
     args.logdir = parse_path(args.logdir)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
-    args.nb_train_frame = int(float(args.nb_train_frame))
+    args.nb_step = int(float(args.nb_step))
     args.tag = parse_none(args.tag)
     args.nb_eval_env = int(args.nb_eval_env)
     args.summary_freq = int(args.summary_freq)
