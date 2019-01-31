@@ -41,6 +41,10 @@ WORLD_SIZE = int(os.environ['WORLD_SIZE'])
 GLOBAL_RANK = int(os.environ['RANK'])
 LOCAL_RANK = int(os.environ['LOCAL_RANK'])
 
+# hack to use bypass pysc2 flags
+from absl import flags
+FLAGS = flags.FLAGS
+FLAGS(['local.py'])
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
