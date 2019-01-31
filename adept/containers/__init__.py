@@ -20,5 +20,4 @@ from .evaluation import ReplayGenerator, AtariRenderer, Evaluation
 import importlib
 mpi4py_spec = importlib.util.find_spec("mpi4py")
 if mpi4py_spec is not None:
-    from .towered import ToweredHost, ToweredWorker
     from .impala import ImpalaHost, ImpalaWorker
