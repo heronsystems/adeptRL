@@ -186,7 +186,7 @@ million frames in less than one hour."
 * Architecture: [Four Convs](./adept/networks/net3d/four_conv.py) (F=32) 
 followed by an [LSTM](./adept/networks/net1d/lstm.py) (F=512)
 * Reproduce with `python -m adept.app local --logdir ~/local64_benchmark --eval 
--y --env <env-id>`
+-y --nb-step 50e6 --env <env-id>`
 
 ## Acknowledgements
 We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and 
