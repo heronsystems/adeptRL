@@ -39,7 +39,7 @@ Script Options:
     --gpu-ids <ids>            Comma-separated CUDA IDs [default: 0,1]
     --nb-env <int>             Number of environments per Tower [default: 32]
     --seed <int>               Seed for random variables [default: 0]
-    --nb-train-frame <int>     Number of frames to train on [default: 10e6]
+    --nb-step <int>            Number of steps to train for [default: 10e6]
     --max-queue-len <int>      Maximum rollout queue length
     --nb-rollout-batch <int>   Number of rollouts in a batch
     --max-dynamic-batch <int>  Limit max rollouts in batch [default: 0]
@@ -125,7 +125,7 @@ def parse_args():
     args.gpu_ids = parse_list_str(args.gpu_ids, int)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
-    args.nb_train_frame = int(float(args.nb_train_frame))
+    args.nb_step = int(float(args.nb_step))
     args.max_queue_len = int(args.max_queue_len) \
         if args.max_queue_len \
         else (size - 1) * 2
@@ -303,6 +303,7 @@ def main(
             args.nb_env,
             logger,
             summary_writer,
+            rank,
             use_local_buffers=args.use_local_buffers
         )
 
@@ -358,6 +359,7 @@ def main(
             saver,
             args.epoch_len,
             args.info_interval,
+            rank,
             use_local_buffers=args.use_local_buffers
         )
 
@@ -375,14 +377,14 @@ def main(
                 container.run(
                     args.max_dynamic_batch,
                     args.max_queue_len,
-                    args.nb_train_frame,
+                    args.nb_step,
                     dynamic=True,
                     min_dynamic_batch=args.min_dynamic_batch
                 )
             else:
                 container.run(
                     args.nb_rollout_batch, args.max_queue_len,
-                    args.nb_train_frame
+                    args.nb_step
                 )
             profiler.stop()
             print(profiler.output_text(unicode=True, color=True))
@@ -391,14 +393,14 @@ def main(
                 container.run(
                     args.max_dynamic_batch,
                     args.max_queue_len,
-                    args.nb_train_frame,
+                    args.nb_step,
                     dynamic=True,
                     min_dynamic_batch=args.min_dynamic_batch
                 )
             else:
                 container.run(
                     args.nb_rollout_batch, args.max_queue_len,
-                    args.nb_train_frame
+                    args.nb_step
                 )
 
 

@@ -32,6 +32,7 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         saver,
         save_interval,
         summary_steps,
+        rank,
         use_local_buffers=False
     ):
         """
@@ -42,6 +43,7 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         self._optimizer = make_optimizer(self.network.parameters())
         self._summary_writer = summary_writer
         self._summary_frequency = summary_frequency
+        self._rank = rank
         self.saver = saver
         self.save_interval = save_interval
         self.comm = mpi_comm
@@ -365,6 +367,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         nb_env,
         logger,
         summary_writer,
+        rank,
         use_local_buffers=False,
         max_parameter_skip=10,
         send_warning_time=float('inf'),
@@ -376,6 +379,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         self._nb_env = nb_env
         self._logger = logger
         self._summary_writer = summary_writer
+        self._rank = rank
 
         self.global_step = 0
         self.mpi_helper = None
@@ -430,6 +434,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
                 terminal_infos,
                 self.global_step,
                 self.local_step_count,
+                self._rank,
                 initial_step_count=initial_count
             )
             self.write_reward_summaries(terminal_rewards, self.global_step)

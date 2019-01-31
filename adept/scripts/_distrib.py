@@ -16,25 +16,25 @@
 """
 Distributed worker script. Called from launcher (distrib.py).
 """
+import argparse
+import json
 import os
 
 import torch
 import torch.distributed as dist
+from tensorboardX import SummaryWriter
 
 from adept.agents.agent_registry import AgentRegistry
+from adept.containers.distrib import DistribHost, DistribWorker
 from adept.environments.env_registry import EnvRegistry
 from adept.environments.managers.subproc_env_manager import SubProcEnvManager
-from adept.networks.network_registry import NetworkRegistry
 from adept.networks.modular_network import ModularNetwork
-from adept.utils.script_helpers import (
-    count_parameters, parse_none, LogDirHelper, parse_path, parse_bool_str
-)
+from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import make_logger, SimpleModelSaver
+from adept.utils.script_helpers import (
+    count_parameters, LogDirHelper
+)
 from adept.utils.util import DotDict
-import json
-from tensorboardX import SummaryWriter
-from adept.containers.distrib import DistribHost, DistribWorker
-
 
 MODE = 'Distrib'
 WORLD_SIZE = int(os.environ['WORLD_SIZE'])
@@ -42,16 +42,30 @@ GLOBAL_RANK = int(os.environ['RANK'])
 LOCAL_RANK = int(os.environ['LOCAL_RANK'])
 
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def parse_args():
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--log-id-dir', required=True)
+    parser.add_argument(
+        '--resume', type=str2bool, nargs='?', const=True, default=False
+    )
+    parser.add_argument('--load-network', default=None)
+    parser.add_argument('--load-optim', default=None)
+    parser.add_argument('--initial-step-count', type=int, default=0)
     args = parser.parse_args()
     return args
 
 
 def main(
-    args,
+    local_args,
     agent_registry=AgentRegistry(),
     env_registry=EnvRegistry(),
     net_registry=NetworkRegistry()
@@ -65,7 +79,8 @@ def main(
     :param net_registry: NetworkRegistry
     :return:
     """
-    log_id_dir = args.log_id_dir
+    log_id_dir = local_args.log_id_dir
+    initial_step_count = local_args.intial_step_count
 
     logger = make_logger(
         MODE + str(LOCAL_RANK),
@@ -75,6 +90,9 @@ def main(
     helper = LogDirHelper(log_id_dir)
     with open(helper.args_file_path(), 'r') as args_file:
         args = DotDict(json.load(args_file))
+
+    if local_args.resume:
+        args = DotDict({**args, **vars(local_args)})
 
     torch.backends.cudnn.benchmark = True
 
@@ -123,7 +141,10 @@ def main(
         )
         # get step count from network file
         print('Reloaded network from {}'.format(args.load_network))
-    logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
+    if LOCAL_RANK == 0:
+        logger.info('Network Parameter Count: {}'.format(
+            count_parameters(network))
+        )
 
     device = torch.device("cuda:{}".format(LOCAL_RANK))
     agent = agent_registry.lookup_agent(args.agent).from_args(
@@ -163,7 +184,7 @@ def main(
             agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
             GLOBAL_RANK, WORLD_SIZE
         )
-    initial_step_count = helper.latest_epoch()
+
     container.run(args.nb_step, initial_count=initial_step_count)
     env.close()
 

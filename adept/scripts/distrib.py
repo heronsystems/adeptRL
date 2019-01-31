@@ -110,7 +110,7 @@ def parse_args():
     args = DotDict(args)
 
     if args.resume:
-        raise NotImplementedError
+        return args
 
     args.nb_node = int(args.nb_node)
     args.node_rank = int(args.node_rank)
@@ -152,13 +152,14 @@ def main(
     current_env["MASTER_ADDR"] = args.master_addr
     current_env["MASTER_PORT"] = str(args.master_port)
     current_env["WORLD_SIZE"] = str(dist_world_size)
-
+    initial_step_count = 0
     if args.resume:
         log_id_dir = args.resume
         helper = LogDirHelper(log_id_dir)
         # TODO make this work
         args.load_network = helper.latest_network_path()
         args.load_optim = helper.latest_optim_path()
+        initial_step_count = helper.latest_epoch()
     else:
         if args.use_defaults:
             agent_args = agent_registry.lookup_agent(args.agent).args
@@ -182,11 +183,11 @@ def main(
         )
         log_id_dir = os.path.join(args.logdir, args.env, log_id)
         os.makedirs(log_id_dir)
+        write_args_file(log_id_dir, args)
 
     print_ascii_logo()
     logger = make_logger(MODE, os.path.join(log_id_dir, 'train_log.txt'))
     log_args(logger, args)
-    write_args_file(log_id_dir, args)
 
     processes = []
 
@@ -197,13 +198,27 @@ def main(
         current_env["LOCAL_RANK"] = str(local_rank)
 
         # spawn the processes
-        cmd = [
-            sys.executable,
-            "-u",
-            "-m",
-            "adept.scripts._distrib",
-            "--log-id-dir={}".format(log_id_dir)
-        ]
+        if not args.resume:
+            cmd = [
+                sys.executable,
+                "-u",
+                "-m",
+                "adept.scripts._distrib",
+                "--log-id-dir={}".format(log_id_dir),
+                "--initial-step-count {}".format(initial_step_count)
+            ]
+        else:
+            cmd = [
+                sys.executable,
+                "-u",
+                "-m",
+                "adept.scripts._distrib",
+                "--log-id-dir={}".format(log_id_dir),
+                "--resume",
+                "--load-network {}".format(args.load_network),
+                "--load-optim {}".format(args.load_optim),
+                "--initial-step-count {}".format(initial_step_count)
+            ]
 
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
