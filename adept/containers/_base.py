@@ -90,17 +90,41 @@ class LogsRewards(CountsRewards, metaclass=abc.ABCMeta):
         self,
         terminal_rewards,
         terminal_infos,
-        step_count,
+        global_step_count,
+        local_step_count=None,
+        rank=None,
         initial_step_count=0
     ):
+
         if terminal_rewards:
+            if local_step_count is None:
+                local_step_count = global_step_count
+
             ep_reward = np.mean(terminal_rewards)
-            self.logger.info(
-                'train_frames: {} reward: {} avg_train_fps: {}'.format(
-                    step_count, ep_reward, (step_count - initial_step_count) /
-                    (time() - self.start_time)
+            if rank is None:
+                delta_t = time() - self.start_time
+                self.logger.info(
+                    'STEP: {} REWARD: {} STEP/S: {}'.format(
+                        global_step_count,
+                        ep_reward,
+                        (local_step_count - initial_step_count) / delta_t
+                    )
                 )
-            )
+            else:
+                delta_t = time() - self.start_time
+                self.logger.info(
+                    'RANK: {} '
+                    'GLOBAL STEP: {} '
+                    'REWARD: {} '
+                    'GLOBAL STEP/S: {} '
+                    'LOCAL STEP/S: {}'.format(
+                        rank,
+                        global_step_count,
+                        ep_reward,
+                        (global_step_count - initial_step_count) / delta_t,
+                        (local_step_count - initial_step_count) / delta_t
+                    )
+                )
         return terminal_rewards
 
 
@@ -112,7 +136,7 @@ class LogsAndSummarizesRewards(LogsRewards, metaclass=abc.ABCMeta):
 
     @property
     def summary_name(self):
-        return 'reward'
+        return 'reward/train'
 
     def write_reward_summaries(self, terminal_rewards, step_count):
         if terminal_rewards:

@@ -40,7 +40,7 @@ Script Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-env <int>          Number of parallel environments [default: 64]
     --seed <int>            Seed for random variables [default: 0]
-    --nb-train-frame <int>  Number of frames to train on [default: 10e6]
+    --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
     --load-optim <path>     Path to optimizer file
     --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
@@ -115,7 +115,7 @@ def parse_args():
     args.gpu_id = int(args.gpu_id)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
-    args.nb_train_frame = int(float(args.nb_train_frame))
+    args.nb_step = int(float(args.nb_step))
     args.tag = parse_none(args.tag)
     args.nb_eval_env = int(args.nb_eval_env)
     args.summary_freq = int(args.summary_freq)
@@ -140,7 +140,7 @@ def main(
     :param net_registry: NetworkRegistry
     :return:
     """
-
+    args = DotDict(args)
     initial_step_count = 0
     if args.resume:
         log_dir_helper = LogDirHelper(args.resume)
@@ -157,7 +157,6 @@ def main(
             timestamp=log_dir_helper.timestamp()
         )
     else:
-        args = DotDict(args)
         if args.use_defaults:
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
@@ -322,7 +321,7 @@ def main(
         profiler.stop()
         print(profiler.output_text(unicode=True, color=True))
     else:
-        container.run(args.nb_train_frame, initial_count=initial_step_count)
+        container.run(args.nb_step, initial_count=initial_step_count)
     env.close()
 
     if args.nb_eval_env > 0:
@@ -338,7 +337,9 @@ def main(
             '--log-id-dir',
             log_id_dir,
             '--gpu-id',
-            str(args.gpu_id)
+            str(args.gpu_id),
+            '--nb-episode',
+            str(args.nb_env)
         ], env=os.environ))
 
 
