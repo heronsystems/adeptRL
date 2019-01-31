@@ -80,7 +80,7 @@ def main(
     :return:
     """
     log_id_dir = local_args.log_id_dir
-    initial_step_count = local_args.intial_step_count
+    initial_step_count = local_args.initial_step_count
 
     logger = make_logger(
         MODE + str(LOCAL_RANK),

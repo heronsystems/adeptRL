@@ -48,7 +48,7 @@ Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
 
 Script Options:
-    --nb-env <int>          Number of parallel environments [default: 64]
+    --nb-env <int>          Number of parallel environments [default: 32]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
@@ -109,13 +109,14 @@ def parse_args():
 
     args = DotDict(args)
 
-    if args.resume:
-        return args
-
     args.nb_node = int(args.nb_node)
     args.node_rank = int(args.node_rank)
     args.nb_proc = int(args.nb_proc)
     args.master_port = int(args.master_port)
+
+    if args.resume:
+        return args
+
     args.logdir = parse_path(args.logdir)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
@@ -204,8 +205,7 @@ def main(
                 "-u",
                 "-m",
                 "adept.scripts._distrib",
-                "--log-id-dir={}".format(log_id_dir),
-                "--initial-step-count {}".format(initial_step_count)
+                "--log-id-dir={}".format(log_id_dir)
             ]
         else:
             cmd = [
@@ -214,10 +214,10 @@ def main(
                 "-m",
                 "adept.scripts._distrib",
                 "--log-id-dir={}".format(log_id_dir),
-                "--resume",
-                "--load-network {}".format(args.load_network),
-                "--load-optim {}".format(args.load_optim),
-                "--initial-step-count {}".format(initial_step_count)
+                "--resume={}".format(True),
+                "--load-network={}".format(args.load_network),
+                "--load-optim={}".format(args.load_optim),
+                "--initial-step-count={}".format(initial_step_count)
             ]
 
         process = subprocess.Popen(cmd, env=current_env)
