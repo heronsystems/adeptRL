@@ -1,1 +1,1 @@
-![modlar_network](../images/modular_network.png)
+![modular_network](../images/modular_network.png)
