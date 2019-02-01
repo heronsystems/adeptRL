@@ -24,7 +24,7 @@ We're happy to accept feedback and contributions.
 
 ### Documentation
 * [Architecture Overview](docs/api_overview.md)
-* ModularNetwork Overview
+* [ModularNetwork Overview](docs/modular_network.md)
 * Resume training
 * Evaluate a model
 * Render environment
