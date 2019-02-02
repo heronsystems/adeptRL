@@ -12,12 +12,13 @@ Inheritance Tree:
     * ExperienceReplay
     * RolloutBuffer
 * [Environment](#environment)
+    * GymEnv
     * SC2Feat1DEnv (1d action space)
     * SC2Feat3DEnv (3d action space)
     * SC2RawEnv (new proto)
 * [EnvironmentManager](#environmentmanager)
     * SimpleEnvManager (synchronous, same process, for debugging / rendering)
-    * SubProcEnvManager (use torch.multiprocessing.Pipe)
+    * SubProcEnvManager (use torch.multiprocessing.Pipe, default start method)
 * [Network](#network)
     * ModularNetwork
     * CustomNetwork
@@ -57,7 +58,17 @@ return:
 # Agent
 * [network](#network)
 ```python
-def observe(): ...  # ?
+@staticmethod
+def output_space(action_space): ...
+"""
+legend:
+    ActionName = str
+    Shape = Tuple[*int]
+args:
+    action_space: Dict[ActionName, Shape]
+    
+"""
+
 def step(observation): ...  # ?
 """
 legend:
@@ -104,6 +115,10 @@ return:
 def read(): ...
 def write(): ...
 def ready(): ...
+"""
+return:
+    bool, whether the cache is ready 
+"""
 ```
 
 # Network
@@ -126,3 +141,5 @@ args:
     dim: int, dimensionality of 
 """
 ```
+
+# ObsPreprocessor
