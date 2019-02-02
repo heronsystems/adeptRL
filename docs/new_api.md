@@ -8,9 +8,9 @@ Inheritance Tree:
 * [Agent](#agent)
     * ActorCritic
     * VTrace
-* [ExperienceCache](#experiencecache)
+* [TrajectoryCache](#trajectorycache)
     * ExperienceReplay
-    * RolloutBuffer
+    * RolloutCache
 * [Environment](#environment)
     * GymEnv
     * SC2Feat1DEnv (1d action space)
@@ -19,6 +19,7 @@ Inheritance Tree:
 * [EnvironmentManager](#environmentmanager)
     * SimpleEnvManager (synchronous, same process, for debugging / rendering)
     * SubProcEnvManager (use torch.multiprocessing.Pipe, default start method)
+    * SelfPlayEnvManager
 * [Network](#network)
     * ModularNetwork
     * CustomNetwork
@@ -38,13 +39,14 @@ Inheritance Tree:
     * SubModule4D
         * Identity4D
 
-# Container
-* [agent](#agent)
-* [environment](#environment)
-* [experience_cache](#experiencecache)
-* `local_step_count: int`
-* `reward_buffer: List[float], keep track of running rewards`
-* `hidden_state: Dict[Id, torch.Tensor], keep track of current LSTM states`
+### Container
+* _agent: [Agent](#agent)
+* _environment: [Environment](#environment)
+* _trajectory_cache: [TrajectoryCache](#trajectorycache)
+* _network: [Network](#network)
+* `_local_step_count: int`
+* `_reward_buffer: List[float], keep track of running rewards`
+* `_hidden_state: Dict[Id, torch.Tensor], keep track of current LSTM states`
 ```python
 def run(nb_step, initial_step=0): ...
 """
@@ -55,35 +57,24 @@ return:
 """
 ```
 
-# Agent
-* [network](#network)
+### Agent
+
 ```python
+@classmethod
+def trajectory_cache(cls): ...
 @staticmethod
 def output_space(action_space): ...
 """
-legend:
-    ActionName = str
-    Shape = Tuple[*int]
 args:
     action_space: Dict[ActionName, Shape]
     
 """
 
-def step(observation): ...  # ?
-"""
-legend:
-    ObsName = str
-    ActionName = str
-args:
-    observation: Dict[ObsName, torch.Tensor]
-return:
-    policy_dict: Dict[ActionName, torch.Tensor]
-"""
-def compute_loss(): ...  # ?
+def compute_loss(prediction, trajectory): ...  # ?
 ```
 
-# EnvironmentManager
-* [obs_preprocessor_gpu](#)
+### EnvironmentManager
+* _obs_preprocessor_gpu: [ObsPreprocessor](#)
 * `env_cls: type, environment class`
 ```python
 def step_train(policy_logits): ...
@@ -103,14 +94,19 @@ return:
 
 ```
 
-# Environment
-* [obs_preprocessor_cpu](#)
-* [action_preprocessor](#)
+### Environment
+* _obs_preprocessor_cpu: [ObsPreprocessor](#)
+* _action_preprocessor: [ActionPreprocessor](#)
+* `_action_space: Dict[]`
 ```python
+def step(observation): ...
+def reset(): ...
+def close(): ...
+
 
 ```
 
-# ExperienceCache
+### TrajectoryCache
 ```python
 def read(): ...
 def write(): ...
@@ -121,7 +117,7 @@ return:
 """
 ```
 
-# Network
+### Network
 ```python
 def forward(observation, hidden_state): ...
 """
@@ -131,7 +127,7 @@ args:
 """
 ```
 
-# SubModule
+### SubModule
 * `input_shape: Tuple[int]`
 ```python
 def forward(): ...
@@ -142,4 +138,4 @@ args:
 """
 ```
 
-# ObsPreprocessor
+### ObsPreprocessor
