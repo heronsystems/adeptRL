@@ -36,7 +36,8 @@ class AdeptGymEnv(EnvModule):
     args = {
         "max_episode_length": 10000,
         "skip_rate": 4,
-        "noop_max": 30
+        "noop_max": 30,
+        "frame_stack": False
     }
 
     def __init__(self, env, do_frame_stack):
@@ -70,7 +71,6 @@ class AdeptGymEnv(EnvModule):
     @classmethod
     def from_args(cls, args, seed, **kwargs):
         # TODO fix this hack
-        do_frame_stack = 'Linear' in args.netbody
         env = gym.make(args.env)
         if hasattr(env.unwrapped, 'ale'):
             if 'FIRE' in env.unwrapped.get_action_meanings():
@@ -84,7 +84,7 @@ class AdeptGymEnv(EnvModule):
         else:
             env._max_episode_steps = args.max_episode_length
         env.seed(seed)
-        return cls(env, do_frame_stack)
+        return cls(env, args.frame_stack)
 
     def step(self, action):
         obs, reward, done, info = self.gym_env.step(self._wrap_action(action))

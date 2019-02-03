@@ -40,10 +40,10 @@ Inheritance Tree:
         * Identity4D
 
 ### Container
-* _agent: [Agent](#agent)
-* _environment: [Environment](#environment)
-* _trajectory_cache: [TrajectoryCache](#trajectorycache)
-* _network: [Network](#network)
+* `_agent:` [Agent](#agent)
+* `_environment:` [Environment](#environment)
+
+* `_network:` [Network](#network)
 * `_local_step_count: int`
 * `_reward_buffer: List[float], keep track of running rewards`
 * `_hidden_state: Dict[Id, torch.Tensor], keep track of current LSTM states`
@@ -58,10 +58,9 @@ return:
 ```
 
 ### Agent
-
+* `_trajectory_cache:` [TrajectoryCache](#trajectorycache)
 ```python
-@classmethod
-def trajectory_cache(cls): ...
+
 @staticmethod
 def output_space(action_space): ...
 """
@@ -69,7 +68,7 @@ args:
     action_space: Dict[ActionName, Shape]
     
 """
-
+def observe(cls): ...
 def compute_loss(prediction, trajectory): ...  # ?
 ```
 
