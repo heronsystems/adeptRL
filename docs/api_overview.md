@@ -62,9 +62,10 @@ Inheritance Tree:
         * Identity4D
 
 ### Container
-* [agent](#agent)
-* [environment](#environment)
-* [experience_cache](#experiencecache)
+* `agent:` [Agent](#agent)
+* `env:` [EnvironmentManager](#environment)
+* `exp_cache:` [ExperienceCache](#experiencecache)
+* `network:` [Network](#network)
 * `local_step_count: int`
 * `reward_buffer: List[float], keep track of running rewards`
 * `hidden_state: Dict[HSName, torch.Tensor], keep track of current LSTM states`
