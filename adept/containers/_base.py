@@ -274,7 +274,7 @@ class MPIProc:
     def receive(self):
         raise NotImplementedError
 
-    def submit(self):
+    def submit(self, experience):
         raise NotImplementedError
 
 

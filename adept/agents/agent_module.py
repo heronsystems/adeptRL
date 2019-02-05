@@ -62,7 +62,7 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_loss(self, *args):
+    def compute_loss(self, experience, next_obs):
         raise NotImplementedError
 
     @abc.abstractmethod
