@@ -25,7 +25,7 @@ We're happy to accept feedback and contributions.
 ### Documentation
 * [Architecture Overview](docs/api_overview.md)
 * [ModularNetwork Overview](docs/modular_network.md)
-* Resume training
+* [Resume training](docs/resume_training.md)
 * Evaluate a model
 * Render environment
 
@@ -183,7 +183,7 @@ million frames in less than one hour."
 * Trained for 50M Steps / 200M Frames
 * Up to 30 no-ops at start of each episode
 * Evaluated on different seeds than trained on
-* Architecture: [Four Convs](./adept/networks/net3d/four_conv.py) (F=32) 
+* Architecture: [Four Convs](./adept/networks/net3d/four_conv.py) (F=32)
 followed by an [LSTM](./adept/networks/net1d/lstm.py) (F=512)
 * Reproduce with `python -m adept.app local --logdir ~/local64_benchmark --eval 
 -y --nb-step 50e6 --env <env-id>`
