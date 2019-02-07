@@ -17,6 +17,7 @@ from adept.utils.normalizers import Clip, Scale
 from collections import defaultdict
 
 
+
 SC2_ENVS = [
     'BuildMarines', 'CollectMineralShards', 'DefeatRoaches',
     'DefeatZerglingsAndBanelings', 'FindAndDefeatZerglings', 'MoveToBeacon'
@@ -101,13 +102,18 @@ class EnvRegistry:
     def __init__(self):
         self._engine_ids_by_env_id_set = {}
         self._module_class_by_engine_id = {}
+        self._policy_class_by_engine_id = defaultdict(lambda: Policy)
         self._reward_norm_by_env_id = defaultdict(lambda: Clip())
 
         from adept.environments.openai_gym import AdeptGymEnv
         self.register_env(AdeptGymEnv, ATARI_ENVS)
+        from adept.policy.policy import Policy
+        self.register_policy(AdeptGymEnv.__name__, Policy)
         try:
             from adept.environments.deepmind_sc2 import AdeptSC2Env
+            from adept.policy.sc2_policy import SC2Policy
             self.register_env(AdeptSC2Env, SC2_ENVS)
+            self.register_policy(AdeptSC2Env.__name__, SC2Policy)
             self.register_reward_normalizer('DefeatRoaches', Scale(0.1))
             self.register_reward_normalizer(
                 'DefeatZerglingsAndBanelings', Scale(0.2)
@@ -165,3 +171,17 @@ class EnvRegistry:
         :return: Callable[[float], float]
         """
         return self._reward_norm_by_env_id[env_id]
+
+    def register_policy(self, engine_id, policy_cls):
+        """
+        Associate a policy with an engine id.
+
+        :param engine_id: str
+        :param policy_cls: type
+        :return:
+        """
+        self._policy_class_by_engine_id[engine_id] = policy_cls
+        return self
+
+    def lookup_policy(self, engine_id):
+        return self._policy_class_by_engine_id[engine_id]

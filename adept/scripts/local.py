@@ -233,8 +233,7 @@ def main(
         device,
         env_registry.lookup_reward_normalizer(args.env),
         env.gpu_preprocessor,
-        env.engine,
-        env.action_space
+        env_registry.lookup_policy(env.engine)(env.action_space)
     )
 
     # Construct the Container
@@ -286,8 +285,7 @@ def main(
             eval_net,
             device,
             eval_env.gpu_preprocessor,
-            eval_env.engine,
-            env.action_space
+            env_registry.lookup_policy(eval_env.engine)(eval_env.action_space)
         )
         eval_net.load_state_dict(network.state_dict())
 

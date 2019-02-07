@@ -23,11 +23,11 @@ class Policy:
         self._action_space = action_space
         self._action_keys = list(sorted(action_space.keys()))
 
-    def act(self, predictions):
+    def act(self, logits, available_actions=None):
         """
-        :param predictions: Dict[ActionKey, torch.Tensor]
+        :param logits: Dict[ActionKey, torch.Tensor]
         :return:
-            actions: Dict[ActionKey, torch.Tensor], flattened to (N)
+            actions: Dict[ActionKey, torch.LongTensor], flattened to (N)
             log_probs: torch.Tensor, flattened to (N, X)
             entropies: torch.Tensor, flattened to (N, X)
         """
@@ -35,22 +35,22 @@ class Policy:
         log_probs = []
         entropies = []
         for k in self._action_keys:
-            logits = predictions[k]
-            size = logits.size()
-            dim = logits.dim()
+            logit = logits[k]
+            size = logit.size()
+            dim = logit.dim()
 
             if dim == 3:
                 n, f, l = size
-                logits = logits.view(n, f * l)
+                logit = logit.view(n, f * l)
             elif dim == 4:
                 n, f, h, w = size
-                logits = logits.view(n, f * h * w)
+                logit = logit.view(n, f * h * w)
             elif dim == 5:
                 n, f, d, h, w = size
-                logits = logits.view(n, f * d * h * w)
+                logit = logit.view(n, f * d * h * w)
 
-            prob = F.softmax(logits, dim=1)
-            log_prob = F.log_softmax(logits, dim=1)
+            prob = F.softmax(logit, dim=1)
+            log_prob = F.log_softmax(logit, dim=1)
             entropy = -(log_prob * prob).sum(1, keepdim=True)
 
             action = prob.multinomial(1)  # (N)
@@ -64,29 +64,29 @@ class Policy:
         entropies = torch.cat(entropies, dim=1)
         return actions, log_probs, entropies
 
-    def act_eval(self, predictions):
+    def act_eval(self, logits, available_actions=None):
         """
-        :param predictions:
-        :return: actions: Dict[ActionKey, torch.Tensor]
+        :param logits: Dict[ActionKey, torch.Tensor]
+        :return: actions: Dict[ActionKey, torch.LongTensor]
         """
         with torch.no_grad():
             actions = OrderedDict()
             for k in self._action_keys:
-                logits = predictions[k]
-                size = logits.size()
-                dim = logits.dim()
+                logit = logits[k]
+                size = logit.size()
+                dim = logit.dim()
 
                 if dim == 3:
                     n, f, l = size
-                    logits = logits.view(n, f * l)
+                    logit = logit.view(n, f * l)
                 elif dim == 4:
                     n, f, h, w = size
-                    logits = logits.view(n, f * h * w)
+                    logit = logit.view(n, f * h * w)
                 elif dim == 5:
                     n, f, d, h, w = size
-                    logits = logits.view(n, f * d * h * w)
+                    logit = logit.view(n, f * d * h * w)
 
-                prob = F.softmax(logits, dim=1)
+                prob = F.softmax(logit, dim=1)
                 action = prob.multinomial(1)  # (N)
                 actions[k] = action.cpu()
             return actions

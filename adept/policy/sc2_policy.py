@@ -19,18 +19,23 @@ from adept.environments.deepmind_sc2 import SC2ActionLookup
 
 
 class SC2Policy:
+    """
+    A policy that masks out unused heads. This is needed in SC2 because
+    func_ids only use certain heads for args.
+    """
+
     def __init__(self, action_space):
         super(SC2Policy, self).__init__()
         self._action_space = action_space
         self._action_keys = list(sorted(action_space.keys()))
         self._func_id_to_headnames = SC2ActionLookup()
 
-    def act(self, predictions, available_actions):
+    def act(self, logits, available_actions):
         """
-        :param predictions: Dict[ActionKey, torch.Tensor]
+        :param logits: Dict[ActionKey, torch.Tensor]
         :param available_actions: torch.Tensor (N, NB_ACTION), one hot
         :return:
-            actions: Dict[ActionKey, torch.Tensor], flattened to (N)
+            actions: Dict[ActionKey, torch.LongTensor], flattened to (N)
             log_probs: torch.Tensor, flattened to (N, X)
             entropies: torch.Tensor, flattened to (N, X)
         """
@@ -39,21 +44,21 @@ class SC2Policy:
         log_probs = []
         entropies = []
         for key in self._action_keys:
-            logits = predictions[key]
-            size = logits.size()
-            dim = logits.dim()
+            logit = logits[key]
+            size = logit.size()
+            dim = logit.dim()
 
             if dim == 3:
                 n, f, l = size
-                logits = logits.view(n, f * l)
+                logit = logit.view(n, f * l)
             elif dim == 4:
                 n, f, h, w = size
-                logits = logits.view(n, f * h * w)
+                logit = logit.view(n, f * h * w)
             elif dim == 5:
                 n, f, d, h, w = size
-                logits = logits.view(n, f * d * h * w)
-            prob = F.softmax(logits, dim=1)
-            log_prob = F.log_softmax(logits, dim=1)
+                logit = logit.view(n, f * d * h * w)
+            prob = F.softmax(logit, dim=1)
+            log_prob = F.log_softmax(logit, dim=1)
             entropy = -(log_prob * prob).sum(1, keepdim=True)
 
             action = prob.multinomial(1)
@@ -91,10 +96,35 @@ class SC2Policy:
         entropies = entropies * head_masks
         return actions, log_probs, entropies
 
-    def act_eval(self, predictions, available_actions):
+    def act_eval(self, logits, available_actions):
         """
-        :param predictions:
-        :return: actions: Dict[ActionKey, torch.Tensor]
+        :param logits: Dict[ActionKey, torch.Tensor]
+        :return: actions: Dict[ActionKey, torch.LongTensor]
         """
         with torch.no_grad():
-            pass
+            actions = OrderedDict()
+            for key in self._action_keys:
+                logit = logits[key]
+                size = logit.size()
+                dim = logit.dim()
+
+                if dim == 3:
+                    n, f, l = size
+                    logit = logit.view(n, f * l)
+                elif dim == 4:
+                    n, f, h, w = size
+                    logit = logit.view(n, f * h * w)
+                elif dim == 5:
+                    n, f, d, h, w = size
+                    logit = logit.view(n, f * d * h * w)
+
+                prob = F.softmax(logit, dim=1)
+                action = torch.argmax(prob, 1)
+                actions[key] = action.cpu()
+
+        for batch_idx, action in enumerate(actions['func_id']):
+            # convert unavailable actions to NOOP
+            if action not in available_actions[batch_idx]:
+                actions['func_id'][batch_idx] = 0
+
+        return actions

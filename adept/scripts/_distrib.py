@@ -157,8 +157,7 @@ def main(
         device,
         env_registry.lookup_reward_normalizer(args.env),
         env.gpu_preprocessor,
-        env.engine,
-        env.action_space
+        env_registry.lookup_policy(env.engine)(env.action_space)
     )
 
     def make_optimizer(params):

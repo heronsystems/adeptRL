@@ -28,8 +28,7 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
         device,
         reward_normalizer,
         gpu_preprocessor,
-        engine,
-        action_space,
+        policy,
         nb_env
     ):
         self._network = network.to(device)
@@ -39,14 +38,13 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
         self._device = device
         self._reward_normalizer = reward_normalizer
         self._gpu_preprocessor = gpu_preprocessor
-        self._engine = engine
-        self._action_space = action_space
+        self._policy = policy
 
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, args, network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, **kwargs
+        cls, args, network, device, reward_normalizer, gpu_preprocessor, policy,
+        **kwargs
     ):
         raise NotImplementedError
 
@@ -93,14 +91,13 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
         self._internals = new_internals
 
     @property
-    def engine(self):
-        """Get network"""
-        return self._engine
-
-    @property
     def gpu_preprocessor(self):
         """Get network"""
         return self._gpu_preprocessor
+
+    @property
+    def policy(self):
+        return self._policy
 
     @property
     def action_space(self):

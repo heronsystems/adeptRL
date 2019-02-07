@@ -286,8 +286,7 @@ def main(
         device,
         env_registry.lookup_reward_normalizer(args.env),
         env.gpu_preprocessor,
-        env_registry.lookup_engine(args.env),
-        env.action_space
+        env_registry.lookup_policy(env.engine)(env.action_space)
     )
 
     # workers
