@@ -40,8 +40,7 @@ class ActorCriticVtrace(AgentModule):
         device,
         reward_normalizer,
         gpu_preprocessor,
-        engine,
-        action_space,
+        policy,
         nb_env,
         nb_rollout,
         discount,
@@ -54,8 +53,7 @@ class ActorCriticVtrace(AgentModule):
             device,
             reward_normalizer,
             gpu_preprocessor,
-            engine,
-            action_space,
+            policy,
             nb_env
         )
         self.discount = discount
@@ -67,11 +65,6 @@ class ActorCriticVtrace(AgentModule):
             nb_rollout, device, reward_normalizer,
             ['log_prob_of_action', 'sampled_action']
         )
-        self._action_keys = list(sorted(action_space.keys()))
-        self._func_id_to_headnames = None
-        if self.engine == 'AdeptSC2Env':
-            from adept.environments.deepmind_sc2 import SC2ActionLookup
-            self._func_id_to_headnames = SC2ActionLookup()
 
     @classmethod
     def from_args(
