@@ -136,8 +136,7 @@ def main(
         device,
         env_registry.lookup_reward_normalizer(train_args.env),
         env.gpu_preprocessor,
-        env.engine,
-        env.action_space,
+        env_registry.lookup_policy(env.engine)(env.action_space),
         nb_env=1
     )
 
