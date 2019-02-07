@@ -75,15 +75,14 @@ class ActorCriticVtrace(AgentModule):
 
     @classmethod
     def from_args(
-        cls, args, network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, nb_env=None
+        cls, args, network, device, reward_normalizer, gpu_preprocessor, policy,
+        nb_env=None
     ):
         if nb_env is None:
             nb_env = args.nb_env
 
         return cls(
-            network, device, reward_normalizer, gpu_preprocessor, engine,
-            action_space,
+            network, device, reward_normalizer, gpu_preprocessor, policy,
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
