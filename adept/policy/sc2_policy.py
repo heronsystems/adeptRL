@@ -84,7 +84,7 @@ class SC2Policy:
                 actions['func_id'][batch_idx] = 0
 
             # build SC2 action masks
-            func_id = actions['func_id'][batch_idx]
+            func_id = actions['func_id'][batch_idx].item()
             # TODO this can be vectorized via gather?
             for headname in self._func_id_to_headnames[func_id].keys():
                 head_masks[headname][batch_idx] = 1.

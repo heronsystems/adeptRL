@@ -155,7 +155,7 @@ class AdeptSC2Env(EnvModule):
         return obs
 
     def _wrap_action(self, action):
-        func_id = action['func_id']
+        func_id = action['func_id'].item()
         required_heads = self._func_id_to_headnames[func_id]
         args = []
 
@@ -163,9 +163,11 @@ class AdeptSC2Env(EnvModule):
             if '_y' in headname:
                 continue
             elif '_x' in headname:
-                args.append([action[headname], action[headname[:-2] + '_y']])
+                args.append([
+                    action[headname].item(),
+                    action[headname[:-2] + '_y'].item()])
             else:
-                args.append([action[headname]])
+                args.append([action[headname].item()])
 
         return [FunctionCall(func_id, args)]
 
