@@ -157,7 +157,6 @@ def main(
     if args.resume:
         log_id_dir = args.resume
         helper = LogDirHelper(log_id_dir)
-        # TODO make this work
         args.load_network = helper.latest_network_path()
         args.load_optim = helper.latest_optim_path()
         initial_step_count = helper.latest_epoch()

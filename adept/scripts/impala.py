@@ -29,6 +29,13 @@ Usage:
     impala [options]
     impala (-h | --help)
 
+Distributed Options:
+    --nb-node <int>         Number of distributed nodes [default: 1]
+    --node-rank <int>       ID of the node for multi-node training [default: 0]
+    --nb-proc <int>         Number of processes per node [default: 2]
+    --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
+    --master-port <int>     Master node (rank 0's) comm port [default: 29500]
+
 Agent Options:
     --agent <str>             Name of agent class [default: ActorCriticVtrace]
 
@@ -75,39 +82,23 @@ Troubleshooting Options:
     --profile                 Profile this script
 """
 import os
+import subprocess
+import sys
 from datetime import datetime
 
-import torch
-from absl import flags
-from mpi4py import MPI as mpi
-from tensorboardX import SummaryWriter
-
 from adept.agents.agent_registry import AgentRegistry
-from adept.containers import ImpalaHost, ImpalaWorker
-from adept.environments import SubProcEnvManager, EnvMetaData
 from adept.environments.env_registry import EnvRegistry
-from adept.networks.modular_network import ModularNetwork
 from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
-    make_log_id, make_logger, print_ascii_logo, log_args,
-    write_args_file, SimpleModelSaver
+    make_log_id, make_logger, print_ascii_logo,
+    log_args, write_args_file
 )
 from adept.utils.script_helpers import (
-    count_parameters,
-    parse_none,
-    parse_list_str,
-    parse_path
+    parse_list_str, parse_path, parse_none, LogDirHelper
 )
 from adept.utils.util import DotDict
 
-# hack to use argparse for SC2
-FLAGS = flags.FLAGS
-FLAGS(['local.py'])
-
-# mpi comm, rank, and size
-comm = mpi.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+MODE = 'Impala'
 
 
 def parse_args():
@@ -118,7 +109,10 @@ def parse_args():
     del args['help']
     args = DotDict(args)
 
-    # Network Options
+    args.nb_node = int(args.nb_node)
+    args.node_rank = int(args.node_rank)
+    args.nb_proc = int(args.nb_proc)
+    args.master_port = int(args.master_port)
 
     # Container Options
     args.logdir = parse_path(args.logdir)
@@ -154,7 +148,7 @@ def main(
     net_registry=NetworkRegistry()
 ):
     """
-    Run local training.
+    Run impala training.
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
@@ -162,8 +156,22 @@ def main(
     :param net_registry: NetworkRegistry
     :return:
     """
-    # host needs to broadcast timestamp so all procs create the same log dir
-    if rank == 0:
+    args = DotDict(args)
+
+    dist_world_size = args.nb_proc * args.nb_node
+
+    current_env = os.environ.copy()
+    current_env["MASTER_ADDR"] = args.master_addr
+    current_env["MASTER_PORT"] = str(args.master_port)
+    current_env["WORLD_SIZE"] = str(dist_world_size)
+    initial_step_count = 0
+    if args.resume:
+        log_id_dir = args.resume
+        helper = LogDirHelper(log_id_dir)
+        args.load_network = helper.latest_network_path()
+        args.load_optim = helper.latest_optim_path()
+        initial_step_count = helper.latest_epoch()
+    else:
         if args.use_defaults:
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
@@ -179,228 +187,54 @@ def main(
             else:
                 net_args = net_registry.prompt_modular_args(args)
         args = DotDict({**args, **agent_args, **env_args, **net_args})
-
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         log_id = make_log_id(
-            args.tag, 'Impala', args.agent,
-            args.net3d + args.netbody, timestamp
+            args.tag, MODE, args.agent,
+            args.net3d + args.netbody,
+            timestamp=datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         )
         log_id_dir = os.path.join(args.logdir, args.env, log_id)
         os.makedirs(log_id_dir)
-        saver = SimpleModelSaver(log_id_dir)
-        args = dict(args)
-        print_ascii_logo()
-    else:
-        timestamp = None
-        args = None
-    timestamp = comm.bcast(timestamp, root=0)
-    args = comm.bcast(args, root=0)
-    args = DotDict(args)
-
-    if rank != 0:
-        log_id = make_log_id(
-            args.tag, 'Impala', args.agent,
-            args.net3d + args.netbody, timestamp
-        )
-        log_id_dir = os.path.join(args.logdir, args.env, log_id)
-
-    comm.Barrier()
-
-    # construct env
-    # unique seed per process
-    seed = args.seed if rank == 0 else args.seed + args.nb_env * (rank - 1)
-    if rank == 0:
-        env = EnvMetaData.from_args(args, env_registry)
-    else:
-        env = SubProcEnvManager.from_args(
-            args, seed=seed, registry=env_registry
-        )
-
-    # construct network
-    torch.manual_seed(args.seed)
-    output_space = agent_registry.lookup_output_space(
-        args.agent, env.action_space
-    )
-    if args.custom_network:
-        network = net_registry.lookup_custom_net(args.custom_network).from_args(
-            args,
-            env.observation_space,
-            output_space,
-            net_registry
-        )
-    else:
-        network = ModularNetwork.from_args(
-            args,
-            env.observation_space,
-            output_space,
-            net_registry
-        )
-
-    # possibly load network
-    initial_step_count = 0
-    if args.load_network:
-        network.load_state_dict(
-            torch.load(
-                args.load_network, map_location=lambda storage, loc: storage
-            )
-        )
-        # get step count from network file
-        epoch_dir = os.path.split(args.load_network)[0]
-        initial_step_count = int(os.path.split(epoch_dir)[-1])
-        print('Reloaded network from {}'.format(args.load_network))
-    # only sync network params if not loading
-    else:
-        if rank == 0:
-            for v in network.parameters():
-                comm.Bcast(v.detach().cpu().numpy(), root=0)
-            print('Root variables synced')
-        else:
-            # can just use the numpy buffers
-            variables = [v.detach().cpu().numpy() for v in network.parameters()]
-            for v in variables:
-                comm.Bcast(v, root=0)
-            for shared_v, model_v in zip(variables, network.parameters()):
-                model_v.data.copy_(
-                    torch.from_numpy(shared_v), non_blocking=True
-                )
-            print('{} variables synced'.format(rank))
-
-    # construct agent
-    # host is always the first gpu,
-    # workers are distributed evenly across the rest
-    gpu_id = args.gpu_ids[rank % len(args.gpu_ids)]
-    device = torch.device(
-        "cuda:{}".format(gpu_id)
-        if (torch.cuda.is_available() and gpu_id >= 0)
-        else "cpu"
-    )
-    cudnn = True
-    # disable cudnn for dynamic batches
-    if rank == 0 and args.max_dynamic_batch > 0:
-        cudnn = False
-
-    torch.backends.cudnn.benchmark = cudnn
-    agent = agent_registry.lookup_agent(args.agent).from_args(
-        args,
-        network,
-        device,
-        env_registry.lookup_reward_normalizer(args.env),
-        env.gpu_preprocessor,
-        env_registry.lookup_policy(env.engine)(env.action_space)
-    )
-
-    # workers
-    if rank != 0:
-        logger = make_logger(
-            'ImpalaWorker{}'.format(rank),
-            os.path.join(log_id_dir, 'train_log{}.txt'.format(rank))
-        )
-        summary_writer = SummaryWriter(os.path.join(log_id_dir, str(rank)))
-        container = ImpalaWorker(
-            agent,
-            env,
-            args.nb_env,
-            logger,
-            summary_writer,
-            rank,
-            use_local_buffers=args.use_local_buffers
-        )
-
-        # Run the container
-        if args.profile:
-            try:
-                from pyinstrument import Profiler
-            except:
-                raise ImportError(
-                    'You must install pyinstrument to use profiling.'
-                )
-            profiler = Profiler()
-            profiler.start()
-            container.run()
-            profiler.stop()
-            print(profiler.output_text(unicode=True, color=True))
-        else:
-            container.run(initial_step_count)
-        env.close()
-    # host
-    else:
-        logger = make_logger(
-            'ImpalaHost',
-            os.path.join(log_id_dir, 'train_log{}.txt'.format(rank))
-        )
-        summary_writer = SummaryWriter(os.path.join(log_id_dir, str(rank)))
-        log_args(logger, args)
         write_args_file(log_id_dir, args)
-        logger.info(
-            'Network Parameter Count: {}'.format(count_parameters(network))
-        )
 
-        # Construct the optimizer
-        def make_optimizer(params):
-            opt = torch.optim.RMSprop(
-                params, lr=args.lr, eps=1e-5, alpha=0.99
-            )
-            if args.load_optim:
-                opt.load_state_dict(
-                    torch.load(
-                        args.load_optim,
-                        map_location=lambda storage, loc: storage
-                    )
-                )
-            return opt
+    print_ascii_logo()
+    logger = make_logger(MODE, os.path.join(log_id_dir, 'train_log.txt'))
+    log_args(logger, args)
 
-        container = ImpalaHost(
-            agent,
-            comm,
-            make_optimizer,
-            summary_writer,
-            args.summary_freq,
-            saver,
-            args.epoch_len,
-            args.info_interval,
-            rank,
-            use_local_buffers=args.use_local_buffers
-        )
+    processes = []
 
-        # Run the container
-        if args.profile:
-            try:
-                from pyinstrument import Profiler
-            except:
-                raise ImportError(
-                    'You must install pyinstrument to use profiling.'
-                )
-            profiler = Profiler()
-            profiler.start()
-            if args.max_dynamic_batch > 0:
-                container.run(
-                    args.max_dynamic_batch,
-                    args.max_queue_len,
-                    args.nb_step,
-                    dynamic=True,
-                    min_dynamic_batch=args.min_dynamic_batch
-                )
-            else:
-                container.run(
-                    args.nb_rollout_batch, args.max_queue_len,
-                    args.nb_step
-                )
-            profiler.stop()
-            print(profiler.output_text(unicode=True, color=True))
+    for local_rank in range(0, args.nb_proc):
+        # each process's rank
+        dist_rank = args.nb_proc * args.node_rank + local_rank
+        current_env["RANK"] = str(dist_rank)
+        current_env["LOCAL_RANK"] = str(local_rank)
+
+        # spawn the processes
+        if not args.resume:
+            cmd = [
+                sys.executable,
+                "-u",
+                "-m",
+                "adept.scripts._impala",
+                "--log-id-dir={}".format(log_id_dir)
+            ]
         else:
-            if args.max_dynamic_batch > 0:
-                container.run(
-                    args.max_dynamic_batch,
-                    args.max_queue_len,
-                    args.nb_step,
-                    dynamic=True,
-                    min_dynamic_batch=args.min_dynamic_batch
-                )
-            else:
-                container.run(
-                    args.nb_rollout_batch, args.max_queue_len,
-                    args.nb_step
-                )
+            cmd = [
+                sys.executable,
+                "-u",
+                "-m",
+                "adept.scripts._impala",
+                "--log-id-dir={}".format(log_id_dir),
+                "--resume={}".format(True),
+                "--load-network={}".format(args.load_network),
+                "--load-optim={}".format(args.load_optim),
+                "--initial-step-count={}".format(initial_step_count)
+            ]
+
+        process = subprocess.Popen(cmd, env=current_env)
+        processes.append(process)
+
+    for process in processes:
+        process.wait()
 
 
 if __name__ == '__main__':
