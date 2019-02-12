@@ -46,6 +46,7 @@ from absl import flags
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
 
+
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True

@@ -96,7 +96,7 @@ class ActorCritic(AgentModule):
         )
         values = predictions['critic'].squeeze(1)
         if 'available_actions' in obs:
-            actions, log_probs, entropies =  self.policy.act(
+            actions, log_probs, entropies = self.policy.act(
                 predictions, obs['available_actions']
             )
         else:
