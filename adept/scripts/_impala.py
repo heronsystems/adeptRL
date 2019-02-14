@@ -27,7 +27,7 @@ from adept.environments.env_registry import EnvRegistry
 from adept.environments.managers.subproc_env_manager import SubProcEnvManager
 from adept.networks.modular_network import ModularNetwork
 from adept.networks.network_registry import NetworkRegistry
-from adept.utils.logging import make_logger, SimpleModelSaver
+from adept.utils.logging import make_logger
 from adept.utils.script_helpers import (
     count_parameters, LogDirHelper
 )
@@ -150,14 +150,17 @@ def main(
         )
 
     device = torch.device("cuda:{}".format(LOCAL_RANK))
-    agent = agent_registry.lookup_agent(args.agent).from_args(
-        args,
-        network,
-        device,
-        env_registry.lookup_reward_normalizer(args.env),
-        env.gpu_preprocessor,
-        env_registry.lookup_policy(env.engine)(env.action_space)
-    )
+    if LOCAL_RANK == 0:
+        agent = agent_registry.lookup_agent(args.agent).from_args(
+            args,
+            network,
+            device,
+            env_registry.lookup_reward_normalizer(args.env),
+            env.gpu_preprocessor,
+            env_registry.lookup_policy(env.engine)(env.action_space)
+        )
+    else:
+        agent = ImpalaWorkerAgent()
 
     def make_optimizer(params):
         opt = torch.optim.RMSprop(
