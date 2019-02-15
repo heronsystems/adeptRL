@@ -128,7 +128,8 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
 
             # to dict of tensors
             rollout = {
-                k: torch.from_numpy(v).to(self.agent.device)
+                # act on host must check terminal to determine if internals need to be reset, MUCH faster to do on cpu
+                k: torch.from_numpy(v).to(self.agent.device) if k != 'terminals' else torch.from_numpy(v)
                 for k, v in zip(
                     self.sorted_keys,
                     unflattened_rollout  # timestep has been popped

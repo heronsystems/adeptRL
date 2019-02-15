@@ -15,6 +15,7 @@
 from collections import OrderedDict
 import torch
 from torch.nn import functional as F
+import numpy as np
 
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
@@ -265,6 +266,9 @@ class ActorCriticVtrace(AgentModule):
         log_probs_of_action = []
         entropies = []
 
+        # numpy to vectorize check for terminals
+        terminal_masks = terminal_masks.numpy()
+
         # if network is modular,
         # trunk can be sped up by combining batch & seq dim
         def get_results_generator():
@@ -289,11 +293,11 @@ class ActorCriticVtrace(AgentModule):
             entropies.append(entropies_seq)
 
             # if this state was terminal reset internals
-            for batch_ind, t_mask in enumerate(terminal_masks[seq_ind]):
-                if t_mask == 0:
-                    reset_internals = self.network.new_internals(self.device)
-                    for k, v in reset_internals.items():
-                        internals[k][batch_ind] = v
+            terminals = np.where(terminal_masks[seq_ind] == 0)[0]
+            for batch_ind in terminals:
+                reset_internals = self.network.new_internals(self.device)
+                for k, v in reset_internals.items():
+                    internals[k][batch_ind] = v
 
         # forward on state t+1
         with torch.no_grad():
@@ -387,8 +391,8 @@ class ActorCriticVtrace(AgentModule):
         # cat along the 1 dim gives [seq, batch = nb_env*nb_batches]
         # pull from rollout and convert to tensors of [seq, batch, ...]
         rewards = torch.cat(rollouts['rewards'], 1).to(self.device)
-        terminals_mask = torch.cat(rollouts['terminals'], 1).to(self.device)
-        discount_terminal_mask = self.discount * terminals_mask
+        terminals_mask = torch.cat(rollouts['terminals'], 1)  # cpu
+        discount_terminal_mask = (self.discount * terminals_mask).to(self.device)
         states = {
             k.split('-')[-1]: torch.cat(rollouts[k], 1)
             for k, v in rollouts.items() if 'rollout_obs-' in k
