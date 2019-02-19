@@ -41,6 +41,7 @@ setup(
         'tensorboardX>=1.2',
         'cloudpickle>=0.5',
         'opencv-python-headless>=3.4',
+        'pyzmq>=17.1.2',
         'docopt>=0.6'
     ],
     test_requires=test_deps,

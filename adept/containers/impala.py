@@ -413,6 +413,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
         self.local_step_count = initial_count
         next_obs = self.environment.reset()
         self._starting_internals = self.agent.internals
+        self._start_time = time.time()
         while not self.should_stop():
             obs = next_obs
             # need to copy the obs so the rollout append works
