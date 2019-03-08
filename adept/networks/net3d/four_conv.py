@@ -26,6 +26,8 @@ class FourConv(SubModule3D):
     def __init__(self, in_shape, id, normalize):
         super().__init__(in_shape, id)
         bias = not normalize
+        self._in_shape = in_shape
+        self._out_shape = None
         self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=bias)
         self.conv2 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
         self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
@@ -55,7 +57,13 @@ class FourConv(SubModule3D):
     @property
     def _output_shape(self):
         # For 84x84, (32, 5, 5)
-        return (32, 5, 5)
+        if self._out_shape is None:
+            output_dim = calc_output_dim(self._in_shape[1], 7, 2, 1, 1)
+            output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+            output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+            output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+            self._out_shape = 32, output_dim, output_dim
+        return self._out_shape
 
     def _forward(self, xs, internals, **kwargs):
         xs = F.relu(self.bn1(self.conv1(xs)))
@@ -66,3 +74,17 @@ class FourConv(SubModule3D):
 
     def _new_internals(self):
         return {}
+
+
+def calc_output_dim(dim_size, kernel_size, stride, padding, dilation):
+    numerator = dim_size + 2 * padding - dilation * (kernel_size - 1) - 1
+    return numerator // stride + 1
+
+
+if __name__ == '__main__':
+    output_dim = 84
+    output_dim = calc_output_dim(output_dim, 7, 2, 1, 1)
+    output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+    output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+    output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+    print(output_dim)  # should be 5
