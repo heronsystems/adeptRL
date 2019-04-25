@@ -1,5 +1,4 @@
 from adept.networks import NetworkModule, NetworkRegistry
-from adept.scripts.local import parse_args, main
 from adept.networks.net2d.gpt2 import GPT2
 from torch.nn import Conv2d, Linear, BatchNorm2d, BatchNorm1d, Conv1d
 from torch.nn import functional as F
@@ -118,6 +117,7 @@ class GPT2RL(NetworkModule):
 
 
 if __name__ == '__main__':
+    from adept.scripts.local import parse_args, main
     args = parse_args()
     network_reg = NetworkRegistry()
     network_reg.register_custom_net(GPT2RL)
