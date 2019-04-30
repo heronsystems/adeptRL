@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from copy import deepcopy
+import torch
 
 
 class ObsPreprocessor:
@@ -61,3 +62,28 @@ class ObsPreprocessor:
     def reset(self):
         for o in self.ops:
             o.reset()
+
+    def __repr__(self):
+        return f"ObsPreprocessor(" \
+            f"ops={self.ops}," \
+            f"observation_space={self.observation_space}, " \
+            f"observation_dtypes={self.observation_dtypes}," \
+            f"rank_to_names={self.rank_to_names})"
+
+    def __getstate__(self):
+        odict = self.__dict__.copy()
+        new_obs_dtypes = {}
+        for key, dtype in self.observation_dtypes.items():
+            if dtype == torch.float:
+                new_obs_dtypes[key] = 'float'
+        odict['observation_dtypes'] = new_obs_dtypes
+        return odict
+
+    def __setstate__(self, state):
+        self.__dict__ == state
+        new_obs_dtypes = {}
+        dtypes = state['observation_dtypes']
+        for obs_key, obs_value in dtypes.items():
+            if obs_key == 'float':
+                new_obs_dtypes[obs_key] = torch.float32
+        self.observation_dtypes = new_obs_dtypes

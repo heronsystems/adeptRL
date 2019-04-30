@@ -13,8 +13,8 @@ from adept.networks.net2d.submodule_2d import SubModule2D
 
 class GPT2(SubModule2D):
     args = {
-        'nb_layer': 12,
-        'nb_head': 12,
+        'nb_layer': 4,
+        'nb_head': 4,
         'layer_norm_eps': 1e-5
     }
 

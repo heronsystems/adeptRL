@@ -72,4 +72,4 @@ if __name__ == '__main__':
     main(args, net_registry=network_reg)
 
     # Call script like this to train agent:
-    # python -m custom_network_stub.py --custom-net MyCustomNetwork
+    # python -m custom_network_stub.py --custom-network MyCustomNetwork

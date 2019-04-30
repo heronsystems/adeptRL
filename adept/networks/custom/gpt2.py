@@ -54,8 +54,9 @@ class GPT2RL(NetworkModule):
         :return: MyCustomNetwork
         """
         assert len(observation_space) == 1
-        in_shape = observation_space.values()[0]
-        return cls(in_shape, args.nb_layer, args.nb_head, args.layer_norm_eps)
+        in_shape = list(observation_space.values())[0]
+        return cls(in_shape, output_space, args.nb_layer, args.nb_head,
+                                args.layer_norm_eps)
 
     def new_internals(self, device):
         """
