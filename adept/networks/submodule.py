@@ -65,7 +65,7 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def _new_internals(self):
         """
-        :return: Dict[InternalKey, List[torch.Tensor (ND)]]
+        :return: Dict[InternalKey, torch.Tensor (ND)]
         """
         raise NotImplementedError
 

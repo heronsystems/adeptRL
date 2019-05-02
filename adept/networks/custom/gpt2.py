@@ -13,7 +13,7 @@ class GPT2RL(NetworkModule):
         super(GPT2RL, self).__init__()
         self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=False)
         self.conv2 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
-        self.gpt2 = GPT2((1600, 32), id, nb_layer, nb_head, layer_norm_eps)
+        self.gpt2 = GPT2((1600, 32), 'gpt2', nb_layer, nb_head, layer_norm_eps)
         self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
         self.conv4 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
         self.fc = Linear(800, 512, bias=False)

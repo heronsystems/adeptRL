@@ -76,6 +76,8 @@ class ObsPreprocessor:
         for key, dtype in self.observation_dtypes.items():
             if dtype == torch.float:
                 new_obs_dtypes[key] = 'float'
+            elif dtype == torch.uint8:
+                new_obs_dtypes[key] = 'uint8'
         odict['observation_dtypes'] = new_obs_dtypes
         return odict
 
@@ -86,4 +88,6 @@ class ObsPreprocessor:
         for obs_key, obs_value in dtypes.items():
             if obs_key == 'float':
                 new_obs_dtypes[obs_key] = torch.float32
+            elif obs_key == 'uint8':
+                new_obs_dtypes[obs_key] = torch.uint8
         self.observation_dtypes = new_obs_dtypes

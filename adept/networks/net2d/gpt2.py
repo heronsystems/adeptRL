@@ -27,8 +27,8 @@ class GPT2(SubModule2D):
             layer_norm_eps
     ):
         super(GPT2, self).__init__(input_shape, id)
-        seq_len = input_shape[-2]
-        feat_len = input_shape[-1]
+        self.seq_len = seq_len = input_shape[-2]
+        self.feat_len = feat_len = input_shape[-1]
         block = Block(seq_len, feat_len, nb_head, layer_norm_eps, scale=True)
         self.nb_layer = nb_layer
         self.h = nn.ModuleList(
@@ -55,14 +55,18 @@ class GPT2(SubModule2D):
         x = input
         new_internals = []
         for i in range(self.nb_layer):
-            x, internal = self.h[i].forward(x, internals[i])
+            x, internal = self.h[str(i)].forward(x, internals[i])
             new_internals.append(internal)
-        new_internals = dict(enumerate(new_internals))
+        new_internals = {str(k): v for k, v in enumerate(new_internals)}
         x = self.ln_f(x)
         return x, new_internals
 
     def _new_internals(self):
-        return dict(enumerate([None, ] * self.nb_layer))
+        zeros = [
+            torch.zeros(2, 1, self.seq_len, self.feat_len) for _ in range(
+                self.nb_layer
+            )]
+        return {str(k): v for k, v in enumerate(zeros)}
 
     def _init_weights(self, module):
         """ Initialize the weights.
@@ -146,7 +150,7 @@ class Attention(nn.Module):
         else:
             return x.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
 
-    def forward(self, x, layer_past=None):
+    def forward(self, x, layer_past):
         """
         :param x: torch.Tensor of shape (B, S, F)
         :param layer_past: torch.Tensor of previous key and value (2, B, S, F)
@@ -157,10 +161,11 @@ class Attention(nn.Module):
         query = self.split_heads(query)
         key = self.split_heads(key, k=True)
         value = self.split_heads(value)
-        if layer_past is not None:
-            past_key, past_value = layer_past[0].transpose(-2, -1), layer_past[1]  # transpose back cf below
-            key = torch.cat((past_key, key), dim=-1)
-            value = torch.cat((past_value, value), dim=-2)
+
+        past_key, past_value = layer_past[0].transpose(-2, -1), layer_past[1]  # transpose back cf below
+        key = torch.cat((past_key, key), dim=-1)
+        value = torch.cat((past_value, value), dim=-2)
+
         present = torch.stack((key.transpose(-2, -1), value))  # transpose to have same shapes for stacking
         a = self._attn(query, key, value)
         a = self.merge_heads(a)
