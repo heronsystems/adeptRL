@@ -47,8 +47,17 @@ class SubProcEnvManager(EnvManager):
         self._zmq_ports = []
         self._zmq_sockets = []
 
+        # make a temporary env to get stuff
+        dummy = env_fns[0]()
+        self._observation_space = dummy.observation_space
+        self._action_space = dummy.action_space
+        self._cpu_preprocessor = dummy.cpu_preprocessor
+        self._gpu_preprocessor = dummy.gpu_preprocessor
+        dummy.close()
+
         # iterate envs to get torch shared memory through pipe then close it
         shared_memories = []
+
         for w_ind in range(self.nb_env):
             pipe, w_pipe = mp.Pipe()
             socket, port = zmq_robust_bind_socket(self._zmq_context)
@@ -59,13 +68,6 @@ class SubProcEnvManager(EnvManager):
             self.processes.append(process)
 
             self._zmq_sockets.append(socket)
-
-            # first worker sets up spaces and processors
-            if w_ind == 0:
-                pipe.send(('get_spaces', None))
-                self._observation_space, self._action_space = pipe.recv()
-                pipe.send(('get_processors', None))
-                self._cpu_preprocessor, self._gpu_preprocessor = pipe.recv()
 
             pipe.send(('get_shared_memory', None))
             shared_memories.append(pipe.recv())

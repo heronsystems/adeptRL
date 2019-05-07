@@ -29,6 +29,7 @@ class GPT2(SubModule2D):
         super(GPT2, self).__init__(input_shape, id)
         self.seq_len = seq_len = input_shape[-2]
         self.feat_len = feat_len = input_shape[-1]
+        self.nb_head = nb_head
         block = Block(seq_len, feat_len, nb_head, layer_norm_eps, scale=True)
         self.nb_layer = nb_layer
         self.h = nn.ModuleList(
@@ -52,21 +53,36 @@ class GPT2(SubModule2D):
         return self.input_shape
 
     def _forward(self, input, internals, **kwargs):
+        keys = torch.stack(internals[self.id + 'keys'], dim=0).unbind(dim=1)
+        values = torch.stack(internals[self.id + 'values'], dim=0).unbind(dim=1)
         x = input
-        new_internals = []
-        for i in range(self.nb_layer):
-            x, internal = self.h[str(i)].forward(x, internals[i])
-            new_internals.append(internal)
-        new_internals = {str(k): v for k, v in enumerate(new_internals)}
+        new_ks = []
+        new_vs = []
+        for i, kv in enumerate(zip(keys, values)):
+            k, v = kv
+            x, new_key, new_value = self.h[i].forward(x, k, v)
+            new_ks.append(new_key)
+            new_vs.append(new_value)
+        new_internals = {
+            'keys': torch.stack(new_ks, dim=1),
+            'values': torch.stack(new_vs, dim=1)
+        }
         x = self.ln_f(x)
-        return x, new_internals
+        return x, {k: v.unbind(dim=0) for k, v in new_internals.items()}
 
     def _new_internals(self):
-        zeros = [
-            torch.zeros(2, 1, self.seq_len, self.feat_len) for _ in range(
-                self.nb_layer
-            )]
-        return {str(k): v for k, v in enumerate(zeros)}
+        keys = torch.zeros(
+            self.nb_layer, self.nb_head, self.feat_len // self.nb_head,
+            self.seq_len
+        )
+        values = torch.zeros(
+            self.nb_layer, self.nb_head, self.seq_len,
+            self.feat_len // self.nb_head
+        )
+        return {
+            'keys': keys,
+            'values': values
+        }
 
     def _init_weights(self, module):
         """ Initialize the weights.
@@ -90,12 +106,12 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(feat_len, eps=layer_norm_eps)
         self.mlp = MLP(4 * feat_len, feat_len)
 
-    def forward(self, x, layer_past=None):
-        a, present = self.attn(self.ln_1(x), layer_past=layer_past)
+    def forward(self, x, k, v):
+        a, new_k, new_v = self.attn(self.ln_1(x), k, v)
         x = x + a
         m = self.mlp(self.ln_2(x))
         x = x + m
-        return x, present
+        return x, new_k, new_v
 
 
 class LayerNorm(nn.Module):
@@ -119,8 +135,8 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
         # [switch nx => n_state from Block to Attention to keep identical to TF implem]
         assert feat_len % nb_head == 0
-        self.register_buffer("bias", torch.tril(torch.ones(seq_len, seq_len)).view(1, 1, seq_len, seq_len))
-        self.n_head = nb_head
+        # self.register_buffer("bias", torch.tril(torch.ones(seq_len, seq_len)).view(1, 1, seq_len, seq_len))
+        self.nb_head = nb_head
         self.split_size = feat_len
         self.scale = scale
         self.c_attn = Conv1D(feat_len * 3, feat_len)
@@ -131,8 +147,8 @@ class Attention(nn.Module):
         if self.scale:
             w = w / math.sqrt(v.size(-1))
         nd, ns = w.size(-2), w.size(-1)
-        b = self.bias[:, :, ns-nd:ns, :ns]
-        w = w * b - 1e10 * (1 - b)
+        # b = self.bias[:, :, ns-nd:ns, :ns]
+        # w = w * b - 1e10 * (1 - b)
 
         w = nn.Softmax(dim=-1)(w)
         return torch.matmul(w, v)
@@ -143,34 +159,27 @@ class Attention(nn.Module):
         return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
 
     def split_heads(self, x, k=False):
-        new_x_shape = x.size()[:-1] + (self.n_head, x.size(-1) // self.n_head)
+        new_x_shape = x.size()[:-1] + (self.nb_head, x.size(-1) // self.nb_head)
         x = x.view(*new_x_shape)  # in Tensorflow implem: fct split_states
         if k:
             return x.permute(0, 2, 3, 1)  # (batch, head, head_features, seq_length)
         else:
             return x.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
 
-    def forward(self, x, layer_past):
-        """
-        :param x: torch.Tensor of shape (B, S, F)
-        :param layer_past: torch.Tensor of previous key and value (2, B, S, F)
-        :return:
-        """
+    def forward(self, x, past_key, past_value):
         x = self.c_attn(x)
         query, key, value = x.split(self.split_size, dim=2)
         query = self.split_heads(query)
         key = self.split_heads(key, k=True)
         value = self.split_heads(value)
 
-        past_key, past_value = layer_past[0].transpose(-2, -1), layer_past[1]  # transpose back cf below
-        key = torch.cat((past_key, key), dim=-1)
-        value = torch.cat((past_value, value), dim=-2)
+        cur_key = torch.cat((past_key, key), dim=-1)
+        cur_value = torch.cat((past_value, value), dim=-2)
 
-        present = torch.stack((key.transpose(-2, -1), value))  # transpose to have same shapes for stacking
-        a = self._attn(query, key, value)
+        a = self._attn(query, cur_key, cur_value)
         a = self.merge_heads(a)
         a = self.c_proj(a)
-        return a, present
+        return a, key, value
 
 
 class MLP(nn.Module):
@@ -197,6 +206,7 @@ class Conv1D(nn.Module):
 
     def forward(self, x):
         size_out = x.size()[:-1] + (self.nf,)
+        x = x.contiguous()
         x = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
         x = x.view(*size_out)
         return x

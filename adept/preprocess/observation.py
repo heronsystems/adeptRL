@@ -69,25 +69,3 @@ class ObsPreprocessor:
             f"observation_space={self.observation_space}, " \
             f"observation_dtypes={self.observation_dtypes}," \
             f"rank_to_names={self.rank_to_names})"
-
-    def __getstate__(self):
-        odict = self.__dict__.copy()
-        new_obs_dtypes = {}
-        for key, dtype in self.observation_dtypes.items():
-            if dtype == torch.float:
-                new_obs_dtypes[key] = 'float'
-            elif dtype == torch.uint8:
-                new_obs_dtypes[key] = 'uint8'
-        odict['observation_dtypes'] = new_obs_dtypes
-        return odict
-
-    def __setstate__(self, state):
-        self.__dict__ == state
-        new_obs_dtypes = {}
-        dtypes = state['observation_dtypes']
-        for obs_key, obs_value in dtypes.items():
-            if obs_key == 'float':
-                new_obs_dtypes[obs_key] = torch.float32
-            elif obs_key == 'uint8':
-                new_obs_dtypes[obs_key] = torch.uint8
-        self.observation_dtypes = new_obs_dtypes

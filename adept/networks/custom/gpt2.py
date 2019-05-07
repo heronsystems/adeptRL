@@ -12,14 +12,14 @@ class GPT2RL(NetworkModule):
     def __init__(self, in_shape, out_space, nb_layer, nb_head, layer_norm_eps):
         super(GPT2RL, self).__init__()
         self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=False)
-        self.conv2 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
-        self.gpt2 = GPT2((1600, 32), 'gpt2', nb_layer, nb_head, layer_norm_eps)
+        self.conv2 = Conv2d(32, 30, 3, stride=2, padding=1, bias=False)
+        self.gpt2 = GPT2((400, 32), 'gpt2', nb_layer, nb_head, layer_norm_eps)
         self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
         self.conv4 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
         self.fc = Linear(800, 512, bias=False)
 
         self.bn1 = BatchNorm2d(32)
-        self.bn2 = BatchNorm2d(32)
+        self.bn2 = BatchNorm2d(30)
         self.bn3 = BatchNorm2d(32)
         self.bn4 = BatchNorm2d(32)
         self.bn_fc = BatchNorm1d(512)
@@ -75,7 +75,7 @@ class GPT2RL(NetworkModule):
         :param internals: Dict[InternalKey, torch.Tensor (ND)]
         :return: Dict[OutKey, torch.Tensor], Dict[InternalKey, torch.Tensor]
         """
-        x = observation
+        x = observation['Box']
         x = self.conv1(x)
         x = self.bn1(x)
         x = F.relu(x)
@@ -87,17 +87,17 @@ class GPT2RL(NetworkModule):
         b, f, h, w = x.size()
 
         x_enc = torch.linspace(0, 1, steps=w).view(1, 1, 1, -1).expand(
-            b, f, h, -1
-        )
+            b, -1, h, -1
+        ).to(x.device)
         y_enc = torch.linspace(0, 1, steps=h).view(1, 1, -1, 1).expand(
-            b, f, -1, w
-        )
-        x = torch.cat([x, x_enc, y_enc], dim=1).view(b, f, h * w)
+            b, -1, -1, w
+        ).to(x.device)
+        x = torch.cat([x, x_enc, y_enc], dim=1).view(b, f + 2, h * w)
         x = x.permute(0, 2, 1)
         x, new_internals = self.gpt2.forward(x, internals)
 
         x = x.permute(0, 2, 1)
-        x = x.view(b, f, h, w)
+        x = x.view(b, f + 2, h, w)
 
         x = self.conv3(x)
         x = self.bn3(x)
