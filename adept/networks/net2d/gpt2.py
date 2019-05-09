@@ -173,10 +173,10 @@ class Attention(nn.Module):
         key = self.split_heads(key, k=True)
         value = self.split_heads(value)
 
-        cur_key = torch.cat((past_key, key), dim=-1)
-        cur_value = torch.cat((past_value, value), dim=-2)
+        # cur_key = torch.cat((past_key, key), dim=-1)
+        # cur_value = torch.cat((past_value, value), dim=-2)
 
-        a = self._attn(query, cur_key, cur_value)
+        a = self._attn(query, key, value)
         a = self.merge_heads(a)
         a = self.c_proj(a)
         return a, key, value

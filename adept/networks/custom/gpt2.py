@@ -34,6 +34,10 @@ class GPT2RL(NetworkModule):
             output_heads[output_key] = module
         self.out_heads = torch.nn.ModuleDict(output_heads)
 
+        h, w = 20, 20
+        self.register_buffer('x_enc', torch.linspace(0, 1, steps=w))
+        self.register_buffer('y_enc', torch.linspace(0, 1, steps=h))
+
     @classmethod
     def from_args(
         cls,
@@ -86,12 +90,8 @@ class GPT2RL(NetworkModule):
 
         b, f, h, w = x.size()
 
-        x_enc = torch.linspace(0, 1, steps=w).view(1, 1, 1, -1).expand(
-            b, -1, h, -1
-        ).to(x.device)
-        y_enc = torch.linspace(0, 1, steps=h).view(1, 1, -1, 1).expand(
-            b, -1, -1, w
-        ).to(x.device)
+        x_enc = self.x_enc.view(1, 1, 1, -1).expand(b, -1, h, -1)
+        y_enc = self.y_enc.view(1, 1, -1, 1).expand(b, -1, -1, w)
         x = torch.cat([x, x_enc, y_enc], dim=1).view(b, f + 2, h * w)
         x = x.permute(0, 2, 1)
         x, new_internals = self.gpt2.forward(x, internals)
