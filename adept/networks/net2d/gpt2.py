@@ -68,7 +68,7 @@ class GPT2(SubModule2D):
             'values': torch.stack(new_vs, dim=1)
         }
         x = self.ln_f(x)
-        return x, {k: v.unbind(dim=0) for k, v in new_internals.items()}
+        return x, {k: list(v.unbind(dim=0)) for k, v in new_internals.items()}
 
     def _new_internals(self):
         keys = torch.zeros(
