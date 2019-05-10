@@ -67,7 +67,7 @@ Network Options:
     --head2d <str>          Network to use for 2d output [default: Identity2D]
     --head3d <str>          Network to use for 3d output [default: Identity3D]
     --head4d <str>          Network to use for 4d output [default: Identity4D]
-    --custom-network        Name of custom network class
+    --custom-network <str>  Name of custom network class
 
 Optimizer Options:
     --lr <float>            Learning rate [default: 0.0007]
@@ -166,14 +166,16 @@ def main(
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(args.net).args
+                net_args = net_registry.lookup_custom_net(
+                    args.custom_network).args
             else:
                 net_args = net_registry.lookup_modular_args(args)
         else:
             agent_args = agent_registry.lookup_agent(args.agent).prompt()
             env_args = env_registry.lookup_env_class(args.env).prompt()
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(args.net).prompt()
+                net_args = net_registry.lookup_custom_net(
+                    args.custom_network).prompt()
             else:
                 net_args = net_registry.prompt_modular_args(args)
         args = DotDict({**args, **agent_args, **env_args, **net_args})
