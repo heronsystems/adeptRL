@@ -53,25 +53,22 @@ class GPT2(SubModule2D):
         return self.input_shape
 
     def _forward(self, input, internals, **kwargs):
-        # keys = torch.stack(internals[self.id + 'keys'], dim=0).unbind(dim=1)
-        # values = torch.stack(internals[self.id + 'values'], dim=0).unbind(dim=1)
+        keys = torch.stack(internals[self.id + 'keys'], dim=0).unbind(dim=1)
+        values = torch.stack(internals[self.id + 'values'], dim=0).unbind(dim=1)
         x = input
         new_ks = []
         new_vs = []
-        # for i, kv in enumerate(zip(keys, values)):
-        for i in range(self.nb_layer):
-            # k, v = kv
-            # x, new_key, new_value = self.h[i].forward(x, k, v)
-            x = self.hiddens[i].forward(x)
-            # new_ks.append(new_key)
-            # new_vs.append(new_value)
-        # new_internals = {
-        #     'keys': torch.stack(new_ks, dim=1),
-        #     'values': torch.stack(new_vs, dim=1)
-        # }
+        for i, kv in enumerate(zip(keys, values)):
+            k, v = kv
+            x, new_key, new_value = self.hiddens[i].forward(x, k, v)
+            new_ks.append(new_key)
+            new_vs.append(new_value)
+        new_internals = {
+            'keys': torch.stack(new_ks, dim=1),
+            'values': torch.stack(new_vs, dim=1)
+        }
         x = self.ln_f(x)
-        # return x, {k: v.unbind(dim=0) for k, v in new_internals.items()}
-        return x, {}
+        return x, {k: v.unbind(dim=0) for k, v in new_internals.items()}
 
     def _new_internals(self):
         keys = torch.zeros(
@@ -82,11 +79,10 @@ class GPT2(SubModule2D):
             self.nb_layer, self.nb_head, self.seq_len,
             self.feat_len // self.nb_head
         )
-        # return {
-        #     'keys': keys,
-        #     'values': values
-        # }
-        return {}
+        return {
+            'keys': keys,
+            'values': values
+        }
 
     def _init_weights(self, module):
         """ Initialize the weights.
@@ -110,15 +106,12 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(feat_len, eps=layer_norm_eps)
         self.mlp = MLP(4 * feat_len, feat_len)
 
-    # def forward(self, x, k, v):
-    def forward(self, x):
-        # a, new_k, new_v = self.attn(self.ln_1(x), k, v)
-        a = self.attn(self.ln_1(x))
+    def forward(self, x, k, v):
+        a, new_k, new_v = self.attn(self.ln_1(x), k, v)
         x = x + a
         m = self.mlp(self.ln_2(x))
         x = x + m
-        # return x, new_k, new_v
-        return x
+        return x, new_k, new_v
 
 
 class LayerNorm(nn.Module):
@@ -173,22 +166,20 @@ class Attention(nn.Module):
         else:
             return x.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
 
-    # def forward(self, x, past_key, past_value):
-    def forward(self, x):
+    def forward(self, x, past_key, past_value):
         x = self.c_attn(x)
         query, key, value = x.split(self.split_size, dim=2)
         query = self.split_heads(query)
         key = self.split_heads(key, k=True)
         value = self.split_heads(value)
 
-        # cur_key = torch.cat((past_key, key), dim=-1)
-        # cur_value = torch.cat((past_value, value), dim=-2)
+        cur_key = torch.cat((past_key, key), dim=-1)
+        cur_value = torch.cat((past_value, value), dim=-2)
 
-        a = self._attn(query, key, value)
+        a = self._attn(query, cur_key, cur_value)
         a = self.merge_heads(a)
         a = self.c_proj(a)
-        # return a, key, value
-        return a
+        return a, key, value
 
 
 class MLP(nn.Module):
