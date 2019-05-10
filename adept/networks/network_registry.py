@@ -69,6 +69,8 @@ class NetworkRegistry:
         }
         for name, submod_cls in net_4d_cls_by_name.items():
             self.register_submodule(submod_cls)
+        from adept.networks.custom.gpt2 import GPT2RL
+        self.register_custom_net(GPT2RL)
 
     def register_custom_net(self, net_cls):
         """

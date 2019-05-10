@@ -332,7 +332,7 @@ def main(
 
     if args.eval:
         import subprocess
-        exit(subprocess.call([
+        command = [
             'python',
             '-m',
             'adept.scripts.evaluate',
@@ -342,7 +342,13 @@ def main(
             str(args.gpu_id),
             '--nb-episode',
             str(args.nb_env)
-        ], env=os.environ))
+        ]
+        if args.custom_network:
+            command += [
+                '--custom-network',
+                args.custom_network
+            ]
+        exit(subprocess.call(command, env=os.environ))
 
 
 if __name__ == '__main__':

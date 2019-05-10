@@ -38,6 +38,7 @@ Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-episode <int>      Number of episodes to average [default: 30]
     --seed <int>            Seed for random variables [default: 512]
+    --custom-network <str>  Name of custom network class
 """
 import json
 import os

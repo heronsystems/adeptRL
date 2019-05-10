@@ -219,12 +219,28 @@ def main(
                 "--load-optim={}".format(args.load_optim),
                 "--initial-step-count={}".format(initial_step_count)
             ]
+        if args.custom_network:
+            cmd += [
+                '--custom-network',
+                args.custom_network
+            ]
 
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
 
     for process in processes:
         process.wait()
+
+    if args.eval:
+        from adept.scripts.evaluate import main
+        eval_args = {
+            'log_id_dir': args.log_id_dir,
+            'gpu_id': 0,
+            'nb_episode': 32,
+        }
+        if args.custom_network:
+            eval_args['custom_network'] = args.custom_network
+        main(eval_args, agent_registry, env_registry, net_registry)
 
 
 if __name__ == '__main__':
