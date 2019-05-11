@@ -57,6 +57,7 @@ from adept.networks.modular_network import ModularNetwork
 from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
 from adept.utils.util import DotDict
+from adept.utils.script_helpers import parse_path
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -70,6 +71,7 @@ def parse_args():
     del args['h']
     del args['help']
     args = DotDict(args)
+    args.log_id_dir = parse_path(args.log_id_dir)
     args.gpu_id = int(args.gpu_id)
     args.nb_episode = int(args.nb_episode)
     args.seed = int(args.seed)

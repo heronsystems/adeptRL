@@ -236,7 +236,7 @@ def main(
     if args.eval:
         from adept.scripts.evaluate import main
         eval_args = {
-            'log_id_dir': args.log_id_dir,
+            'log_id_dir': log_id_dir,
             'gpu_id': 0,
             'nb_episode': 32,
         }
