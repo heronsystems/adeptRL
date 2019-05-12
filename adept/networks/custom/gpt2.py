@@ -12,16 +12,16 @@ class GPT2RL(NetworkModule):
     def __init__(self, in_shape, out_space, nb_layer, nb_head, layer_norm_eps):
         super(GPT2RL, self).__init__()
         self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=False)
-        self.conv2 = Conv2d(32, 30, 3, stride=2, padding=1, bias=False)
-        self.gpt2 = GPT2((400, 32), 'gpt2', nb_layer, nb_head, layer_norm_eps)
+        self.conv2 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
         self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
-        self.conv4 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
+        self.conv4 = Conv2d(32, 30, 3, stride=2, padding=1, bias=False)
+        self.gpt2 = GPT2((25, 32), 'gpt2', nb_layer, nb_head, layer_norm_eps)
         self.fc = Linear(800, 512, bias=False)
 
         self.bn1 = BatchNorm2d(32)
-        self.bn2 = BatchNorm2d(30)
+        self.bn2 = BatchNorm2d(32)
         self.bn3 = BatchNorm2d(32)
-        self.bn4 = BatchNorm2d(32)
+        self.bn4 = BatchNorm2d(30)
         self.bn_fc = BatchNorm1d(512)
 
         output_heads = {}
@@ -34,7 +34,7 @@ class GPT2RL(NetworkModule):
             output_heads[output_key] = module
         self.out_heads = torch.nn.ModuleDict(output_heads)
 
-        h, w = 20, 20
+        h, w = 5, 5
         self.register_buffer('x_enc', torch.linspace(0, 1, steps=w))
         self.register_buffer('y_enc', torch.linspace(0, 1, steps=h))
 
@@ -88,6 +88,14 @@ class GPT2RL(NetworkModule):
         x = self.bn2(x)
         x = F.relu(x)
 
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = F.relu(x)
+
+        x = self.conv4(x)
+        x = self.bn4(x)
+        x = F.relu(x)
+
         b, f, h, w = x.size()
 
         x_enc = self.x_enc.view(1, 1, 1, -1).expand(b, -1, h, -1)
@@ -97,17 +105,9 @@ class GPT2RL(NetworkModule):
         x, new_internals = self.gpt2.forward(x, internals)
 
         x = x.permute(0, 2, 1)
-        x = x.view(b, f + 2, h, w)
+        # x = x.view(b, f + 2, h, w)
 
-        x = self.conv3(x)
-        x = self.bn3(x)
-        x = F.relu(x)
-
-        x = self.conv4(x)
-        x = self.bn4(x)
-        x = F.relu(x)
-
-        x = x.view(b, -1)
+        x = x.contiguous().view(b, -1)
         x = self.fc(x)
         x = self.bn_fc(x)
         x = F.relu(x)
