@@ -12,16 +12,18 @@ class GPT2RL(NetworkModule):
     def __init__(self, in_shape, out_space, nb_layer, nb_head, layer_norm_eps):
         super(GPT2RL, self).__init__()
         self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=False)
-        self.conv2 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
-        self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=False)
-        self.conv4 = Conv2d(32, 30, 3, stride=2, padding=1, bias=False)
-        self.gpt2 = GPT2((25, 32), 'gpt2', nb_layer, nb_head, layer_norm_eps)
+        self.conv2 = Conv2d(32, 64, 3, stride=2, padding=1, bias=False)
+        self.conv3 = Conv2d(64, 128, 3, stride=2, padding=1, bias=False)
+        self.conv4 = Conv2d(128, 254, 3, stride=2, padding=1, bias=False)
+        self.gpt2 = GPT2((25, 256), 'gpt2', nb_layer, nb_head, layer_norm_eps)
+        self.conv1x1 = Conv2d(256, 32, 1, 1)
         self.fc = Linear(800, 512, bias=False)
 
         self.bn1 = BatchNorm2d(32)
-        self.bn2 = BatchNorm2d(32)
-        self.bn3 = BatchNorm2d(32)
-        self.bn4 = BatchNorm2d(30)
+        self.bn2 = BatchNorm2d(64)
+        self.bn3 = BatchNorm2d(128)
+        self.bn4 = BatchNorm2d(254)
+        self.bn1x1 = BatchNorm2d(32)
         self.bn_fc = BatchNorm1d(512)
 
         output_heads = {}
@@ -105,7 +107,11 @@ class GPT2RL(NetworkModule):
         x, new_internals = self.gpt2.forward(x, internals)
 
         x = x.permute(0, 2, 1)
-        # x = x.view(b, f + 2, h, w)
+        x = x.view(b, f + 2, h, w)
+
+        x = self.conv1x1(x)
+        x = self.bn1x1(x)
+        x = F.relu(x)
 
         x = x.contiguous().view(b, -1)
         x = self.fc(x)
