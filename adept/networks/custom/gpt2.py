@@ -9,13 +9,15 @@ class GPT2RL(NetworkModule):
     # You will be prompted for these when training script starts
     args = GPT2.args
 
-    def __init__(self, in_shape, out_space, nb_layer, nb_head, layer_norm_eps):
+    def __init__(self, in_shape, out_space, nb_layer, nb_head,
+                 layer_norm_eps, do_scale):
         super(GPT2RL, self).__init__()
         self.conv1 = Conv2d(in_shape[0], 64, 7, stride=2, padding=1, bias=False)
         self.conv2 = Conv2d(64, 128, 3, stride=2, padding=1, bias=False)
         self.conv3 = Conv2d(128, 256, 3, stride=2, padding=1, bias=False)
         self.conv4 = Conv2d(256, 510, 3, stride=2, padding=1, bias=False)
-        self.gpt2 = GPT2((25, 512), 'gpt2', nb_layer, nb_head, layer_norm_eps)
+        self.gpt2 = GPT2((25, 512), 'gpt2', nb_layer, nb_head,
+                         layer_norm_eps, do_scale)
         self.conv1x1 = Conv2d(512, 32, 1, 1)
         self.fc = Linear(800, 512, bias=False)
 
@@ -62,7 +64,7 @@ class GPT2RL(NetworkModule):
         assert len(observation_space) == 1
         in_shape = list(observation_space.values())[0]
         return cls(in_shape, output_space, args.nb_layer, args.nb_head,
-                                args.layer_norm_eps)
+                                args.layer_norm_eps, args.do_scale)
 
     def new_internals(self, device):
         """
