@@ -15,7 +15,8 @@ class GPT2(SubModule2D):
     args = {
         'nb_layer': 1,
         'nb_head': 2,
-        'layer_norm_eps': 1e-5
+        'layer_norm_eps': 1e-5,
+        'do_scale': False
     }
 
     def __init__(
@@ -24,15 +25,17 @@ class GPT2(SubModule2D):
             id,
             nb_layer,
             nb_head,
-            layer_norm_eps
+            layer_norm_eps,
+            do_scale
     ):
         super(GPT2, self).__init__(input_shape, id)
         self.seq_len = seq_len = input_shape[-2]
         self.feat_len = feat_len = input_shape[-1]
         self.nb_head = nb_head
         self.nb_layer = nb_layer
+        self.do_scale = do_scale
         self.hiddens = nn.ModuleList([
-            Block(seq_len, feat_len, nb_head, layer_norm_eps, scale=True)
+            Block(seq_len, feat_len, nb_head, layer_norm_eps, scale=do_scale)
             for _ in range(nb_layer)
         ])
         self.ln_f = LayerNorm(feat_len, eps=layer_norm_eps)
@@ -45,7 +48,8 @@ class GPT2(SubModule2D):
             id,
             args.nb_layer,
             args.nb_head,
-            args.layer_norm_eps
+            args.layer_norm_eps,
+            args.do_scale
         )
 
     @property
