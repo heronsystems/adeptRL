@@ -41,12 +41,11 @@ class NetworkRegistry:
             self.register_submodule(submod_cls)
 
         from adept.networks.net3d.identity_3d import Identity3D
-        from adept.networks.net3d.four_conv import FourConv
+        from adept.networks.net3d.four_conv import FourConv, FourConvWide
         net_3d_cls_by_name = {
             'Identity3D': Identity3D,
             'FourConv': FourConv,
-            # 'FourConvSpatialAttention': FourConvSpatialAttention,
-            # 'FourConvLarger': FourConvLarger,
+            'FourConvWide': FourConvWide,
             # 'Nature': Nature,
             # 'Mnih2013': Mnih2013,
             # 'ResNet18': ResNet18,
@@ -69,8 +68,8 @@ class NetworkRegistry:
         }
         for name, submod_cls in net_4d_cls_by_name.items():
             self.register_submodule(submod_cls)
-        from adept.networks.custom.gpt2 import GPT2RL
-        self.register_custom_net(GPT2RL)
+        from adept.networks.custom.gpt2 import GPT2Net
+        self.register_custom_net(GPT2Net)
 
     def register_custom_net(self, net_cls):
         """

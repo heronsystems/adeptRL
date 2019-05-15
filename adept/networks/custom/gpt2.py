@@ -5,13 +5,13 @@ from torch.nn import functional as F
 import torch
 
 
-class GPT2RL(NetworkModule):
+class GPT2Net(NetworkModule):
     # You will be prompted for these when training script starts
     args = GPT2.args
 
     def __init__(self, in_shape, out_space, nb_layer, nb_head,
                  layer_norm_eps, do_scale):
-        super(GPT2RL, self).__init__()
+        super(GPT2Net, self).__init__()
         self.conv1 = Conv2d(in_shape[0], 64, 7, stride=2, padding=1, bias=False)
         self.conv2 = Conv2d(64, 128, 3, stride=2, padding=1, bias=False)
         self.conv3 = Conv2d(128, 256, 3, stride=2, padding=1, bias=False)
@@ -83,7 +83,7 @@ class GPT2RL(NetworkModule):
         :param internals: Dict[InternalKey, torch.Tensor (ND)]
         :return: Dict[OutKey, torch.Tensor], Dict[InternalKey, torch.Tensor]
         """
-        x = observation['Box']
+        x = observation['Box']  # this network is just for testing on atari
         x = self.conv1(x)
         x = self.bn1(x)
         x = F.relu(x)
@@ -129,9 +129,6 @@ if __name__ == '__main__':
     from adept.scripts.local import parse_args, main
     args = parse_args()
     network_reg = NetworkRegistry()
-    network_reg.register_custom_net(GPT2RL)
+    network_reg.register_custom_net(GPT2Net)
 
     main(args, net_registry=network_reg)
-
-    # Call script like this to train agent:
-    # python -m custom_network_stub.py --custom-net MyCustomNetwork

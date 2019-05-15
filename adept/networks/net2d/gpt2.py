@@ -16,7 +16,7 @@ class GPT2(SubModule2D):
         'nb_layer': 1,
         'nb_head': 2,
         'layer_norm_eps': 1e-5,
-        'do_scale': False
+        'do_scale': True
     }
 
     def __init__(

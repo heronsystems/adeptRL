@@ -81,6 +81,74 @@ def calc_output_dim(dim_size, kernel_size, stride, padding, dilation):
     return numerator // stride + 1
 
 
+class FourConvWide(SubModule3D):
+    args = {
+        'normalize': True,
+        'width_scale': 1
+    }
+
+    def __init__(self, in_shape, id, normalize, width_scale):
+        super().__init__(in_shape, id)
+        bias = not normalize
+        self._in_shape = in_shape
+        self._out_shape = None
+        self._widths = widths = [x * width_scale for x in [32, 64, 128, 256]]
+        self.conv1 = Conv2d(in_shape[0], widths[0], 7, stride=2, padding=1,
+                            bias=bias)
+        self.conv2 = Conv2d(widths[0], widths[1], 3, stride=2, padding=1,
+                            bias=bias)
+        self.conv3 = Conv2d(widths[1], widths[2], 3, stride=2, padding=1,
+                            bias=bias)
+        self.conv4 = Conv2d(widths[2], widths[3], 3, stride=2, padding=1,
+                            bias=bias)
+        self.conv1x1 = Conv2d(widths[3], 32, 1, 1)
+
+        if normalize:
+            self.bn1 = BatchNorm2d(widths[0])
+            self.bn2 = BatchNorm2d(widths[1])
+            self.bn3 = BatchNorm2d(widths[2])
+            self.bn4 = BatchNorm2d(widths[3])
+            self.bn1x1 = BatchNorm2d(32)
+        else:
+            self.bn1 = Identity()
+            self.bn2 = Identity()
+            self.bn3 = Identity()
+            self.bn4 = Identity()
+            self.bn1x1 = Identity()
+
+        relu_gain = init.calculate_gain('relu')
+        self.conv1.weight.data.mul_(relu_gain)
+        self.conv2.weight.data.mul_(relu_gain)
+        self.conv3.weight.data.mul_(relu_gain)
+        self.conv4.weight.data.mul_(relu_gain)
+
+    @classmethod
+    def from_args(cls, args, in_shape, id):
+        return cls(in_shape, id, args.normalize, args.width_scale)
+
+    @property
+    def _output_shape(self):
+        # For 84x84, (32, 5, 5)
+        if self._out_shape is None:
+            output_dim = calc_output_dim(self._in_shape[1], 7, 2, 1, 1)
+            output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+            output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+            output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)
+            self._out_shape = 32, output_dim, output_dim
+        return self._out_shape
+
+    def _forward(self, xs, internals, **kwargs):
+        xs = F.relu(self.bn1(self.conv1(xs)))
+        xs = F.relu(self.bn2(self.conv2(xs)))
+        xs = F.relu(self.bn3(self.conv3(xs)))
+        xs = F.relu(self.bn4(self.conv4(xs)))
+        xs = F.relu(self.bn1x1(self.conv1x1(xs)))
+        return xs, {}
+
+    def _new_internals(self):
+        return {}
+
+
 if __name__ == '__main__':
     output_dim = 84
     output_dim = calc_output_dim(output_dim, 7, 2, 1, 1)
