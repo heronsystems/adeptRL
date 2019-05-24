@@ -25,7 +25,8 @@ class DQN(AgentModule):
     args = {
         'nb_rollout': 20,
         'discount': 0.99,
-        'egreedy_steps': 1000000
+        'egreedy_steps': 1000000,
+        'double_dqn': True
     }
 
     def __init__(
@@ -39,7 +40,8 @@ class DQN(AgentModule):
         nb_env,
         nb_rollout,
         discount,
-        egreedy_steps
+        egreedy_steps,
+        double_dqn
     ):
         super(DQN, self).__init__(
             network,
@@ -51,6 +53,7 @@ class DQN(AgentModule):
             nb_env
         )
         self.discount, self.egreedy_steps = discount, egreedy_steps / nb_env
+        self.double_dqn = double_dqn
         self._act_count = 0
 
         self._exp_cache = RolloutCache(
@@ -73,7 +76,8 @@ class DQN(AgentModule):
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
-            egreedy_steps=args.egreedy_steps
+            egreedy_steps=args.egreedy_steps,
+            double_dqn=args.double_dqn
         )
 
     @property
@@ -149,11 +153,11 @@ class DQN(AgentModule):
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
             results, _ = self.network(next_obs_on_device, self.internals)
-            last_values = []
-            for k in self._action_keys:
-                max_val, _ = torch.max(results[k], 1, keepdim=True)
-                last_values.append(max_val.squeeze(1))
-        last_values = torch.stack([torch.max(results[k], 1)[0].data for k in self._action_keys], dim=1)
+        if self.double_dqn:
+            last_actions = [results[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
+            last_values = torch.stack([results[k].gather(1, a).data for k, a in zip(self._action_keys, last_actions)], dim=1)
+        else:
+            last_values = torch.stack([torch.max(results[k], 1)[0].data for k in self._action_keys], dim=1)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
