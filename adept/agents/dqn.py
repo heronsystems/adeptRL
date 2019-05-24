@@ -60,6 +60,7 @@ class DQN(AgentModule):
         self.target_copy_steps = target_copy_steps / nb_env
         self._next_target_copy = self.target_copy_steps
         self._target_net = deepcopy(network)
+        self._target_net.eval()
         self._act_count = 0
 
         self._exp_cache = RolloutCache(
@@ -164,6 +165,7 @@ class DQN(AgentModule):
         # copy target network
         if self._act_count > self._next_target_copy:
             self._target_net = deepcopy(self.network)
+            self._target_net.eval()
             self._next_target_copy += self.target_copy_steps
 
         # estimate value of next state

@@ -87,6 +87,7 @@ class DDQN(DQN):
         # copy target network
         if self._act_count > self._next_target_copy:
             self._target_net = deepcopy(self.network)
+            self._target_net.eval()
             self._next_target_copy += self.target_copy_steps
 
         # estimate value of next state
