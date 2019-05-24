@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import OrderedDict
+from copy import deepcopy
 
 import torch
 from torch.nn import functional as F
@@ -26,7 +27,8 @@ class DQN(AgentModule):
         'nb_rollout': 20,
         'discount': 0.99,
         'egreedy_steps': 1000000,
-        'double_dqn': True
+        'target_copy_steps': 10000,
+        'double_dqn': False
     }
 
     def __init__(
@@ -41,6 +43,7 @@ class DQN(AgentModule):
         nb_rollout,
         discount,
         egreedy_steps,
+        target_copy_steps,
         double_dqn
     ):
         super(DQN, self).__init__(
@@ -54,11 +57,14 @@ class DQN(AgentModule):
         )
         self.discount, self.egreedy_steps = discount, egreedy_steps / nb_env
         self.double_dqn = double_dqn
+        self.target_copy_steps = target_copy_steps / nb_env
+        self._next_target_copy = self.target_copy_steps
+        self._target_net = deepcopy(network)
         self._act_count = 0
 
         self._exp_cache = RolloutCache(
             nb_rollout, device, reward_normalizer,
-            ['values', 'log_probs', 'entropies']
+            ['values']
         )
         self._action_keys = list(sorted(action_space.keys()))
 
@@ -77,6 +83,7 @@ class DQN(AgentModule):
             nb_rollout=args.nb_rollout,
             discount=args.discount,
             egreedy_steps=args.egreedy_steps,
+            target_copy_steps=args.target_copy_steps,
             double_dqn=args.double_dqn
         )
 
@@ -149,12 +156,18 @@ class DQN(AgentModule):
         return actions
 
     def compute_loss(self, rollouts, next_obs):
+        # copy target network
+        if self._act_count > self._next_target_copy:
+            self._target_net = deepcopy(self.network)
+            self._next_target_copy += self.target_copy_steps
+
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self.network(next_obs_on_device, self.internals)
+            results, _ = self._target_net(next_obs_on_device, self.internals)
         if self.double_dqn:
-            last_actions = [results[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
+            current_results, _ = self.network(next_obs_on_device, self.internals)
+            last_actions = [current_results[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
             last_values = torch.stack([results[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
         else:
             last_values = torch.stack([torch.max(results[k], 1)[0].data for k in self._action_keys], dim=1)
