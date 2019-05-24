@@ -104,8 +104,6 @@ class DQN(AgentModule):
             # possible sample
             if self._act_count < self.egreedy_steps:
                 epsilon = 1 - (0.9 / self.egreedy_steps) * self._act_count
-                if self._act_count % 100 == 0:
-                    print(self._act_count, epsilon)
             else:
                 epsilon = 0.1
 
