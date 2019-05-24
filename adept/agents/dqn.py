@@ -155,7 +155,7 @@ class DQN(AgentModule):
             results, _ = self.network(next_obs_on_device, self.internals)
         if self.double_dqn:
             last_actions = [results[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
-            last_values = torch.stack([results[k].gather(1, a).data for k, a in zip(self._action_keys, last_actions)], dim=1)
+            last_values = torch.stack([results[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
         else:
             last_values = torch.stack([torch.max(results[k], 1)[0].data for k in self._action_keys], dim=1)
 
