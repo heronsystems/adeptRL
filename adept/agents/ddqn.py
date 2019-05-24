@@ -19,98 +19,21 @@ import torch
 from torch.nn import functional as F
 
 from adept.expcaches.rollout import RolloutCache
-from adept.agents.agent_module import AgentModule
+from adept.agents.dqn import DQN
 
 
-class DQN(AgentModule):
-    args = {
-        'nb_rollout': 20,
-        'discount': 0.99,
-        'egreedy_steps': 1000000,
-        'target_copy_steps': 10000,
-        'double_dqn': False
-    }
-
-    def __init__(
-        self,
-        network,
-        device,
-        reward_normalizer,
-        gpu_preprocessor,
-        engine,
-        action_space,
-        nb_env,
-        nb_rollout,
-        discount,
-        egreedy_steps,
-        target_copy_steps,
-        double_dqn
-    ):
-        super(DQN, self).__init__(
-            network,
-            device,
-            reward_normalizer,
-            gpu_preprocessor,
-            engine,
-            action_space,
-            nb_env
-        )
-        self.discount, self.egreedy_steps = discount, egreedy_steps / nb_env
-        self.double_dqn = double_dqn
-        self.target_copy_steps = target_copy_steps / nb_env
-        self._next_target_copy = self.target_copy_steps
-        self._target_net = deepcopy(network)
-        self._act_count = 0
-
-        self._exp_cache = RolloutCache(
-            nb_rollout, device, reward_normalizer,
-            ['values']
-        )
-        self._action_keys = list(sorted(action_space.keys()))
-
-    @classmethod
-    def from_args(
-        cls, args, network, device, reward_normalizer, gpu_preprocessor, engine,
-        action_space, nb_env=None
-    ):
-        if nb_env is None:
-            nb_env = args.nb_env
-
-        # if running in distrib mode, divide by number of processes
-        denom = 1
-        if hasattr(args, 'nb_proc'):
-            denom = args.nb_proc
-
-        return cls(
-            network, device, reward_normalizer, gpu_preprocessor, engine,
-            action_space,
-            nb_env=nb_env,
-            nb_rollout=args.nb_rollout,
-            discount=args.discount,
-            egreedy_steps=args.egreedy_steps / denom,
-            target_copy_steps=args.target_copy_steps / denom,
-            double_dqn=args.double_dqn
-        )
-
-    @property
-    def exp_cache(self):
-        return self._exp_cache
-
+class DDQN(DQN):
     @staticmethod
     def output_space(action_space):
-        head_dict = {**action_space}
+        head_dict = {'value': (1, ), **action_space}
         return head_dict
-
-    def act(self, obs):
-        self.network.train()
-        self._act_count += 1
-        return self._act_gym(obs)
 
     def _act_gym(self, obs):
         predictions, internals = self.network(
             self.gpu_preprocessor(obs, self.device), self.internals
         )
         batch_size = predictions[self._action_keys[0]].shape[0]
+        q_vals = self._get_qvals_from_pred(predictions)
 
         # reduce feature dim, build action_key dim
         actions = OrderedDict()
@@ -127,10 +50,10 @@ class DQN(AgentModule):
             if epsilon > torch.rand(1):
                 action = torch.randint(self.action_space[key][0], (batch_size, 1), dtype=torch.long).to(self.device)
             else:
-                action = predictions[key].argmax(dim=-1, keepdim=True)
+                action = q_vals[key].argmax(dim=-1, keepdim=True)
 
             actions[key] = action.squeeze(1).cpu().numpy()
-            values.append(predictions[key].gather(1, action))
+            values.append(q_vals[key].gather(1, action))
 
         values = torch.cat(values, dim=1)
 
@@ -170,14 +93,16 @@ class DQN(AgentModule):
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
             results, _ = self._target_net(next_obs_on_device, self.internals)
+            target_q = self._get_qvals_from_pred(results)
 
         # if double dqn estimate get target val for current estimated action
         if self.double_dqn:
             current_results, _ = self.network(next_obs_on_device, self.internals)
-            last_actions = [current_results[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
-            last_values = torch.stack([results[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
+            current_q = self._get_qvals_from_pred(current_results)
+            last_actions = [current_q[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
+            last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
         else:
-            last_values = torch.stack([torch.max(results[k], 1)[0].data for k in self._action_keys], dim=1)
+            last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self._action_keys], dim=1)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
@@ -190,21 +115,8 @@ class DQN(AgentModule):
         metrics = {}
         return losses, metrics
 
-    def _compute_returns_advantages(self, estimated_value, rewards, terminals):
-        next_value = estimated_value
-        # First step of nstep reward target is estimated value of t+1
-        target_return = estimated_value
-        nstep_target_returns = []
-        for i in reversed(range(len(rewards))):
-            # unsqueeze over action dim so it isn't broadcasted
-            reward = rewards[i].unsqueeze(-1)
-            terminal = terminals[i].unsqueeze(-1)
-
-             # Nstep return is always calculated for the critic's target
-            target_return = reward + self.discount * target_return * terminal
-            nstep_target_returns.append(target_return)
-
-        # reverse lists
-        nstep_target_returns = torch.stack(list(reversed(nstep_target_returns))).data
-        return nstep_target_returns
-
+    def _get_qvals_from_pred(self, predictions):
+        q = {}
+        for k in self._action_keys:
+            q[k] = predictions[k] + predictions['value']
+        return q
