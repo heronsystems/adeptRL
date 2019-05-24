@@ -25,6 +25,7 @@ class AgentRegistry:
 
         self.register_agent(self._load_actor_critic())
         self.register_agent(self._load_actor_critic_vtrace())
+        self.register_agent(self._load_dqn())
 
     @staticmethod
     def _load_actor_critic():
@@ -35,6 +36,11 @@ class AgentRegistry:
     def _load_actor_critic_vtrace():
         from adept.agents.impala.actor_critic_vtrace import ActorCriticVtrace
         return ActorCriticVtrace
+
+    @staticmethod
+    def _load_dqn():
+        from adept.agents.dqn import DQN
+        return DQN
 
     def register_agent(self, agent_class):
         """
