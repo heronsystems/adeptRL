@@ -33,5 +33,6 @@ class DDQN(DQN):
     def _get_qvals_from_pred(self, predictions):
         q = {}
         for k in self._action_keys:
-            q[k] = predictions[k] + predictions['value']
+            norm_adv = predictions[k] - predictions[k].mean(-1, keepdim=True)
+            q[k] = norm_adv + predictions['value']
         return q
