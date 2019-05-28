@@ -95,7 +95,7 @@ class ActorCritic(AgentModule):
         return self._exp_cache
 
     @staticmethod
-    def output_space(action_space):
+    def output_space(action_space, args=None):
         head_dict = {'critic': (1, ), **action_space}
         return head_dict
 

@@ -98,7 +98,7 @@ class ActorCriticVtrace(AgentModule):
         return self._exp_cache
 
     @staticmethod
-    def output_space(action_space):
+    def output_space(action_space, args=None):
         return {'critic': (1, ), **action_space}
 
     def seq_obs_to_pathways(self, obs, device):

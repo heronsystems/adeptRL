@@ -22,13 +22,19 @@ from adept.expcaches.rollout import RolloutCache
 from adept.agents.agent_module import AgentModule
 
 
-class DQN(AgentModule):
+def huber(x, k=1.0):
+    return torch.where(x.abs() < k, 0.5 * x.pow(2), k * (x.abs() - 0.5 * k))
+
+
+class QRDQN(AgentModule):
     args = {
-        'nb_rollout': 20,
+        'nb_rollout': 5,
         'discount': 0.99,
         'egreedy_steps': 1000000,
         'target_copy_steps': 10000,
-        'double_dqn': True
+        'double_dqn': True,
+        'num_atoms': 8,
+
     }
 
     def __init__(
@@ -44,9 +50,10 @@ class DQN(AgentModule):
         discount,
         egreedy_steps,
         target_copy_steps,
-        double_dqn
+        double_dqn,
+        num_atoms
     ):
-        super(DQN, self).__init__(
+        super(QRDQN, self).__init__(
             network,
             device,
             reward_normalizer,
@@ -57,11 +64,13 @@ class DQN(AgentModule):
         )
         self.discount, self.egreedy_steps = discount, egreedy_steps / nb_env
         self.double_dqn = double_dqn
+        self.num_atoms = num_atoms
         self.target_copy_steps = target_copy_steps / nb_env
         self._next_target_copy = self.target_copy_steps
         self._target_net = deepcopy(network)
         self._target_net.eval()
         self._act_count = 0
+        self._qr_density = ((2 * torch.arange(self.num_atoms, dtype=torch.float)) + 1) / (2.0 * self.num_atoms)
 
         self._exp_cache = RolloutCache(
             nb_rollout, device, reward_normalizer,
@@ -90,7 +99,8 @@ class DQN(AgentModule):
             discount=args.discount,
             egreedy_steps=args.egreedy_steps / denom,
             target_copy_steps=args.target_copy_steps / denom,
-            double_dqn=args.double_dqn
+            double_dqn=args.double_dqn,
+            num_atoms=args.num_atoms
         )
 
     @property
@@ -98,8 +108,10 @@ class DQN(AgentModule):
         return self._exp_cache
 
     @staticmethod
-    def output_space(action_space, args=None):
-        head_dict = {**action_space}
+    def output_space(action_space, args):
+        head_dict = {}
+        for k, shape in action_space.items():
+            head_dict[k] = (shape[0] * args.num_atoms, )
         return head_dict
 
     def act(self, obs):
@@ -129,10 +141,11 @@ class DQN(AgentModule):
             if epsilon > torch.rand(1):
                 action = torch.randint(self.action_space[key][0], (batch_size, 1), dtype=torch.long).to(self.device)
             else:
-                action = q_vals[key].argmax(dim=-1, keepdim=True)
+                action = q_vals[key].mean(2).argmax(dim=1, keepdim=True)
 
             actions[key] = action.squeeze(1).cpu().numpy()
-            values.append(q_vals[key].gather(1, action))
+            action_select = action.unsqueeze(-1).expand(batch_size, 1, self.num_atoms)
+            values.append(q_vals[key].gather(1, action_select).squeeze(1))
 
         values = torch.cat(values, dim=1)
 
@@ -175,21 +188,24 @@ class DQN(AgentModule):
             results, _ = self._target_net(next_obs_on_device, self.internals)
             target_q = self._get_qvals_from_pred(results)
 
-        # if double dqn estimate get target val for current estimated action
-        if self.double_dqn:
-            current_results, _ = self.network(next_obs_on_device, self.internals)
-            current_q = self._get_qvals_from_pred(current_results)
-            last_actions = [current_q[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
-            last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
-        else:
-            last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self._action_keys], dim=1)
+        last_values = []
+        for k in self._action_keys:
+            action_select = target_q[k].mean(2).argmax(dim=-1, keepdim=True)
+            action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
+            last_values.append(target_q[k].gather(1, action_select).squeeze(1))
+
+        last_values = torch.cat(last_values, dim=1)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
         value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
 
-        # batched huber loss
-        value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
+        diff = value_targets - batch_values
+        dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
+
+        # batched quantile huber loss
+        # value_loss = torch.nn.functional.smooth_l1_loss(batch_values, value_targets)
+        value_loss = (huber(diff) * dist_mask).mean()
 
         losses = {'value_loss': value_loss}
         metrics = {}
@@ -214,5 +230,8 @@ class DQN(AgentModule):
         return nstep_target_returns
 
     def _get_qvals_from_pred(self, predictions):
-        return predictions
+        pred = {}
+        for k, v in predictions.items():
+            pred[k] = v.view(v.shape[0], -1, self.num_atoms)
+        return pred
 

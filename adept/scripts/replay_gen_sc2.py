@@ -111,7 +111,7 @@ def main(
     )
 
     output_space = agent_registry.lookup_output_space(
-        train_args.agent, env.action_space
+        train_args.agent, env.action_space, args
     )
     if args.custom_network:
         network = net_registry.lookup_custom_net(

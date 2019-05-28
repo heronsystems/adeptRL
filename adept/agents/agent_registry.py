@@ -27,6 +27,7 @@ class AgentRegistry:
         self.register_agent(self._load_actor_critic_vtrace())
         self.register_agent(self._load_dqn())
         self.register_agent(self._load_ddqn())
+        self.register_agent(self._load_qrdqn())
 
     @staticmethod
     def _load_actor_critic():
@@ -48,6 +49,11 @@ class AgentRegistry:
         from adept.agents.ddqn import DDQN
         return DDQN
 
+    @staticmethod
+    def _load_qrdqn():
+        from adept.agents.qrdqn import QRDQN
+        return QRDQN
+
     def register_agent(self, agent_class):
         """
         Add your own agent class.
@@ -68,7 +74,7 @@ class AgentRegistry:
         """
         return self._agent_class_by_id[agent_id]
 
-    def lookup_output_space(self, agent_id, action_space):
+    def lookup_output_space(self, agent_id, action_space, args):
         """
         For a given agent_id, determine the shapes of the outputs.
 
@@ -76,4 +82,4 @@ class AgentRegistry:
         :param action_space:
         :return:
         """
-        return self._agent_class_by_id[agent_id].output_space(action_space)
+        return self._agent_class_by_id[agent_id].output_space(action_space, args)
