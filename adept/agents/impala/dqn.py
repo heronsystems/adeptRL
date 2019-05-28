@@ -279,7 +279,6 @@ class DistDQN(AgentModule):
         self._act_count += np.prod(rewards.shape)
         # copy target network
         if self._act_count > self._next_target_copy:
-            print('target copied', self._act_count)
             self._target_net = deepcopy(self.network)
             self._target_net.eval()
             self._next_target_copy += self.target_copy_steps
