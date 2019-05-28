@@ -28,12 +28,12 @@ def huber(x, k=1.0):
 
 class QRDQN(AgentModule):
     args = {
-        'nb_rollout': 5,
+        'nb_rollout': 20,
         'discount': 0.99,
         'egreedy_steps': 1000000,
         'target_copy_steps': 10000,
         'double_dqn': True,
-        'num_atoms': 8,
+        'num_atoms': 51,
 
     }
 
@@ -70,7 +70,7 @@ class QRDQN(AgentModule):
         self._target_net = deepcopy(network)
         self._target_net.eval()
         self._act_count = 0
-        self._qr_density = ((2 * torch.arange(self.num_atoms, dtype=torch.float)) + 1) / (2.0 * self.num_atoms)
+        self._qr_density = (((2 * torch.arange(self.num_atoms, dtype=torch.float)) + 1) / (2.0 * self.num_atoms)).to(self.device)
 
         self._exp_cache = RolloutCache(
             nb_rollout, device, reward_normalizer,
