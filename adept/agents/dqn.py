@@ -191,7 +191,7 @@ class DQN(AgentModule):
         batch_values = torch.stack(rollouts.values)
         value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
 
-        # batched huber loss
+        # batched loss
         value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
 
         losses = {'value_loss': value_loss}

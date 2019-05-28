@@ -63,7 +63,7 @@ class QRDQN(AgentModule):
             action_space,
             nb_env
         )
-        self.discount, self.egreedy_steps, self.egreedy_final = discount, egreedy_steps / nb_env, self.egreedy_final
+        self.discount, self.egreedy_steps, self.egreedy_final = discount, egreedy_steps / nb_env, egreedy_final
         self.double_dqn = double_dqn
         self.num_atoms = num_atoms
         self.target_copy_steps = target_copy_steps / nb_env
