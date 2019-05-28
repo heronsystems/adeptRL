@@ -141,12 +141,12 @@ class QRDQN(AgentModule):
 
             # random action across some environments
             rand_mask = (epsilon > torch.rand(batch_size)).nonzero().squeeze(-1)
-            action = q_vals[key].argmax(dim=-1, keepdim=True)
+            action = q_vals[key].mean(2).argmax(dim=-1, keepdim=True)
             rand_act = torch.randint(self.action_space[key][0], (rand_mask.shape[0], 1), dtype=torch.long).to(self.device)
             action[rand_mask] = rand_act
 
             actions[key] = action.squeeze(1).cpu().numpy()
-            action_select = action.unsqueeze(-1).expand(batch_size, 1, self.num_atoms)
+            action_select = action.unsqueeze(1).expand(batch_size, 1, self.num_atoms)
             values.append(q_vals[key].gather(1, action_select).squeeze(1))
 
         values = torch.cat(values, dim=1)
