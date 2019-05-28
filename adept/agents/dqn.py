@@ -26,6 +26,7 @@ class DQN(AgentModule):
     args = {
         'nb_rollout': 20,
         'discount': 0.99,
+        'egreedy_final': 0.01,
         'egreedy_steps': 1000000,
         'target_copy_steps': 10000,
         'double_dqn': True
@@ -42,6 +43,7 @@ class DQN(AgentModule):
         nb_env,
         nb_rollout,
         discount,
+        egreedy_final,
         egreedy_steps,
         target_copy_steps,
         double_dqn
@@ -55,7 +57,7 @@ class DQN(AgentModule):
             action_space,
             nb_env
         )
-        self.discount, self.egreedy_steps = discount, egreedy_steps / nb_env
+        self.discount, self.egreedy_steps, self.egreedy_final = discount, egreedy_steps / nb_env, egreedy_final
         self.double_dqn = double_dqn
         self.target_copy_steps = target_copy_steps / nb_env
         self._next_target_copy = self.target_copy_steps
@@ -88,6 +90,7 @@ class DQN(AgentModule):
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
+            egreedy_final=args.egreedy_final,
             egreedy_steps=args.egreedy_steps / denom,
             target_copy_steps=args.target_copy_steps / denom,
             double_dqn=args.double_dqn
@@ -121,9 +124,9 @@ class DQN(AgentModule):
         for key in self._action_keys:
             # possible sample
             if self._act_count < self.egreedy_steps:
-                epsilon = 1 - (0.9 / self.egreedy_steps) * self._act_count
+                epsilon = 1 - ((1-self.egreedy_final) / self.egreedy_steps) * self._act_count
             else:
-                epsilon = 0.1
+                epsilon = self.egreedy_final
 
             # TODO: if random action, it's random across all envs, make it single
             if epsilon > torch.rand(1):
