@@ -30,7 +30,7 @@ class DistDQN(AgentModule):
         'discount': 0.99,
         'egreedy_steps': 1000000,
         'target_copy_steps': 10000,
-        'double_dqn': False
+        'double_dqn': True
     }
 
     def __init__(
@@ -272,6 +272,13 @@ class DistDQN(AgentModule):
             [item.to(self.device) for sublist in v for item in sublist]
             for k, v in rollouts.items() if 'internals' in k
         }
+
+        self._act_count += np.prod(rewards.shape)
+        # copy target network
+        if self._act_count > self._next_target_copy:
+            self._target_net = deepcopy(self.network)
+            self._target_net.eval()
+            self._next_target_copy += self.target_copy_steps
 
         # compute current forward
         current_values, estimated_value = self.act_on_host(

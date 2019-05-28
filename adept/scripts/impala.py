@@ -132,7 +132,7 @@ def parse_args():
     args.nb_rollout_batch = int(args.nb_rollout_batch) \
         if args.nb_rollout_batch \
         else size - 1
-    args.nb_proc = size
+    args.nb_proc = size - 1
     args.max_dynamic_batch = int(args.max_dynamic_batch)
     args.min_dynamic_batch = int(args.min_dynamic_batch)
     args.info_interval = int(args.info_interval)
