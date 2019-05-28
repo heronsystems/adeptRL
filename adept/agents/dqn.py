@@ -26,7 +26,7 @@ class DQN(AgentModule):
     args = {
         'nb_rollout': 20,
         'discount': 0.99,
-        'egreedy_final': 0.01,
+        'egreedy_final': 0.1,
         'egreedy_steps': 1000000,
         'target_copy_steps': 10000,
         'double_dqn': True
