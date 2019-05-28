@@ -34,7 +34,6 @@ class QRDQN(AgentModule):
         'target_copy_steps': 10000,
         'double_dqn': True,
         'num_atoms': 51,
-
     }
 
     def __init__(

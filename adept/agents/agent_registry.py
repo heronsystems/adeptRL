@@ -26,6 +26,7 @@ class AgentRegistry:
         self.register_agent(self._load_actor_critic())
         self.register_agent(self._load_actor_critic_vtrace())
         self.register_agent(self._load_dqn())
+        self.register_agent(self._load_distributed_dqn())
         self.register_agent(self._load_ddqn())
         self.register_agent(self._load_qrdqn())
 
@@ -43,6 +44,11 @@ class AgentRegistry:
     def _load_dqn():
         from adept.agents.dqn import DQN
         return DQN
+
+    @staticmethod
+    def _load_distributed_dqn():
+        from adept.agents.impala.dqn import DistDQN
+        return DistDQN
 
     @staticmethod
     def _load_ddqn():
