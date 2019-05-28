@@ -28,7 +28,7 @@ class DQN(AgentModule):
         'discount': 0.99,
         'egreedy_steps': 1000000,
         'target_copy_steps': 10000,
-        'double_dqn': False
+        'double_dqn': True
     }
 
     def __init__(
@@ -79,7 +79,7 @@ class DQN(AgentModule):
 
         # if running in distrib mode, divide by number of processes
         denom = 1
-        if hasattr(args, 'nb_proc'):
+        if hasattr(args, 'nb_proc') and args.nb_proc is not None:
             denom = args.nb_proc
 
         return cls(
@@ -111,6 +111,7 @@ class DQN(AgentModule):
         predictions, internals = self.network(
             self.gpu_preprocessor(obs, self.device), self.internals
         )
+        q_vals = self._get_qvals_from_pred(predictions)
         batch_size = predictions[self._action_keys[0]].shape[0]
 
         # reduce feature dim, build action_key dim
@@ -128,10 +129,10 @@ class DQN(AgentModule):
             if epsilon > torch.rand(1):
                 action = torch.randint(self.action_space[key][0], (batch_size, 1), dtype=torch.long).to(self.device)
             else:
-                action = predictions[key].argmax(dim=-1, keepdim=True)
+                action = q_vals[key].argmax(dim=-1, keepdim=True)
 
             actions[key] = action.squeeze(1).cpu().numpy()
-            values.append(predictions[key].gather(1, action))
+            values.append(q_vals[key].gather(1, action))
 
         values = torch.cat(values, dim=1)
 
@@ -172,21 +173,23 @@ class DQN(AgentModule):
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
             results, _ = self._target_net(next_obs_on_device, self.internals)
+            target_q = self._get_qvals_from_pred(results)
 
         # if double dqn estimate get target val for current estimated action
         if self.double_dqn:
             current_results, _ = self.network(next_obs_on_device, self.internals)
-            last_actions = [current_results[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
-            last_values = torch.stack([results[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
+            current_q = self._get_qvals_from_pred(current_results)
+            last_actions = [current_q[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
+            last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
         else:
-            last_values = torch.stack([torch.max(results[k], 1)[0].data for k in self._action_keys], dim=1)
+            last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self._action_keys], dim=1)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
         value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
 
-        # batched value loss
-        value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
+        # batched huber loss
+        value_loss = torch.nn.functional.smooth_l1_loss(batch_values, value_targets)
 
         losses = {'value_loss': value_loss}
         metrics = {}
@@ -209,4 +212,7 @@ class DQN(AgentModule):
         # reverse lists
         nstep_target_returns = torch.stack(list(reversed(nstep_target_returns))).data
         return nstep_target_returns
+
+    def _get_qvals_from_pred(self, predictions):
+        return predictions
 
