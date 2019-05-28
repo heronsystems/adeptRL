@@ -189,9 +189,16 @@ class QRDQN(AgentModule):
             target_q = self._get_qvals_from_pred(results)
 
         last_values = []
+        # if double dqn estimate get target val for current estimated action
         for k in self._action_keys:
-            action_select = target_q[k].mean(2).argmax(dim=-1, keepdim=True)
-            action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
+            if self.double_dqn:
+                current_results, _ = self.network(next_obs_on_device, self.internals)
+                current_q = self._get_qvals_from_pred(current_results)
+                action_select = current_q[k].mean(2).argmax(dim=-1, keepdim=True)
+                action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
+            else:
+                action_select = target_q[k].mean(2).argmax(dim=-1, keepdim=True)
+                action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
             last_values.append(target_q[k].gather(1, action_select).squeeze(1))
 
         last_values = torch.cat(last_values, dim=1)
