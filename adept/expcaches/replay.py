@@ -21,10 +21,11 @@ import numpy as np
 # Some code is taken from OpenAI MIT license
 # https://github.com/openai/baselines/blob/master/baselines/deepq/replay_buffer.py
 import random
+from operator import itemgetter
 
 
 class ExperienceReplay(BaseExperience):
-    def __init__(self, size, nb_rollout, reward_normalizer, keys):
+    def __init__(self, size, min_size, nb_rollout, reward_normalizer, keys):
         """
         Parameters
         ----------
@@ -37,7 +38,9 @@ class ExperienceReplay(BaseExperience):
         assert type(nb_rollout == int)
 
         self._storage = []
+        self._full = False
         self._maxsize = size
+        self._minsize = min_size
         self._next_idx = 0
         self._keys = ['states', 'rewards', 'terminals'] + keys
 
@@ -49,10 +52,11 @@ class ExperienceReplay(BaseExperience):
 
     def write_forward(self, **kwargs):
         # write forward occurs before write env so append here
-        if self._next_idx >= len(self._storage):
+        if not self._full and self._next_idx >= len(self._storage):
             self._storage.append(kwargs)
         else:
             self._storage[self._next_idx] = kwargs
+            self._full = True
 
     def write_env(self, obs, rewards, terminals, infos):
         # forward already written, add env info then increment
@@ -71,23 +75,40 @@ class ExperienceReplay(BaseExperience):
         dict_at_ind['terminals'] = terminals
 
     def read(self):
-        # TODO: support burn in
-        # sample an index and get the next sequential samples of len nb_rollout
-        # minus two so last state fits
-        index = random.randint(0, len(self._storage) - (self.nb_rollout + 2))
-        end_index = index + self.nb_rollout
-        exp_list = self._storage[index:end_index]
+        exp_list, last_obs = self._sample()
         # will be list of dicts, convert to dict of lists
-        # TODO: should be dict of tensors?
         dict_of_list = listd_to_dlist(exp_list)
         # get the next observation
-        dict_of_list['next_obs'] = self._storage[end_index + 1]['states']
+        dict_of_list['next_obs'] = last_obs
         # return named tuple
         return namedtuple(self.__class__.__name__, ['next_obs'] + self._keys)(**dict_of_list)
 
+    def _sample(self):
+        # TODO: support burn in
+        # if full indexes may wrap 
+        if self._full:
+            # wrap index starting from current index to full size
+            min_ind = self._next_idx
+            max_ind = min_ind + (self._maxsize - (self.nb_rollout + 2))
+            index = random.randint(min_ind, max_ind)
+            end_index = index + self.nb_rollout + 1
+            # range is exclusive of end so last_index == end_index
+            last_index = int(end_index % self._maxsize)
+            indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
+        else:
+            # sample an index and get the next sequential samples of len nb_rollout
+            # minus two so last state fits
+            index = random.randint(0, len(self._storage) - (self.nb_rollout + 2))
+            end_index = index + self.nb_rollout
+            indexes = range(index, end_index)
+            # range is exclusive of end so last_index == end_index
+            last_index = end_index
+
+        return itemgetter(*indexes)(self._storage), self._storage[last_index]['states']
+
     def is_ready(self):
         # plus 2 to include next states
-        return len(self) > self.nb_rollout + 2
+        return len(self) > self._minsize and len(self) > self.nb_rollout + 2
 
     def clear(self):
         pass

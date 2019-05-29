@@ -27,6 +27,7 @@ from adept.utils import listd_to_dlist, dlist_to_listd
 class DQN(AgentModule):
     args = {
         'exp_size': 1000000,
+        'exp_min_size': 1000,
         'nb_rollout': 20,
         'discount': 0.99,
         'egreedy_final': 0.1,
@@ -47,6 +48,7 @@ class DQN(AgentModule):
         nb_rollout,
         discount,
         exp_size,
+        exp_min_size,
         egreedy_final,
         egreedy_steps,
         target_copy_steps,
@@ -62,7 +64,8 @@ class DQN(AgentModule):
             nb_env
         )
         self.discount, self.egreedy_steps, self.egreedy_final = discount, egreedy_steps / nb_env, egreedy_final
-        self.exp_size = exp_size
+        self.exp_size = int(exp_size / nb_env)
+        self.exp_min_size = int(exp_min_size / nb_env)
         self.double_dqn = double_dqn
         self.target_copy_steps = target_copy_steps / nb_env
         self._next_target_copy = self.target_copy_steps
@@ -71,7 +74,7 @@ class DQN(AgentModule):
         self._act_count = 0
 
         self._exp_cache = ExperienceReplay(
-            exp_size, nb_rollout, reward_normalizer, ['actions', 'internals']
+            exp_size, exp_min_size, nb_rollout, reward_normalizer, ['actions', 'internals']
         )
         self._action_keys = list(sorted(action_space.keys()))
 
@@ -95,6 +98,7 @@ class DQN(AgentModule):
             nb_rollout=args.nb_rollout,
             discount=args.discount,
             exp_size=args.exp_size / denom,
+            exp_min_size=args.exp_min_size / denom,
             egreedy_final=args.egreedy_final,
             egreedy_steps=args.egreedy_steps / denom,
             target_copy_steps=args.target_copy_steps / denom,
@@ -208,6 +212,8 @@ class DQN(AgentModule):
 
         # recompute forward pass to get value estimates for states
         batch_values, internals = self._batch_forward(rollouts.states, rollout_actions, rollout_internals, terminals_mask)
+        # put terminals on gpu for nstep returns
+        terminals_mask.to(self.device)
 
         # estimate value of next state
         with torch.no_grad():
