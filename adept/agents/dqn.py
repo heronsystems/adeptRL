@@ -17,13 +17,16 @@ from copy import deepcopy
 
 import torch
 from torch.nn import functional as F
+import numpy as np
 
-from adept.expcaches.rollout import RolloutCache
+from adept.expcaches.replay import ExperienceReplay
 from adept.agents.agent_module import AgentModule
+from adept.utils import listd_to_dlist, dlist_to_listd
 
 
 class DQN(AgentModule):
     args = {
+        'exp_size': 1000000,
         'nb_rollout': 20,
         'discount': 0.99,
         'egreedy_final': 0.1,
@@ -43,6 +46,7 @@ class DQN(AgentModule):
         nb_env,
         nb_rollout,
         discount,
+        exp_size,
         egreedy_final,
         egreedy_steps,
         target_copy_steps,
@@ -58,6 +62,7 @@ class DQN(AgentModule):
             nb_env
         )
         self.discount, self.egreedy_steps, self.egreedy_final = discount, egreedy_steps / nb_env, egreedy_final
+        self.exp_size = exp_size
         self.double_dqn = double_dqn
         self.target_copy_steps = target_copy_steps / nb_env
         self._next_target_copy = self.target_copy_steps
@@ -65,9 +70,8 @@ class DQN(AgentModule):
         self._target_net.eval()
         self._act_count = 0
 
-        self._exp_cache = RolloutCache(
-            nb_rollout, device, reward_normalizer,
-            ['values']
+        self._exp_cache = ExperienceReplay(
+            exp_size, nb_rollout, reward_normalizer, ['actions', 'internals']
         )
         self._action_keys = list(sorted(action_space.keys()))
 
@@ -90,6 +94,7 @@ class DQN(AgentModule):
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
+            exp_size=args.exp_size / denom,
             egreedy_final=args.egreedy_final,
             egreedy_steps=args.egreedy_steps / denom,
             target_copy_steps=args.target_copy_steps / denom,
@@ -135,61 +140,93 @@ class DQN(AgentModule):
             action[rand_mask] = rand_act
 
             actions[key] = action.squeeze(1).cpu().numpy()
-            values.append(q_vals[key].gather(1, action))
 
-        values = torch.cat(values, dim=1)
-
-        self.exp_cache.write_forward(values=values)
+        detached_internals = {k: [i.detach() for i in v] for k, v in self.internals.items()}
+        self.exp_cache.write_forward(internals=detached_internals, actions=actions)
         self.internals = internals
         return actions
 
     def act_eval(self, obs):
-        self.network.eval()
-        return self._act_eval_gym(obs)
-
-    def _act_eval_gym(self, obs):
         raise NotImplementedError()
-        with torch.no_grad():
-            predictions, internals = self.network(
-                self.gpu_preprocessor(obs, self.device), self.internals
-            )
 
-            # reduce feature dim, build action_key dim
-            actions = OrderedDict()
-            for key in self._action_keys:
-                logit = predictions[key]
-                prob = F.softmax(logit, dim=1)
-                action = torch.argmax(prob, 1)
-                actions[key] = action.cpu().numpy()
+    def _batch_forward(self, obs, sampled_actions, internals, terminals):
+        """
+        This is the method to recompute the forward pass on the host, it
+        must return values. Obs, sampled_actions,
+        terminal_masks here are [seq, batch], internals must be reset if
+        terminal
+        """
+        self.network.train()
+        values = []
 
-        self.internals = internals
-        return actions
+        # numpy to vectorize check for terminals
+        terminal_masks = terminals.numpy()
 
-    def compute_loss(self, rollouts, next_obs):
+        # if network is modular,
+        # trunk can be sped up by combining batch & seq dim
+        def get_results_generator():
+            torch_obs_dict = {k: torch.stack(v) for k, v in listd_to_dlist(obs).items()}
+            obs_on_device = dlist_to_listd(self.gpu_preprocessor(torch_obs_dict, self.device))
+
+            def get_results(seq_ind, internals):
+                obs_of_seq_ind = obs_on_device[seq_ind]
+                return self.network(obs_of_seq_ind, internals)
+
+            return get_results
+
+        result_fn = get_results_generator()
+        for seq_ind in range(terminal_masks.shape[0]):
+            results, internals = result_fn(seq_ind, internals)
+
+            qvals = self._get_qvals_from_pred_sampled(results, sampled_actions[seq_ind])
+            # seq lists
+            values.append(qvals)
+
+            # if this state was terminal reset internals
+            terminals = np.where(terminal_masks[seq_ind] == 0)[0]
+            for batch_ind in terminals:
+                reset_internals = self.network.new_internals(self.device)
+                for k, v in reset_internals.items():
+                    internals[k][batch_ind] = v
+
+        return torch.stack(values), internals
+
+    def compute_loss(self, rollouts, _):
+        next_obs = rollouts.next_obs
+        # rollout actions, terminals, rewards are lists/arrays convert to torch tensors
+        rollout_actions = [{k: torch.from_numpy(v).to(self.device) for k, v in x.items()} for x in rollouts.actions]
+        rewards = torch.stack(rollouts.rewards).to(self.device)
+        terminals_mask = torch.stack(rollouts.terminals)  # keep on cpu
+        # only need first internals
+        rollout_internals = rollouts.internals[0]
+
         # copy target network
         if self._act_count > self._next_target_copy:
             self._target_net = deepcopy(self.network)
             self._target_net.eval()
             self._next_target_copy += self.target_copy_steps
 
+        # recompute forward pass to get value estimates for states
+        batch_values, internals = self._batch_forward(rollouts.states, rollout_actions, rollout_internals, terminals_mask)
+
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self._target_net(next_obs_on_device, self.internals)
+            results, _ = self._target_net(next_obs_on_device, internals)
             target_q = self._get_qvals_from_pred(results)
 
             # if double dqn estimate get target val for current estimated action
             if self.double_dqn:
-                current_results, _ = self.network(next_obs_on_device, self.internals)
+                current_results, _ = self.network(next_obs_on_device, internals)
                 current_q = self._get_qvals_from_pred(current_results)
                 last_actions = [current_q[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
                 last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
             else:
                 last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self._action_keys], dim=1)
 
+
         # compute nstep return and advantage over batch
-        batch_values = torch.stack(rollouts.values)
-        value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
+        value_targets = self._compute_returns_advantages(last_values, rewards, terminals_mask)
 
         # batched loss
         value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
@@ -218,4 +255,13 @@ class DQN(AgentModule):
 
     def _get_qvals_from_pred(self, predictions):
         return predictions
+
+    def _get_qvals_from_pred_sampled(self, predictions, actions):
+        qvals = []
+        # TODO support multi-dimensional action spaces?
+        for key in predictions.keys():
+            vals = predictions[key]
+            qvals.append(vals.gather(1, actions[key].unsqueeze(1)))
+
+        return torch.cat(qvals, dim=1)
 
