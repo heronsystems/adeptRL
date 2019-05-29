@@ -178,14 +178,14 @@ class DQN(AgentModule):
             results, _ = self._target_net(next_obs_on_device, self.internals)
             target_q = self._get_qvals_from_pred(results)
 
-        # if double dqn estimate get target val for current estimated action
-        if self.double_dqn:
-            current_results, _ = self.network(next_obs_on_device, self.internals)
-            current_q = self._get_qvals_from_pred(current_results)
-            last_actions = [current_q[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
-            last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
-        else:
-            last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self._action_keys], dim=1)
+            # if double dqn estimate get target val for current estimated action
+            if self.double_dqn:
+                current_results, _ = self.network(next_obs_on_device, self.internals)
+                current_q = self._get_qvals_from_pred(current_results)
+                last_actions = [current_q[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
+                last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
+            else:
+                last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self._action_keys], dim=1)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)

@@ -71,7 +71,7 @@ class QRDQN(AgentModule):
         self._target_net = deepcopy(network)
         self._target_net.eval()
         self._act_count = 0
-        self._qr_density = (((2 * torch.arange(self.num_atoms, dtype=torch.float)) + 1) / (2.0 * self.num_atoms)).to(self.device)
+        self._qr_density = (((2 * torch.arange(self.num_atoms, dtype=torch.float, requires_grad=False)) + 1) / (2.0 * self.num_atoms)).to(self.device)
 
         self._exp_cache = RolloutCache(
             nb_rollout, device, reward_normalizer,
@@ -190,20 +190,20 @@ class QRDQN(AgentModule):
             results, _ = self._target_net(next_obs_on_device, self.internals)
             target_q = self._get_qvals_from_pred(results)
 
-        last_values = []
-        # if double dqn estimate get target val for current estimated action
-        for k in self._action_keys:
-            if self.double_dqn:
-                current_results, _ = self.network(next_obs_on_device, self.internals)
-                current_q = self._get_qvals_from_pred(current_results)
-                action_select = current_q[k].mean(2).argmax(dim=-1, keepdim=True)
-                action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
-            else:
-                action_select = target_q[k].mean(2).argmax(dim=-1, keepdim=True)
-                action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
-            last_values.append(target_q[k].gather(1, action_select).squeeze(1))
+            last_values = []
+            # if double dqn estimate get target val for current estimated action
+            for k in self._action_keys:
+                if self.double_dqn:
+                    current_results, _ = self.network(next_obs_on_device, self.internals)
+                    current_q = self._get_qvals_from_pred(current_results)
+                    action_select = current_q[k].mean(2).argmax(dim=-1, keepdim=True)
+                    action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
+                else:
+                    action_select = target_q[k].mean(2).argmax(dim=-1, keepdim=True)
+                    action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
+                last_values.append(target_q[k].gather(1, action_select).squeeze(1))
 
-        last_values = torch.cat(last_values, dim=1)
+            last_values = torch.cat(last_values, dim=1)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
