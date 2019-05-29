@@ -214,7 +214,7 @@ class DQN(AgentModule):
         # recompute forward pass to get value estimates for states
         batch_values, internals = self._batch_forward(rollouts.states, rollout_actions, rollout_internals, terminals_mask)
         # put terminals on gpu for nstep returns
-        terminals_mask.to(self.device)
+        terminal_masks = terminals_mask.to(self.device)
 
         # estimate value of next state
         with torch.no_grad():
