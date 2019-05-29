@@ -115,9 +115,10 @@ class DQN(AgentModule):
         return head_dict
 
     def act(self, obs):
-        self.network.train()
-        self._act_count += 1
-        return self._act_gym(obs)
+        with torch.no_grad():
+            self.network.train()
+            self._act_count += 1
+            return self._act_gym(obs)
 
     def _act_gym(self, obs):
         predictions, internals = self.network(
