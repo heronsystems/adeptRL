@@ -74,7 +74,7 @@ class DQN(AgentModule):
         self._act_count = 0
 
         self._exp_cache = ExperienceReplay(
-            exp_size, exp_min_size, nb_rollout, reward_normalizer, ['actions', 'internals']
+            self.exp_size, self.exp_min_size, nb_rollout, reward_normalizer, ['actions', 'internals']
         )
         self._action_keys = list(sorted(action_space.keys()))
 
