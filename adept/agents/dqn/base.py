@@ -24,10 +24,8 @@ from adept.agents.agent_module import AgentModule
 from adept.utils import listd_to_dlist, dlist_to_listd
 
 
-class DQN(AgentModule):
+class BaseDQN(AgentModule):
     args = {
-        'exp_size': 1000000,
-        'exp_min_size': 1000,
         'nb_rollout': 20,
         'discount': 0.99,
         'egreedy_final': 0.1,
@@ -47,14 +45,12 @@ class DQN(AgentModule):
         nb_env,
         nb_rollout,
         discount,
-        exp_size,
-        exp_min_size,
         egreedy_final,
         egreedy_steps,
         target_copy_steps,
         double_dqn
     ):
-        super(DQN, self).__init__(
+        super(BaseDQN, self).__init__(
             network,
             device,
             reward_normalizer,
@@ -63,19 +59,14 @@ class DQN(AgentModule):
             action_space,
             nb_env
         )
+        self.nb_rollout = nb_rollout
         self.discount, self.egreedy_steps, self.egreedy_final = discount, egreedy_steps / nb_env, egreedy_final
-        self.exp_size = int(exp_size / nb_env)
-        self.exp_min_size = int(exp_min_size / nb_env)
         self.double_dqn = double_dqn
         self.target_copy_steps = target_copy_steps / nb_env
         self._next_target_copy = self.target_copy_steps
         self._target_net = deepcopy(network)
         self._target_net.eval()
         self._act_count = 0
-
-        self._exp_cache = ExperienceReplay(
-            self.exp_size, self.exp_min_size, nb_rollout, reward_normalizer, ['actions', 'internals']
-        )
         self._action_keys = list(sorted(action_space.keys()))
 
     @classmethod
@@ -97,8 +88,6 @@ class DQN(AgentModule):
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
-            exp_size=args.exp_size / denom,
-            exp_min_size=args.exp_min_size / denom,
             egreedy_final=args.egreedy_final,
             egreedy_steps=args.egreedy_steps / denom,
             target_copy_steps=args.target_copy_steps / denom,
@@ -114,11 +103,13 @@ class DQN(AgentModule):
         head_dict = {**action_space}
         return head_dict
 
+    def _prepare_act(self):
+        self.network.train()
+        self._act_count += 1
+
     def act(self, obs):
-        with torch.no_grad():
-            self.network.train()
-            self._act_count += 1
-            return self._act_gym(obs)
+        self._prepare_act()
+        return self._act_gym(obs)
 
     def _act_gym(self, obs):
         predictions, internals = self.network(
@@ -140,14 +131,14 @@ class DQN(AgentModule):
 
             # random action across some environments
             rand_mask = (epsilon > torch.rand(batch_size)).nonzero().squeeze(-1)
-            action = q_vals[key].argmax(dim=-1, keepdim=True)
+            action = self._action_from_q_vals(q_vals[key])
             rand_act = torch.randint(self.action_space[key][0], (rand_mask.shape[0], 1), dtype=torch.long).to(self.device)
             action[rand_mask] = rand_act
-
             actions[key] = action.squeeze(1).cpu().numpy()
 
-        detached_internals = {k: [i.detach() for i in v] for k, v in self.internals.items()}
-        self.exp_cache.write_forward(internals=detached_internals, actions=actions)
+            values.append(self._get_rollout_values(q_vals[key], action, batch_size))
+
+        self._write_exp_cache(values, actions)
         self.internals = internals
         return actions
 
@@ -196,51 +187,23 @@ class DQN(AgentModule):
 
         return torch.stack(values), internals
 
-    def compute_loss(self, rollouts, _):
-        next_obs = rollouts.next_obs
-        # rollout actions, terminals, rewards are lists/arrays convert to torch tensors
-        rollout_actions = [{k: torch.from_numpy(v).to(self.device) for k, v in x.items()} for x in rollouts.actions]
-        rewards = torch.stack(rollouts.rewards).to(self.device)
-        terminals_mask = torch.stack(rollouts.terminals)  # keep on cpu
-        # only need first internals
-        rollout_internals = rollouts.internals[0]
-
-        # copy target network
-        if self._act_count > self._next_target_copy:
-            self._target_net = deepcopy(self.network)
-            self._target_net.eval()
-            self._next_target_copy += self.target_copy_steps
-
-        # recompute forward pass to get value estimates for states
-        batch_values, internals = self._batch_forward(rollouts.states, rollout_actions, rollout_internals, terminals_mask)
-        # put terminals on gpu for nstep returns
-        terminals_mask = terminals_mask.to(self.device)
-
+    def _compute_estimated_values(self, next_obs):
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self._target_net(next_obs_on_device, internals)
+            results, _ = self._target_net(next_obs_on_device, self.internals)
             target_q = self._get_qvals_from_pred(results)
 
             # if double dqn estimate get target val for current estimated action
             if self.double_dqn:
-                current_results, _ = self.network(next_obs_on_device, internals)
+                current_results, _ = self.network(next_obs_on_device, self.internals)
                 current_q = self._get_qvals_from_pred(current_results)
-                last_actions = [current_q[k].argmax(dim=-1, keepdim=True) for k in self._action_keys]
+                last_actions = [self._action_from_q_vals(current_q[k]) for k in self._action_keys]
                 last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
             else:
                 last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self._action_keys], dim=1)
 
-
-        # compute nstep return and advantage over batch
-        value_targets = self._compute_returns_advantages(last_values, rewards, terminals_mask)
-
-        # batched loss
-        value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
-
-        losses = {'value_loss': value_loss}
-        metrics = {}
-        return losses, metrics
+        return last_values
 
     def _compute_returns_advantages(self, estimated_value, rewards, terminals):
         next_value = estimated_value
@@ -260,6 +223,16 @@ class DQN(AgentModule):
         nstep_target_returns = torch.stack(list(reversed(nstep_target_returns))).data
         return nstep_target_returns
 
+    def _possible_update_target(self):
+        # copy target network
+        if self._act_count > self._next_target_copy:
+            self._target_net = deepcopy(self.network)
+            self._target_net.eval()
+            self._next_target_copy += self.target_copy_steps
+
+    def _action_from_q_vals(self, q_vals):
+        return q_vals.argmax(dim=-1, keepdim=True)
+
     def _get_qvals_from_pred(self, predictions):
         return predictions
 
@@ -272,3 +245,5 @@ class DQN(AgentModule):
 
         return torch.cat(qvals, dim=1)
 
+    def _loss_fn(self, batch_values, value_targets):
+        return 0.5 * torch.mean((value_targets - batch_values).pow(2))
