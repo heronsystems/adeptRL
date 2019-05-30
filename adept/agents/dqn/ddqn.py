@@ -60,3 +60,4 @@ class OnlineDDQN(OnlineDQN):
             norm_adv = predictions[k] - predictions[k].mean(-1, keepdim=True)
             q[k] = norm_adv + predictions['value']
         return q
+

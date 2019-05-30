@@ -123,8 +123,8 @@ class OnlineQRDQN(OnlineDQN):
         # batched quantile huber loss
         diff = value_targets - batch_values
         dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
-        # sum over atoms, mean over everything else
-        return (huber(diff) * dist_mask).sum(-1).mean()
+        # sum over atoms
+        return (huber(diff) * dist_mask).sum(-1)
 
     def _get_qvals_from_pred(self, predictions):
         pred = {}
@@ -237,8 +237,8 @@ class QRDQN(DQN):
         # batched quantile huber loss
         diff = value_targets - batch_values
         dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
-        # sum over atoms, mean over everything else
-        return (huber(diff) * dist_mask).sum(-1).mean()
+        # sum over atoms
+        return (huber(diff) * dist_mask).sum(-1)
 
     def _get_qvals_from_pred(self, predictions):
         pred = {}

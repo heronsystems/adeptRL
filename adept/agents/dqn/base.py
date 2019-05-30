@@ -237,4 +237,5 @@ class BaseDQN(AgentModule):
         return torch.cat(qvals, dim=1)
 
     def _loss_fn(self, batch_values, value_targets):
-        return 0.5 * torch.mean((value_targets - batch_values).pow(2))
+        return 0.5 * (value_targets - batch_values).pow(2)
+

@@ -106,6 +106,7 @@ class DQN(BaseDQN):
         rollout_actions = [{k: torch.from_numpy(v).to(self.device) for k, v in x.items()} for x in rollouts.actions]
         rewards = torch.stack(rollouts.rewards).to(self.device)
         terminals_mask = torch.stack(rollouts.terminals)  # keep on cpu
+        importance_sample_weights = torch.from_numpy(rollouts.importance_sample_weights).float().to(self.device)
         # only need first internals
         rollout_internals = rollouts.internals[0]
 
@@ -123,9 +124,15 @@ class DQN(BaseDQN):
         value_targets = self._compute_returns_advantages(last_values, rewards, terminals_mask)
 
         # batched loss
-        value_loss = self._loss_fn(batch_values, value_targets)
+        value_loss = self._loss_fn(batch_values, value_targets).squeeze(-1)
 
-        losses = {'value_loss': value_loss}
+        # weighted by sample broadcast over envs
+        value_loss *= importance_sample_weights.unsqueeze(-1).expand_as(value_loss)
+
+        # update experience cache td error, mean over envs
+        self.exp_cache.update_priorities(value_loss.mean(-1))
+
+        losses = {'value_loss': value_loss.mean()}
         metrics = {}
         return losses, metrics
 

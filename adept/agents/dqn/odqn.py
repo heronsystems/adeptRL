@@ -73,7 +73,7 @@ class OnlineDQN(BaseDQN):
         # batched loss
         value_loss = self._loss_fn(batch_values, value_targets)
 
-        losses = {'value_loss': value_loss}
+        losses = {'value_loss': value_loss.mean()}
         metrics = {}
         return losses, metrics
 
