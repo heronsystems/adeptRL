@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+import math
 
 
 class Normalizer(abc.ABC):
@@ -36,3 +37,13 @@ class Scale(Normalizer):
 
     def __call__(self, item):
         return self.coefficient * item
+
+
+class AtariScale(Normalizer):
+    def __init__(self, scale=10**-3):
+        self.scale = scale
+
+    def __call__(self, item):
+        return math.copysign(1, item) * (math.sqrt(abs(item) + 1) - 1) \
+            + self.scale * item
+

@@ -151,11 +151,16 @@ def main(
         )
 
     device = torch.device("cuda:{}".format(LOCAL_RANK))
+    if args.reward_normalizer is not None:
+        reward_normalizer = env_registry.lookup_reward_normalizer_by_name(args.reward_normalizer)
+    else:
+        reward_normalizer = env_registry.lookup_reward_normalizer(args.env)
+
     agent = agent_registry.lookup_agent(args.agent).from_args(
         args,
         network,
         device,
-        env_registry.lookup_reward_normalizer(args.env),
+        reward_normalizer,
         env.gpu_preprocessor,
         env.engine,
         env.action_space
