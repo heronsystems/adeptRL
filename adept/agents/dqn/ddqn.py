@@ -17,7 +17,7 @@ from adept.agents.dqn import OnlineDQN
 
 
 class DDQN(DQN):
-    args = DQN.args
+    args = {**DQN.args}
     args['double_dqn'] = False
 
     @staticmethod
@@ -35,7 +35,7 @@ class DDQN(DQN):
 
 # TODO: these are the same, must be a fancy way to do this in python
 class OnlineDDQN(OnlineDQN):
-    args = OnlineDQN.args
+    args = {**OnlineDQN.args}
     args['double_dqn'] = False
 
     @staticmethod
