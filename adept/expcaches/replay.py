@@ -44,7 +44,6 @@ class ExperienceReplay(BaseExperience):
         self._minsize = min_size
         self._next_idx = 0
         self._keys = ['states', 'rewards', 'terminals'] + keys
-        self._last_sample_idx = 0
 
         self.nb_rollout = nb_rollout
         self.reward_normalizer = reward_normalizer
@@ -95,7 +94,7 @@ class ExperienceReplay(BaseExperience):
         if self._full:
             # wrap index starting from current index to full size
             min_ind = self._next_idx
-            max_ind = min_ind + (self._maxsize - (self.nb_rollout + 2))
+            max_ind = min_ind + (self._maxsize - (self.nb_rollout + 1))
             index = random.randint(min_ind, max_ind)
             # range is exclusive of end so last_index == end_index
             end_index = index + self.nb_rollout
@@ -103,14 +102,12 @@ class ExperienceReplay(BaseExperience):
             indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
         else:
             # sample an index and get the next sequential samples of len nb_rollout
-            # minus two so last state fits
-            index = random.randint(0, len(self._storage) - (self.nb_rollout + 2))
+            index = random.randint(0, len(self._storage) - (self.nb_rollout + 1))
             end_index = index + self.nb_rollout
-            indexes = range(index, end_index)
+            indexes = list(range(index, end_index))
             # range is exclusive of end so last_index == end_index
             last_index = end_index
 
-        self._last_sample_idx = index
         weights = np.ones(self.nb_rollout)
         return itemgetter(*indexes)(self._storage), self._storage[last_index]['states'], weights
 
@@ -145,6 +142,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         self._it_sum = SumSegmentTree(it_capacity)
         self._it_min = MinSegmentTree(it_capacity)
         self._max_priority = 1.0
+        self._last_sample_idx = 0
 
     def write_env(self, *args, **kwargs):
         idx = self._next_idx
@@ -170,15 +168,25 @@ class PrioritizedExperienceReplay(ExperienceReplay):
 
         # try to fit a sequence to this index, with the index as early as possible
         if self._full:
-            # wrap index starting from current index to full size
-            min_ind = self._next_idx
-            max_ind = min_ind + (self._maxsize - (self.nb_rollout + 2))
-            index = random.randint(min_ind, max_ind)
-            # range is exclusive of end so last_index == end_index
             end_index = index + self.nb_rollout
-            last_index = int((end_index) % self._maxsize)
-            indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
-            print('random', self._next_idx, indexes, last_index, indexes.size)
+            end_index_wrap = end_index % self._maxsize
+            last_sample_idx = (self._maxsize + self._next_idx - 1) % self._maxsize
+            max_index = last_sample_idx
+            # if in the sample rollout adjust starting index
+            # if (end_index > self._maxsize and last_sample_idx < end_index_wrap) or \
+                    # (self._next_idx > index and self._next_idx < end_index):
+                # # print('andlt', last_sample_idx, index, end_index)
+                # indexes = np.arange(0, 20)
+                # last_index = 20
+            if (end_index - self._next_idx) > self.nb_rollout:
+                pass
+            else:
+                # wrap index starting from current index to full size
+                end_index = index + self.nb_rollout
+                last_index = int((end_index) % self._maxsize)
+                indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
+                print(self._next_idx, indexes, end_index, end_index_wrap)
+                assert self._next_idx not in indexes
         else:
             max_index = (self._next_idx - 1) - self.nb_rollout
             # if index is too far forward
@@ -190,8 +198,6 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             indexes = range(index, end_index)
             # range is exclusive of end so last_index == end_index
             last_index = end_index
-            print('priority', self._next_idx, list(indexes))
-
 
         # TODO: importance weighting
 #         weights = []
@@ -221,7 +227,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             transitions at the sampled index.
         """
         rollout_inds = self._rollout_inds_from_ind(self._last_sample_idx)
-        print('update inds', self._last_sample_idx, rollout_inds)
+        # print('update inds', self._last_sample_idx, rollout_inds)
         for ind, p in zip(rollout_inds, priorities):
             self._it_sum[ind] = p ** self._alpha
             self._it_min[ind] = p ** self._alpha

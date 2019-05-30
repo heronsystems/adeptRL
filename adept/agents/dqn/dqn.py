@@ -126,11 +126,11 @@ class DQN(BaseDQN):
         # batched loss
         value_loss = self._loss_fn(batch_values, value_targets).squeeze(-1)
 
+        # update experience cache td error, mean over envs
+        self.exp_cache.update_priorities(value_loss.mean(-1).detach())
+
         # weighted by sample broadcast over envs
         value_loss *= importance_sample_weights.unsqueeze(-1).expand_as(value_loss)
-
-        # update experience cache td error, mean over envs
-        self.exp_cache.update_priorities(value_loss.mean(-1))
 
         losses = {'value_loss': value_loss.mean()}
         metrics = {}
