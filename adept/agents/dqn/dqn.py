@@ -36,8 +36,6 @@ class DQN(BaseDQN):
         nb_env,
         nb_rollout,
         discount,
-        egreedy_final,
-        egreedy_steps,
         target_copy_steps,
         double_dqn,
         exp_size,
@@ -53,8 +51,6 @@ class DQN(BaseDQN):
             nb_env,
             nb_rollout,
             discount,
-            egreedy_final,
-            egreedy_steps,
             target_copy_steps,
             double_dqn
         )
@@ -85,8 +81,6 @@ class DQN(BaseDQN):
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
-            egreedy_final=args.egreedy_final,
-            egreedy_steps=args.egreedy_steps / denom,
             target_copy_steps=args.target_copy_steps / denom,
             double_dqn=args.double_dqn,
             exp_size=args.exp_size / denom,

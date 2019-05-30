@@ -28,8 +28,6 @@ class BaseDQN(AgentModule):
     args = {
         'nb_rollout': 20,
         'discount': 0.99,
-        'egreedy_final': 0.1,
-        'egreedy_steps': 1000000,
         'target_copy_steps': 10000,
         'double_dqn': True
     }
@@ -45,8 +43,6 @@ class BaseDQN(AgentModule):
         nb_env,
         nb_rollout,
         discount,
-        egreedy_final,
-        egreedy_steps,
         target_copy_steps,
         double_dqn
     ):
@@ -60,7 +56,7 @@ class BaseDQN(AgentModule):
             nb_env
         )
         self.nb_rollout = nb_rollout
-        self.discount, self.egreedy_steps, self.egreedy_final = discount, egreedy_steps / nb_env, egreedy_final
+        self.discount = discount
         self.double_dqn = double_dqn
         self.target_copy_steps = target_copy_steps / nb_env
         self._next_target_copy = self.target_copy_steps
@@ -68,6 +64,9 @@ class BaseDQN(AgentModule):
         self._target_net.eval()
         self._act_count = 0
         self._action_keys = list(sorted(action_space.keys()))
+
+        # use ape-x epsilon
+        self.epsilon = 0.4 ** (1+((torch.arange(nb_env, dtype=torch.float, requires_grad=False) / (nb_env - 1)) * 7))
 
     @classmethod
     def from_args(
@@ -88,8 +87,6 @@ class BaseDQN(AgentModule):
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
-            egreedy_final=args.egreedy_final,
-            egreedy_steps=args.egreedy_steps / denom,
             target_copy_steps=args.target_copy_steps / denom,
             double_dqn=args.double_dqn
         )
@@ -123,14 +120,8 @@ class BaseDQN(AgentModule):
         values = []
         # TODO support multi-dimensional action spaces?
         for key in self._action_keys:
-            # possible sample
-            if self._act_count < self.egreedy_steps:
-                epsilon = 1 - ((1-self.egreedy_final) / self.egreedy_steps) * self._act_count
-            else:
-                epsilon = self.egreedy_final
-
-            # random action across some environments
-            rand_mask = (epsilon > torch.rand(batch_size)).nonzero().squeeze(-1)
+            # random action across some environments based on the actors epsilon
+            rand_mask = (self.epsilon > torch.rand(batch_size)).nonzero().squeeze(-1)
             action = self._action_from_q_vals(q_vals[key])
             rand_act = torch.randint(self.action_space[key][0], (rand_mask.shape[0], 1), dtype=torch.long).to(self.device)
             action[rand_mask] = rand_act

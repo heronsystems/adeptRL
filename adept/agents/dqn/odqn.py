@@ -30,8 +30,6 @@ class OnlineDQN(BaseDQN):
         nb_env,
         nb_rollout,
         discount,
-        egreedy_final,
-        egreedy_steps,
         target_copy_steps,
         double_dqn
     ):
@@ -45,8 +43,6 @@ class OnlineDQN(BaseDQN):
             nb_env,
             nb_rollout,
             discount,
-            egreedy_final,
-            egreedy_steps,
             target_copy_steps,
             double_dqn
         )
