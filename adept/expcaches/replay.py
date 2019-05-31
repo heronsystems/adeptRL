@@ -49,7 +49,10 @@ class ExperienceReplay(BaseExperience):
         self.reward_normalizer = reward_normalizer
 
     def __len__(self):
-        return len(self._storage)
+        if not self._full:
+            return len(self._storage)
+        else:
+            return self._maxsize
 
     def write_forward(self, **kwargs):
         # write forward occurs before write env so append here
@@ -162,7 +165,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         return idx
 
     def _sample(self, beta=0.6):
-        # TODO: beta from agent
+        # TODO: beta from agent, support burn in
         assert beta > 0
 
         index = self._sample_proportional()
@@ -202,22 +205,17 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             last_index = end_index
         # assert (self._maxsize + (self._next_idx - 1)) % self._maxsize not in indexes
 
-        # TODO: importance weighting
-#         weights = []
-        # p_min = self._it_min.min() / self._it_sum.sum()
-        # max_weight = (p_min * len(self._storage)) ** (-beta)
+        weights = []
+        p_min = self._it_min.min() / self._it_sum.sum()
+        max_weight = (p_min * len(self._storage)) ** (-beta)
 
-        # for idx in idxes:
-            # p_sample = self._it_sum[idx] / self._it_sum.sum()
-            # weight = (p_sample * len(self._storage)) ** (-beta)
-            # weights.append(weight / max_weight)
-        # weights = np.array(weights)
-        # print('weights', weights)
-        # TODO: support burn in
+        for idx in indexes:
+            p_sample = self._it_sum[idx] / self._it_sum.sum()
+            weight = (p_sample * len(self._storage)) ** (-beta)
+            weights.append(weight / max_weight)
+        weights = np.array(weights)
 
-        # TODO: importance weighting 
         self._last_sample_idx = index
-        weights = np.ones(self.nb_rollout)
         return itemgetter(*indexes)(self._storage), self._storage[last_index]['states'], weights
 
     def update_priorities(self, priorities):
@@ -230,7 +228,6 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             transitions at the sampled index.
         """
         rollout_inds = self._rollout_inds_from_ind(self._last_sample_idx)
-        # print('update inds', self._last_sample_idx, rollout_inds)
         for ind, p in zip(rollout_inds, priorities):
             self._it_sum[ind] = p ** self._alpha
             self._it_min[ind] = p ** self._alpha
@@ -239,6 +236,5 @@ class PrioritizedExperienceReplay(ExperienceReplay):
     def _rollout_inds_from_ind(self, index):
         end_index = index + self.nb_rollout
         indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
-        print('update', indexes)
         return indexes
 
