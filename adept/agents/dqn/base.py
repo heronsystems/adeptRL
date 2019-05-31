@@ -237,7 +237,8 @@ class BaseDQN(AgentModule):
         return torch.cat(qvals, dim=1)
 
     def _loss_fn(self, batch_values, value_targets):
-        return F.smooth_l1_loss(batch_values, value_targets, reduction='none')
+        return 0.5 * (value_targets - batch_values).pow(2)
+        # return F.smooth_l1_loss(batch_values, value_targets, reduction='none')
 
     def _scale(self, x, SCALE=10**-3):
         return torch.sign(x) * (torch.sqrt(torch.abs(x) + 1) - 1) + SCALE*x
