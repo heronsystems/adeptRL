@@ -213,7 +213,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             p_sample = self._it_sum[idx] / self._it_sum.sum()
             weight = (p_sample * len(self._storage)) ** (-beta)
             weights.append(weight / max_weight)
-        weights = np.array(weights)
+        weights = np.asarray(weights)
 
         self._last_sample_idx = index
         return itemgetter(*indexes)(self._storage), self._storage[last_index]['states'], weights
