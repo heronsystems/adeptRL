@@ -46,7 +46,7 @@ Agent Options:
 
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
-    --reward-normalizer <str> Environment reward normalizer [default: None]
+    --reward-normalizer <str> Environment reward normalizer [default: Env]
 
 Script Options:
     --nb-env <int>          Number of parallel environments [default: 32]

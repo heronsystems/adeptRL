@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from adept.environments.env_module import EnvModule
-from adept.utils.normalizers import Clip, Scale, AtariScale
+from adept.utils.normalizers import Clip, Scale
 from collections import defaultdict
 
 
@@ -172,8 +172,10 @@ class EnvRegistry:
         :param reward_norm_name: str
         :return: Callable[[float], float]
         """
-        if reward_norm_name == 'Clip':
+        if reward_norm_name is None or reward_norm_name.lower() == 'none':
+            return lambda x: x
+        elif reward_norm_name.lower() == 'clip':
             return Clip()
-        elif reward_norm_name == 'AtariScale':
-            return AtariScale()
+        else:
+            raise AttributeError('Reward normalizer {} does not exist'.format(reward_norm_name))
 

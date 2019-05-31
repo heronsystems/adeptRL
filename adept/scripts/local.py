@@ -35,7 +35,7 @@ Agent Options:
 
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
-    --reward-normalizer <str> Environment reward normalizer [default: None]
+    --reward-normalizer <str>   Environment reward normalizer [default: Env]
 
 Script Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
@@ -228,7 +228,7 @@ def main(
         else "cpu"
     )
     torch.backends.cudnn.benchmark = True
-    if args.reward_normalizer is not None:
+    if args.reward_normalizer != 'Env':
         reward_normalizer = env_registry.lookup_reward_normalizer_by_name(args.reward_normalizer)
     else:
         reward_normalizer = env_registry.lookup_reward_normalizer(args.env)

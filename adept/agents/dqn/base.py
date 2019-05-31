@@ -207,7 +207,7 @@ class BaseDQN(AgentModule):
             terminal = terminals[i].unsqueeze(-1)
 
              # Nstep return is always calculated for the critic's target
-            target_return = reward + self.discount * target_return * terminal
+            target_return = self._scale(reward + self.discount * self._inverse_scale(target_return) * terminal)
             nstep_target_returns.append(target_return)
 
         # reverse lists
@@ -238,4 +238,10 @@ class BaseDQN(AgentModule):
 
     def _loss_fn(self, batch_values, value_targets):
         return 0.5 * (value_targets - batch_values).pow(2)
+
+    def _scale(self, x, SCALE=10**-3):
+        return torch.sign(x) * (torch.sqrt(torch.abs(x) + 1) - 1) + SCALE*x
+
+    def _inverse_scale(self, x, SCALE=10**-3):
+        return torch.sign(x) * ((((torch.sqrt(1+4*SCALE*(torch.abs(x)+1+SCALE))-1)/(2*SCALE))**2)-1)
 

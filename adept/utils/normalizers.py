@@ -38,12 +38,3 @@ class Scale(Normalizer):
     def __call__(self, item):
         return self.coefficient * item
 
-
-class AtariScale(Normalizer):
-    def __init__(self, scale=10**-3):
-        self.scale = scale
-
-    def __call__(self, item):
-        return math.copysign(1, item) * (math.sqrt(abs(item) + 1) - 1) \
-            + self.scale * item
-

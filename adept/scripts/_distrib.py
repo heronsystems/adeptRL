@@ -151,7 +151,7 @@ def main(
         )
 
     device = torch.device("cuda:{}".format(LOCAL_RANK))
-    if args.reward_normalizer is not None:
+    if args.reward_normalizer != 'Env':
         reward_normalizer = env_registry.lookup_reward_normalizer_by_name(args.reward_normalizer)
     else:
         reward_normalizer = env_registry.lookup_reward_normalizer(args.env)
