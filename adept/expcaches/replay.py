@@ -107,6 +107,7 @@ class ExperienceReplay(BaseExperience):
             indexes = list(range(index, end_index))
             # range is exclusive of end so last_index == end_index
             last_index = end_index
+        # assert (self._maxsize + (self._next_idx - 1)) % self._maxsize not in indexes
 
         weights = np.ones(self.nb_rollout)
         return itemgetter(*indexes)(self._storage), self._storage[last_index]['states'], weights
@@ -170,23 +171,24 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         if self._full:
             end_index = index + self.nb_rollout
             end_index_wrap = end_index % self._maxsize
-            last_sample_idx = (self._maxsize + self._next_idx - 1) % self._maxsize
-            max_index = last_sample_idx
+
+            # if index is wrapped
+            if self._next_idx - 1 < index:
+                compare_index = self._maxsize + (self._next_idx - 1)
+            else:
+                compare_index = self._next_idx - 1
+
             # if in the sample rollout adjust starting index
-            # if (end_index > self._maxsize and last_sample_idx < end_index_wrap) or \
-                    # (self._next_idx > index and self._next_idx < end_index):
-                # # print('andlt', last_sample_idx, index, end_index)
-                # indexes = np.arange(0, 20)
-                # last_index = 20
-            if (end_index - self._next_idx) > self.nb_rollout:
-                pass
+            if compare_index >= index and compare_index <= end_index:
+                end_index = compare_index
+                index = end_index - self.nb_rollout
+                last_index = int((end_index) % self._maxsize)
+                indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
             else:
                 # wrap index starting from current index to full size
                 end_index = index + self.nb_rollout
                 last_index = int((end_index) % self._maxsize)
                 indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
-                print(self._next_idx, indexes, end_index, end_index_wrap)
-                assert self._next_idx not in indexes
         else:
             max_index = (self._next_idx - 1) - self.nb_rollout
             # if index is too far forward
@@ -198,6 +200,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             indexes = range(index, end_index)
             # range is exclusive of end so last_index == end_index
             last_index = end_index
+        # assert (self._maxsize + (self._next_idx - 1)) % self._maxsize not in indexes
 
         # TODO: importance weighting
 #         weights = []
@@ -236,5 +239,6 @@ class PrioritizedExperienceReplay(ExperienceReplay):
     def _rollout_inds_from_ind(self, index):
         end_index = index + self.nb_rollout
         indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
+        print('update', indexes)
         return indexes
 
