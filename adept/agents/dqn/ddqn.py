@@ -19,9 +19,6 @@ from adept.agents.dqn import OnlineDQN
 
 
 class DDQN(DQN):
-    args = {**DQN.args}
-    args['double_dqn'] = False
-
     @staticmethod
     def output_space(action_space, args=None):
         head_dict = {'value': (1, ), **action_space}
@@ -44,11 +41,7 @@ class DDQN(DQN):
         return torch.cat(q_vals, dim=1)
 
 
-# TODO: these are the same, must be a fancy way to do this in python
 class OnlineDDQN(OnlineDQN):
-    args = {**OnlineDQN.args}
-    args['double_dqn'] = False
-
     @staticmethod
     def output_space(action_space, args=None):
         head_dict = {'value': (1, ), **action_space}

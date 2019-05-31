@@ -24,6 +24,7 @@ class DQN(BaseDQN):
         'exp_min_size': 1000,
     }
     args = {**BaseDQN.args, **exp_args}
+    args['exp_update_rate'] = args['nb_rollout']
 
     def __init__(
         self,
@@ -39,7 +40,8 @@ class DQN(BaseDQN):
         target_copy_steps,
         double_dqn,
         exp_size,
-        exp_min_size
+        exp_min_size,
+        exp_update_rate
     ):
         super(DQN, self).__init__(
             network,
@@ -57,8 +59,9 @@ class DQN(BaseDQN):
 
         self.exp_size = int(exp_size / nb_env)
         self.exp_min_size = int(exp_min_size / nb_env)
+        self.exp_update_rate = exp_update_rate
         self._exp_cache = PrioritizedExperienceReplay(
-            0.6, self.exp_size, self.exp_min_size, nb_rollout, reward_normalizer, ['actions', 'internals']
+            0.6, self.exp_size, self.exp_min_size, nb_rollout, self.exp_update_rate, reward_normalizer, ['actions', 'internals']
         )
 
     @classmethod
@@ -84,7 +87,8 @@ class DQN(BaseDQN):
             target_copy_steps=args.target_copy_steps / denom,
             double_dqn=args.double_dqn,
             exp_size=args.exp_size / denom,
-            exp_min_size=args.exp_min_size / denom
+            exp_min_size=args.exp_min_size / denom,
+            exp_update_rate=args.exp_update_rate
         )
 
     def act(self, obs):

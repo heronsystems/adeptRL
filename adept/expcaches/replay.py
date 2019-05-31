@@ -26,7 +26,7 @@ from operator import itemgetter
 
 
 class ExperienceReplay(BaseExperience):
-    def __init__(self, size, min_size, nb_rollout, reward_normalizer, keys):
+    def __init__(self, size, min_size, nb_rollout, update_rate, reward_normalizer, keys):
         """
         Parameters
         ----------
@@ -41,6 +41,7 @@ class ExperienceReplay(BaseExperience):
         self._storage = []
         self._full = False
         self._maxsize = size
+        self._update_rate = update_rate
         self._minsize = min_size
         self._next_idx = 0
         self._keys = ['states', 'rewards', 'terminals'] + keys
@@ -117,7 +118,9 @@ class ExperienceReplay(BaseExperience):
 
     def is_ready(self):
         # plus 2 to include next states
-        return len(self) > self._minsize and len(self) > self.nb_rollout + 2
+        if len(self) > self._minsize and len(self) > self.nb_rollout + 2:
+            return self._next_idx % self._update_rate == 0
+        return False
 
     def clear(self):
         pass
@@ -127,7 +130,7 @@ class ExperienceReplay(BaseExperience):
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
-    def __init__(self, alpha, size, min_size, nb_rollout, reward_normalizer, keys):
+    def __init__(self, alpha, size, min_size, nb_rollout, update_rate, reward_normalizer, keys):
         """
         Parameters
         ----------
@@ -135,7 +138,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             Max number of transitions to store in the buffer. When the buffer
             overflows the old memories are dropped.
         """
-        super(PrioritizedExperienceReplay, self).__init__(size, min_size, nb_rollout, reward_normalizer, keys)
+        super(PrioritizedExperienceReplay, self).__init__(size, min_size, nb_rollout, update_rate, reward_normalizer, keys)
         assert alpha > 0
         self._alpha = alpha
 
