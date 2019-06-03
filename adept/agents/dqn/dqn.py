@@ -16,7 +16,7 @@ import torch
 
 from adept.expcaches.replay import PrioritizedExperienceReplay
 from adept.agents.dqn import BaseDQN
-
+from adept.utils import listd_to_dlist
 
 class DQN(BaseDQN):
     exp_args = {
@@ -110,22 +110,23 @@ class DQN(BaseDQN):
         rollout_actions = [{k: torch.from_numpy(v).to(self.device) for k, v in x.items()} for x in rollouts.actions]
         rewards = torch.stack(rollouts.rewards).to(self.device)
         terminals_mask = torch.stack(rollouts.terminals)  # keep on cpu
+        terminals_mask_gpu = terminals_mask.to(self.device)
         importance_sample_weights = torch.from_numpy(rollouts.importance_sample_weights).float().to(self.device)
         # only need first internals
         rollout_internals = rollouts.internals[0]
+        # obs are a list of dict of lists convert to dict of torch tensors
+        torch_obs_dict = {k: torch.stack(v) for k, v in listd_to_dlist(rollouts.states).items()}
 
         self._possible_update_target()
 
         # recompute forward pass to get value estimates for states
-        batch_values, internals = self._batch_forward(rollouts.states, rollout_actions, rollout_internals, terminals_mask)
-        # put terminals on gpu for nstep returns
-        terminals_mask = terminals_mask.to(self.device)
+        batch_values, internals = self._batch_forward(torch_obs_dict, rollout_actions, rollout_internals, terminals_mask)
 
         # estimate value of next state
-        last_values = self._compute_estimated_values(next_obs)
+        last_values = self._compute_estimated_values(next_obs, internals)
 
         # compute nstep return and advantage over batch
-        value_targets = self._compute_returns_advantages(last_values, rewards, terminals_mask)
+        value_targets = self._compute_returns_advantages(last_values, rewards, terminals_mask_gpu)
 
         # batched loss
         value_loss = self._loss_fn(batch_values, value_targets).squeeze(-1)

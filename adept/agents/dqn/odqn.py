@@ -64,7 +64,7 @@ class OnlineDQN(BaseDQN):
         self._possible_update_target()
 
         # estimate value of next state
-        last_values = self._compute_estimated_values(next_obs)
+        last_values = self._compute_estimated_values(next_obs, self.internals)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)

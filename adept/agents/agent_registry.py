@@ -42,6 +42,9 @@ class AgentRegistry:
         for dqn in [DQN, DDQN, OnlineDQN, OnlineDDQN, QRDQN, OnlineQRDQN]:
             self.register_agent(dqn)
 
+        from adept.agents.impala.dqn import ActorLearnerDQN
+        self.register_agent(ActorLearnerDQN)
+
     def register_agent(self, agent_class):
         """
         Add your own agent class.

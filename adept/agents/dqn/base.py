@@ -158,9 +158,10 @@ class BaseDQN(AgentModule):
     def _batch_forward(self, obs, sampled_actions, internals, terminals):
         """
         This is the method to recompute the forward pass on the host, it
-        must return values. Obs, sampled_actions,
+        must return values, and final internals. sampled_actions,
         terminal_masks here are [seq, batch], internals must be reset if
-        terminal
+        terminal.
+        Obs must be a dictionary of torch Tensors
         """
         self.network.train()
         values = []
@@ -171,8 +172,7 @@ class BaseDQN(AgentModule):
         # if network is modular,
         # trunk can be sped up by combining batch & seq dim
         def get_results_generator():
-            torch_obs_dict = {k: torch.stack(v) for k, v in listd_to_dlist(obs).items()}
-            obs_on_device = dlist_to_listd(self.gpu_preprocessor(torch_obs_dict, self.device))
+            obs_on_device = dlist_to_listd(self.gpu_preprocessor(obs, self.device))
 
             def get_results(seq_ind, internals):
                 obs_of_seq_ind = obs_on_device[seq_ind]
@@ -197,16 +197,16 @@ class BaseDQN(AgentModule):
 
         return torch.stack(values), internals
 
-    def _compute_estimated_values(self, next_obs):
+    def _compute_estimated_values(self, next_obs, internals):
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self._target_net(next_obs_on_device, self.internals)
+            results, _ = self._target_net(next_obs_on_device, internals)
             target_q = self._get_qvals_from_pred(results)
 
             # if double dqn estimate get target val for current estimated action
             if self.double_dqn:
-                current_results, _ = self.network(next_obs_on_device, self.internals)
+                current_results, _ = self.network(next_obs_on_device, internals)
                 current_q = self._get_qvals_from_pred(current_results)
                 last_actions = [self._action_from_q_vals(current_q[k]) for k in self._action_keys]
                 last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self._action_keys, last_actions)], dim=1)
