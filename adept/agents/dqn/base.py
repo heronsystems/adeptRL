@@ -134,6 +134,25 @@ class BaseDQN(AgentModule):
         return actions
 
     def act_eval(self, obs):
+        self.network.eval()
+        return self._act_eval_gym(obs)
+
+    def _act_eval_gym(self, obs):
+        with torch.no_grad():
+            predictions, internals = self.network(
+                self.gpu_preprocessor(obs, self.device), self.internals
+            )
+
+            # reduce feature dim, build action_key dim
+            actions = OrderedDict()
+            for key in self._action_keys:
+                # TODO: some amount of egreedy
+                action = self._action_from_q_vals(predictions[key])
+                actions[key] = action.cpu().numpy()
+
+        self.internals = internals
+        return actions
+
         raise NotImplementedError()
 
     def _batch_forward(self, obs, sampled_actions, internals, terminals):
