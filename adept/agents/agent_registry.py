@@ -38,12 +38,9 @@ class AgentRegistry:
         return ActorCriticVtrace
 
     def register_dqn_agents(self):
-        from adept.agents.dqn import DQN, DDQN, OnlineDQN, OnlineDDQN, QRDQN, OnlineQRDQN
-        for dqn in [DQN, DDQN, OnlineDQN, OnlineDDQN, QRDQN, OnlineQRDQN]:
+        from adept.agents.dqn import DQN, DDQN, OnlineDQN, OnlineDDQN, ActorLearnerDQN, ActorLearnerDDQN, QRDQN, OnlineQRDQN
+        for dqn in [DQN, DDQN, OnlineDQN, OnlineDDQN, ActorLearnerDQN, ActorLearnerDDQN, QRDQN, OnlineQRDQN]:
             self.register_agent(dqn)
-
-        from adept.agents.impala.dqn import ActorLearnerDQN
-        self.register_agent(ActorLearnerDQN)
 
     def register_agent(self, agent_class):
         """

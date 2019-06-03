@@ -76,59 +76,6 @@ class ActorLearnerDQN(BaseDQN):
         compressed_actions = torch.stack([torch.from_numpy(actions[k]) for k in self._action_keys], dim=1)
         self.exp_cache.write_forward(actions=compressed_actions)
 
-    def seq_obs_to_pathways(self, obs, device):
-        """
-            Converts a dict of sequential observations to a list(of seq len) of dicts
-        """
-        pathway_dict = self.gpu_preprocessor(obs, device)
-        return dlist_to_listd(pathway_dict)
-
-    def act_on_host(
-        self, obs, next_obs, terminal_masks, sampled_actions, internals
-    ):
-        """
-        This is the method to recompute the forward pass on the host, it
-        must return values. Obs, sampled_actions,
-        terminal_masks here are [seq, batch], internals must be reset if
-        terminal
-        """
-        self.network.train()
-        next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-
-        values = []
-
-        # numpy to vectorize check for terminals
-        terminal_masks = terminal_masks.numpy()
-
-        # if network is modular,
-        # trunk can be sped up by combining batch & seq dim
-        def get_results_generator():
-            obs_on_device = self.seq_obs_to_pathways(obs, self.device)
-
-            def get_results(seq_ind, internals):
-                obs_of_seq_ind = obs_on_device[seq_ind]
-                return self.network(obs_of_seq_ind, internals)
-
-            return get_results
-
-        result_fn = get_results_generator()
-        for seq_ind in range(terminal_masks.shape[0]):
-            results, internals = result_fn(seq_ind, internals)
-            qvals = self._get_qvals_from_pred_sampled(
-                results, sampled_actions[seq_ind]
-            )
-            # seq lists
-            values.append(qvals)
-
-            # if this state was terminal reset internals
-            terminals = np.where(terminal_masks[seq_ind] == 0)[0]
-            for batch_ind in terminals:
-                reset_internals = self.network.new_internals(self.device)
-                for k, v in reset_internals.items():
-                    internals[k][batch_ind] = v
-
-        return torch.stack(values), internals
-
     def compute_loss(self, rollouts):
         # TODO: this is a similar process to ActorCriticVtrace maybe some way to merge common
         # rollouts here are a list of [seq, nb_env]

@@ -16,9 +16,34 @@ import torch
 
 from adept.agents.dqn import DQN
 from adept.agents.dqn import OnlineDQN
+from adept.agents.dqn import ActorLearnerDQN
 
 
 class DDQN(DQN):
+    @staticmethod
+    def output_space(action_space, args=None):
+        head_dict = {'value': (1, ), **action_space}
+        return head_dict
+
+    def _get_qvals_from_pred(self, predictions):
+        q = {}
+        for k in self._action_keys:
+            norm_adv = predictions[k] - predictions[k].mean(-1, keepdim=True)
+            q[k] = norm_adv + predictions['value']
+        return q
+
+    def _get_qvals_from_pred_sampled(self, predictions, actions):
+        q_vals = []
+        for k in self._action_keys:
+            norm_adv = predictions[k] - predictions[k].mean(-1, keepdim=True)
+            q = norm_adv + predictions['value']
+            q_vals.append(q.gather(1, actions[k].unsqueeze(1)))
+
+        return torch.cat(q_vals, dim=1)
+
+
+# This is duplicated from above
+class ActorLearnerDDQN(ActorLearnerDQN):
     @staticmethod
     def output_space(action_space, args=None):
         head_dict = {'value': (1, ), **action_space}
