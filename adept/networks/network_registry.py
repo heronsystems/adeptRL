@@ -42,12 +42,13 @@ class NetworkRegistry:
 
         from adept.networks.net3d.identity_3d import Identity3D
         from adept.networks.net3d.four_conv import FourConv
+        from adept.networks.net3d.nature import Nature
         net_3d_cls_by_name = {
             'Identity3D': Identity3D,
             'FourConv': FourConv,
             # 'FourConvSpatialAttention': FourConvSpatialAttention,
             # 'FourConvLarger': FourConvLarger,
-            # 'Nature': Nature,
+            'Nature': Nature,
             # 'Mnih2013': Mnih2013,
             # 'ResNet18': ResNet18,
             # 'ResNet18V2': ResNet18V2,
