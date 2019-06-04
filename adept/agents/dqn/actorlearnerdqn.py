@@ -125,8 +125,8 @@ class ActorLearnerDQN(BaseDQN):
         # compute nstep return and advantage over batch
         value_targets = self._compute_returns_advantages(last_values, rewards, terminals_mask_gpu)
 
-        # batched loss
-        value_loss = self._loss_fn(batch_values, value_targets).squeeze(-1)
+        # batched loss mean over actions
+        value_loss = self._loss_fn(batch_values, value_targets).mean(-1)
 
         losses = {'value_loss': value_loss.mean()}
         metrics = {}

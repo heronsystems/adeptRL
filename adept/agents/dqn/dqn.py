@@ -61,7 +61,7 @@ class DQN(BaseDQN):
         self.exp_min_size = int(exp_min_size / nb_env)
         self.exp_update_rate = exp_update_rate
         self._exp_cache = PrioritizedExperienceReplay(
-            0.6, self.exp_size, self.exp_min_size, nb_rollout, self.exp_update_rate, reward_normalizer, ['actions', 'internals']
+            0.9, self.exp_size, self.exp_min_size, nb_rollout, self.exp_update_rate, reward_normalizer, ['actions', 'internals']
         )
 
     @classmethod
@@ -128,12 +128,15 @@ class DQN(BaseDQN):
         # compute nstep return and advantage over batch
         value_targets = self._compute_returns_advantages(last_values, rewards, terminals_mask_gpu)
 
-        # batched loss
-        value_loss = self._loss_fn(batch_values, value_targets).squeeze(-1)
+        # batched loss meaned over actions
+        value_loss = self._loss_fn(batch_values, value_targets).mean(-1)
 
-        # update experience cache td error, mean over envs
-        # TODO: separate TD prioritiziation vs huber loss
-        self.exp_cache.update_priorities(value_loss.mean(-1).detach().cpu())
+        # set priority over envs to be a mixture of max/mean like R2D2 but over envs instead of seq
+        # mean over actions
+        with torch.no_grad():
+            temporal_diff = torch.abs(batch_values - value_targets).mean(-1)
+            temporal_diff = 0.9 * torch.max(temporal_diff, 1)[0] + 0.1 * torch.mean(temporal_diff, 1)
+            self.exp_cache.update_priorities(temporal_diff.cpu())
 
         # weighted by sample broadcast over envs
         value_loss *= importance_sample_weights.unsqueeze(-1).expand_as(value_loss)
