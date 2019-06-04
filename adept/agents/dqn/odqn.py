@@ -14,8 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
 
-from adept.utils import listd_to_dlist
-from collections import OrderedDict
 from adept.expcaches.rollout import RolloutCache
 from adept.agents.dqn import BaseDQN
 
@@ -54,9 +52,6 @@ class OnlineDQN(BaseDQN):
             nb_rollout, device, reward_normalizer,
             ['values']
         )
-        self._target_internals = listd_to_dlist(
-            [self._target_net.new_internals(device) for _ in range(nb_env)]
-        )
 
     def _get_rollout_values(self, q_vals, action, batch_size=0):
         return q_vals.gather(1, action)
@@ -65,48 +60,11 @@ class OnlineDQN(BaseDQN):
         values = torch.cat(values, dim=1)
         self.exp_cache.write_forward(values=values)
 
-    def _act_gym(self, obs):
-        obs_on_device = self.gpu_preprocessor(obs, self.device)
-        predictions, internals = self.network(
-            obs_on_device, self.internals
-        )
-        with torch.no_grad():
-            _, targ_internals = self._target_net(
-                obs_on_device, self._target_internals
-            )
-        q_vals = self._get_qvals_from_pred(predictions)
-        batch_size = predictions[self._action_keys[0]].shape[0]
-
-        # reduce feature dim, build action_key dim
-        actions = OrderedDict()
-        values = []
-        # TODO support multi-dimensional action spaces?
-        for key in self._action_keys:
-            # random action across some environments based on the actors epsilon
-            rand_mask = (self.epsilon > torch.rand(batch_size)).nonzero().squeeze(-1)
-            action = self._action_from_q_vals(q_vals[key])
-            rand_act = torch.randint(self.action_space[key][0], (rand_mask.shape[0], 1), dtype=torch.long).to(self.device)
-            action[rand_mask] = rand_act
-            actions[key] = action.squeeze(1).cpu().numpy()
-
-            values.append(self._get_rollout_values(q_vals[key], action, batch_size))
-
-        self._write_exp_cache(values, actions)
-        self.internals = internals
-        self._target_internals = targ_internals
-        return actions
-
-    def _reset_internals_at_index(self, env_idx):
-        for (k, v), (tk, tv) in zip(self.network.new_internals(self.device).items(),
-                                    self._target_net.new_internals(self.device).items()):
-            self.internals[k][env_idx] = v
-            self._target_internals[k][env_idx] = tv
-
     def compute_loss(self, rollouts, next_obs):
         self._possible_update_target()
 
         # estimate value of next state
-        last_values = self._compute_estimated_values(next_obs, self._target_internals)
+        last_values = self._compute_estimated_values(next_obs, self.internals)
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(rollouts.values)
