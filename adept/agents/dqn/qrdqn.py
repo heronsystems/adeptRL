@@ -95,25 +95,24 @@ class OnlineQRDQN(OnlineDQN):
     def _action_from_q_vals(self, q_vals):
         return q_vals.mean(2).argmax(dim=-1, keepdim=True)
 
-    def _compute_estimated_values(self, next_obs):
+    def _compute_estimated_values(self, next_obs, internals):
         # TODO make this general in basedqn
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self._target_net(next_obs_on_device, self.internals)
+            results, _ = self._target_net(next_obs_on_device, internals)
             target_q = self._get_qvals_from_pred(results)
 
             last_values = []
             for k in self._action_keys:
                 # if double dqn estimate get target val for current estimated action
                 if self.double_dqn:
-                    current_results, _ = self.network(next_obs_on_device, self.internals)
+                    current_results, _ = self.network(next_obs_on_device, internals)
                     current_q = self._get_qvals_from_pred(current_results)
                     action_select = current_q[k].mean(2).argmax(dim=-1, keepdim=True)
-                    action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
                 else:
                     action_select = target_q[k].mean(2).argmax(dim=-1, keepdim=True)
-                    action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
+                action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
                 last_values.append(target_q[k].gather(1, action_select).squeeze(1))
 
             last_values = torch.cat(last_values, dim=1)
@@ -209,19 +208,19 @@ class QRDQN(DQN):
     def _action_from_q_vals(self, q_vals):
         return q_vals.mean(2).argmax(dim=-1, keepdim=True)
 
-    def _compute_estimated_values(self, next_obs):
+    def _compute_estimated_values(self, next_obs, internals):
         # TODO make this general in basedqn
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self._target_net(next_obs_on_device, self.internals)
+            results, _ = self._target_net(next_obs_on_device, internals)
             target_q = self._get_qvals_from_pred(results)
 
             last_values = []
             for k in self._action_keys:
                 # if double dqn estimate get target val for current estimated action
                 if self.double_dqn:
-                    current_results, _ = self.network(next_obs_on_device, self.internals)
+                    current_results, _ = self.network(next_obs_on_device, internals)
                     current_q = self._get_qvals_from_pred(current_results)
                     action_select = current_q[k].mean(2).argmax(dim=-1, keepdim=True)
                     action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
