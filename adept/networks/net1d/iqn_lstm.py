@@ -25,7 +25,7 @@ class IQNLSTM(SubModule1D):
     args = {
         'lstm_normalize': True,
         'lstm_nb_hidden': 5,
-        'nb_embedding': 3
+        'nb_embedding': 64
     }
 
     def __init__(self, input_shape, id, normalize, nb_hidden, nb_embedding):
