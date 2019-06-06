@@ -239,7 +239,7 @@ class QRDQN(DQN):
         # This is formula for loss in the Implicit Quantile Networks paper
         diff = value_targets.unsqueeze(3) - batch_values.unsqueeze(2)
         dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
-        return (huber(diff) * dist_mask).sum(-1).mean(-1)
+        return (huber(diff) * dist_mask).sum(-1).mean(-1, keepdim=True)
 
     def _get_qvals_from_pred(self, predictions):
         pred = {}
