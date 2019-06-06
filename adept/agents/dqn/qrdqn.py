@@ -119,11 +119,11 @@ class OnlineQRDQN(OnlineDQN):
         return last_values
 
     def _loss_fn(self, batch_values, value_targets):
-        # batched quantile huber loss
-        diff = value_targets - batch_values
+        # Broadcast temporal difference to compare every combination of quantiles
+        # This is formula for loss in the Implicit Quantile Networks paper
+        diff = value_targets.unsqueeze(3) - batch_values.unsqueeze(2)
         dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
-        # sum over atoms
-        return (huber(diff) * dist_mask).sum(-1)
+        return (huber(diff) * dist_mask).sum(-1).mean(-1)
 
     def _get_qvals_from_pred(self, predictions):
         pred = {}
@@ -151,6 +151,7 @@ class QRDQN(DQN):
         double_dqn,
         exp_size,
         exp_min_size,
+        exp_update_rate,
         num_atoms
     ):
         super(QRDQN, self).__init__(
@@ -166,7 +167,8 @@ class QRDQN(DQN):
             target_copy_steps,
             double_dqn,
             exp_size,
-            exp_min_size
+            exp_min_size,
+            exp_update_rate
         )
         self.num_atoms = num_atoms
         self._qr_density = (((2 * torch.arange(self.num_atoms, dtype=torch.float, requires_grad=False)) + 1) / (2.0 * self.num_atoms)).to(self.device)
@@ -194,6 +196,7 @@ class QRDQN(DQN):
             double_dqn=args.double_dqn,
             exp_size=args.exp_size / denom,
             exp_min_size=args.exp_min_size / denom,
+            exp_update_rate=args.exp_update_rate,
             num_atoms=args.num_atoms
         )
 
@@ -223,25 +226,35 @@ class QRDQN(DQN):
                     current_results, _ = self.network(next_obs_on_device, internals)
                     current_q = self._get_qvals_from_pred(current_results)
                     action_select = current_q[k].mean(2).argmax(dim=-1, keepdim=True)
-                    action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
                 else:
                     action_select = target_q[k].mean(2).argmax(dim=-1, keepdim=True)
-                    action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
+                action_select = action_select.unsqueeze(-1).expand(-1, 1, self.num_atoms)
                 last_values.append(target_q[k].gather(1, action_select).squeeze(1))
 
             last_values = torch.cat(last_values, dim=1)
         return last_values
 
     def _loss_fn(self, batch_values, value_targets):
-        # batched quantile huber loss
-        diff = value_targets - batch_values
+        # Broadcast temporal difference to compare every combination of quantiles
+        # This is formula for loss in the Implicit Quantile Networks paper
+        diff = value_targets.unsqueeze(3) - batch_values.unsqueeze(2)
         dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
-        # sum over atoms
-        return (huber(diff) * dist_mask).sum(-1)
+        return (huber(diff) * dist_mask).sum(-1).mean(-1)
 
     def _get_qvals_from_pred(self, predictions):
         pred = {}
         for k, v in predictions.items():
             pred[k] = v.view(v.shape[0], -1, self.num_atoms)
         return pred
+
+    def _get_qvals_from_pred_sampled(self, predictions, actions):
+        qvals = []
+        # TODO support multi-dimensional action spaces?
+        for key in predictions.keys():
+            vals = predictions[key]
+            vals = vals.view(vals.shape[0], -1, self.num_atoms)
+            action_select = actions[key].unsqueeze(-1).unsqueeze(-1).expand(-1, 1, self.num_atoms)
+            qvals.append(vals.gather(1, action_select).squeeze(1))
+
+        return torch.cat(qvals, dim=1)
 
