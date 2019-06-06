@@ -24,7 +24,7 @@ from adept.networks.net1d.submodule_1d import SubModule1D
 class IQNLSTM(SubModule1D):
     args = {
         'lstm_normalize': True,
-        'lstm_nb_hidden': 5,
+        'lstm_nb_hidden': 512,
         'nb_embedding': 64
     }
 
@@ -55,6 +55,7 @@ class IQNLSTM(SubModule1D):
         return (self._nb_hidden, )
 
     def _forward(self, xs, internals, num_samples=8, quantiles=None, **kwargs):
+        self._arange_embedding = self._arange_embedding.to(xs)
         # compute lstm 
         hxs = self.stacked_internals('hx', internals)
         cxs = self.stacked_internals('cx', internals)
