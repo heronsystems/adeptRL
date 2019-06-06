@@ -39,7 +39,9 @@ class AgentRegistry:
 
     def register_dqn_agents(self):
         from adept.agents.dqn import DQN, DDQN, OnlineDQN, OnlineDDQN, ActorLearnerDQN, ActorLearnerDDQN, QRDQN, OnlineQRDQN
-        for dqn in [DQN, DDQN, OnlineDQN, OnlineDDQN, ActorLearnerDQN, ActorLearnerDDQN, QRDQN, OnlineQRDQN]:
+        from adept.agents.dqn import OnlineIQN
+        for dqn in [DQN, DDQN, OnlineDQN, OnlineDDQN, ActorLearnerDQN, ActorLearnerDDQN, QRDQN, OnlineQRDQN, \
+                    OnlineIQN]:
             self.register_agent(dqn)
 
     def register_agent(self, agent_class):

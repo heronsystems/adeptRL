@@ -251,7 +251,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             obs_key_to_submod, body_submod, head_submodules, output_space
         )
 
-    def forward(self, obs_key_to_obs, internals):
+    def forward(self, obs_key_to_obs, internals, **kwargs):
         """
 
         :param obs_key_to_obs: Dict[str, torch.Tensor (1D | 2D | 3D | 4D)]
@@ -268,7 +268,8 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             result, nxt_internal = self.source_nets[key].forward(
                 obs_key_to_obs[key],
                 internals,
-                dim=self.body.dim
+                dim=self.body.dim,
+                **kwargs
             )
             processed_inputs.append(result)
             nxt_internals.append(nxt_internal)
@@ -277,7 +278,8 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         processed_inputs = self._expand_dims(processed_inputs)
         body_out, nxt_internal = self.body.forward(
             torch.cat(processed_inputs, dim=1),
-            internals
+            internals,
+            **kwargs
         )
         nxt_internals.append(nxt_internal)
 
@@ -286,7 +288,8 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         for head_submod in self.heads.values():
             head_out, nxt_internal = head_submod.forward(
                 self.body.to_dim(body_out, head_submod.dim),
-                internals
+                internals,
+                **kwargs
             )
             head_out_by_dim[head_submod.dim] = head_out
             nxt_internals.append(nxt_internal)

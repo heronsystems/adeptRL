@@ -4,3 +4,4 @@ from .odqn import OnlineDQN
 from .actorlearnerdqn import ActorLearnerDQN
 from .ddqn import DDQN, OnlineDDQN, ActorLearnerDDQN
 from .qrdqn import QRDQN, OnlineQRDQN
+from .iqn import OnlineIQN

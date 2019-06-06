@@ -41,6 +41,7 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
         self._gpu_preprocessor = gpu_preprocessor
         self._engine = engine
         self._action_space = action_space
+        self._nb_env = nb_env
 
     @classmethod
     @abc.abstractmethod

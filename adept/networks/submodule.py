@@ -103,8 +103,8 @@ class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
         elif dim == 4:
             return self._to_4d(submodule_output)
 
-    def forward(self, *input, dim=None):
-        submodule_output, internals = self._forward(*input)
+    def forward(self, *input, dim=None, **kwargs):
+        submodule_output, internals = self._forward(*input, **kwargs)
         if dim is None:
             return submodule_output, self._id_internals(internals)
         if dim == 1:
