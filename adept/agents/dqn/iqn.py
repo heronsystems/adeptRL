@@ -152,5 +152,5 @@ class OnlineIQN(OnlineDQN):
         # target quantiles are last dim, broadcast over it
         quantiles = torch.stack(quantiles).unsqueeze(-1)
         dist_mask = torch.abs(quantiles - (diff.detach() < 0).float())
-        return diff.sum(-1).mean(-1)
+        return (huber(diff) * dist_mask).sum(-1).mean(-1)
 
