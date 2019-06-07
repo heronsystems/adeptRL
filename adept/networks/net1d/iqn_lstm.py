@@ -70,7 +70,7 @@ class IQNLSTM(SubModule1D):
         quantiles_embedding = self._arange_embedding.expand(num_samples, batch_size, -1) * quantiles.unsqueeze(-1)
         embedding_input = torch.cos(math.pi * quantiles_embedding).to(xs)
         # sum over embedding dim
-        embedding = F.relu(self.bn_embed(self.embed(embedding_input)))
+        embedding = F.relu(self.bn_embed(self.embed(embedding_input).view(-1, self._nb_hidden)).view(num_samples, -1, self._nb_hidden))
         # embedding shape [quantiles, batch, features]
 
         # combine with lstm output by broadcasting over samples
