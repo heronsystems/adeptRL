@@ -23,6 +23,7 @@ from adept.networks.net1d.submodule_1d import SubModule1D
 
 class IQNLSTM(SubModule1D):
     args = {
+        'lstm_normalize': True,
         'lstm_nb_hidden': 512,
         'nb_embedding': 64
     }
@@ -34,7 +35,7 @@ class IQNLSTM(SubModule1D):
         self._arange_embedding = torch.arange(self._nb_embedding, dtype=torch.float, requires_grad=False)
 
         # learned linear weighting
-        self.embed = Linear(self._nb_embedding, nb_hidden)
+        self.embed = Linear(self._nb_embedding, nb_hidden, bias=not normalize)
         # TODO: normalize linear weighting?
         if normalize:
             self.lstm = LSTMCellLayerNorm(
