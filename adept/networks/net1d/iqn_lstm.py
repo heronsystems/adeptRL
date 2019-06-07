@@ -14,16 +14,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
 import math
-from torch.nn import Linear, LSTMCell
+from torch.nn import Linear, LSTMCell, BatchNorm1d
 import torch.nn.functional as F
 
-from adept.modules import LSTMCellLayerNorm
+from adept.modules import LSTMCellLayerNorm, Identity
 from adept.networks.net1d.submodule_1d import SubModule1D
 
 
 class IQNLSTM(SubModule1D):
     args = {
-        'lstm_normalize': True,
         'lstm_nb_hidden': 512,
         'nb_embedding': 64
     }
@@ -41,10 +40,12 @@ class IQNLSTM(SubModule1D):
             self.lstm = LSTMCellLayerNorm(
                 input_shape[0], nb_hidden
             )
+            self.bn_embed = BatchNorm1d(nb_hidden)
         else:
             self.lstm = LSTMCell(input_shape[0], nb_hidden)
             self.lstm.bias_ih.data.fill_(0)
             self.lstm.bias_hh.data.fill_(0)
+            self.bn_embed = Identity()
 
     @classmethod
     def from_args(cls, args, input_shape, id):
@@ -68,7 +69,7 @@ class IQNLSTM(SubModule1D):
         quantiles_embedding = self._arange_embedding.expand(num_samples, batch_size, -1) * quantiles.unsqueeze(-1)
         embedding_input = torch.cos(math.pi * quantiles_embedding).to(xs)
         # sum over embedding dim
-        embedding = F.relu(self.embed(embedding_input))
+        embedding = F.relu(self.bn_embed(self.embed(embedding_input)))
         # embedding shape [quantiles, batch, features]
 
         # combine with lstm output by broadcasting over samples

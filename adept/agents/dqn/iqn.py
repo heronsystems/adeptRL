@@ -24,7 +24,6 @@ def huber(x, k=1.0):
 
 
 class OnlineIQN(OnlineDQN):
-
     def __init__(
         self,
         network,
