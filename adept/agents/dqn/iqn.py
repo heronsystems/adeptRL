@@ -24,6 +24,41 @@ def huber(x, k=1.0):
 
 
 class OnlineIQN(OnlineDQN):
+
+    def __init__(
+        self,
+        network,
+        device,
+        reward_normalizer,
+        gpu_preprocessor,
+        engine,
+        action_space,
+        nb_env,
+        nb_rollout,
+        discount,
+        target_copy_steps,
+        double_dqn
+    ):
+        super(OnlineDQN, self).__init__(
+            network,
+            device,
+            reward_normalizer,
+            gpu_preprocessor,
+            engine,
+            action_space,
+            nb_env,
+            nb_rollout,
+            discount,
+            target_copy_steps,
+            double_dqn
+        )
+
+        # base dqn doesn't set exp cache
+        self._exp_cache = RolloutCache(
+            nb_rollout, device, reward_normalizer,
+            ['values', 'quantiles']
+        )
+
     def _act_gym(self, obs):
         num_samples = 32
         quantiles = torch.FloatTensor(num_samples, self._nb_env).uniform_(0, 1).to(self.device)
@@ -48,29 +83,14 @@ class OnlineIQN(OnlineDQN):
 
             values.append(self._get_rollout_values(q_vals[key], action, batch_size, num_samples))
 
-        self._write_exp_cache(values, actions)
+        self._write_exp_cache(values, quantiles)
         self.internals = internals
         return actions
 
-    def act_eval(self, obs):
-        self.network.eval()
-        return self._act_eval_gym(obs)
+    def _write_exp_cache(self, values, quantiles):
+        values = torch.cat(values, dim=1)
+        self.exp_cache.write_forward(values=values, quantiles=quantiles.t())
 
-    def _act_eval_gym(self, obs):
-        with torch.no_grad():
-            predictions, internals = self.network(
-                self.gpu_preprocessor(obs, self.device), self.internals, self._num_policy_samples
-            )
-
-            # reduce feature dim, build action_key dim
-            actions = OrderedDict()
-            for key in self._action_keys:
-                # TODO: some amount of egreedy
-                action = self._action_from_q_vals(predictions[key])
-                actions[key] = action.cpu().numpy()
-
-        self.internals = internals
-        return actions
     def _get_qvals_from_pred(self, pred):
         # put quantiles on last dim
         qvals = {}
@@ -85,9 +105,25 @@ class OnlineIQN(OnlineDQN):
     def _action_from_q_vals(self, q_vals):
         return q_vals.mean(2).argmax(dim=-1, keepdim=True)
 
-    def _compute_estimated_values(self, next_obs, internals):
-        # TODO make this general in basedqn
+    def compute_loss(self, rollouts, next_obs):
+        self._possible_update_target()
+
         # estimate value of next state
+        last_values = self._compute_estimated_values(next_obs, self.internals)
+
+        # compute nstep return and advantage over batch
+        batch_values = torch.stack(rollouts.values)
+        value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
+
+        # batched loss
+        value_loss = self._loss_fn(batch_values, value_targets, rollouts.quantiles)
+
+        losses = {'value_loss': value_loss.mean()}
+        metrics = {}
+        return losses, metrics
+
+    def _compute_estimated_values(self, next_obs, internals):
+        # estimate value of next state with same number of samples as policy
         num_samples = 32
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
@@ -109,10 +145,12 @@ class OnlineIQN(OnlineDQN):
             last_values = torch.cat(last_values, dim=1)
         return last_values
 
-    def _loss_fn(self, batch_values, value_targets):
+    def _loss_fn(self, batch_values, value_targets, quantiles):
         # Broadcast temporal difference to compare every combination of quantiles
         # This is formula for loss in the Implicit Quantile Networks paper
         diff = value_targets.unsqueeze(3) - batch_values.unsqueeze(2)
-        # dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
+        # target quantiles are last dim, broadcast over it
+        quantiles = torch.stack(quantiles).unsqueeze(-1)
+        dist_mask = torch.abs(quantiles - (diff.detach() < 0).float())
         return diff.sum(-1).mean(-1)
 
