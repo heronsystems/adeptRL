@@ -258,3 +258,56 @@ class QRDQN(DQN):
 
         return torch.cat(qvals, dim=1)
 
+
+# Dueling
+class OnlineQRDDQN(OnlineQRDQN):
+    @staticmethod
+    def output_space(action_space, args):
+        head_dict = {}
+        for k, shape in action_space.items():
+            head_dict[k] = (shape[0] * args.num_atoms, )
+        head_dict['value'] = (args.num_atoms, )
+        return head_dict
+
+    def _get_qvals_from_pred(self, predictions):
+        pred = {}
+        for k in self._action_keys:
+            v = predictions[k]
+            adv = v.view(v.shape[0], -1, self.num_atoms)
+            norm_adv = adv - adv.mean(-1, keepdim=True)
+            pred[k] = norm_adv + predictions['value'].unsqueeze(1)
+        return pred
+
+
+# copied, add _get_qvals_from_pred_sampled
+class QRDDQN(QRDQN):
+    @staticmethod
+    def output_space(action_space, args):
+        head_dict = {}
+        for k, shape in action_space.items():
+            head_dict[k] = (shape[0] * args.num_atoms, )
+        head_dict['value'] = (args.num_atoms, )
+        return head_dict
+
+    def _get_qvals_from_pred(self, predictions):
+        pred = {}
+        for k in self._action_keys:
+            v = predictions[k]
+            adv = v.view(v.shape[0], -1, self.num_atoms)
+            norm_adv = adv - adv.mean(-1, keepdim=True)
+            pred[k] = norm_adv + predictions['value'].unsqueeze(1)
+        return pred
+
+    def _get_qvals_from_pred_sampled(self, predictions, actions):
+        qvals = []
+        # TODO support multi-dimensional action spaces?
+        for key in self._action_keys:
+            vals = predictions[key]
+            vals = vals.view(vals.shape[0], -1, self.num_atoms)
+            norm_adv = vals - vals.mean(-1, keepdim=True)
+            true_val = norm_adv + predictions['value'].unsqueeze(1)
+            action_select = actions[key].unsqueeze(-1).unsqueeze(-1).expand(-1, 1, self.num_atoms)
+            qvals.append(true_val.gather(1, action_select).squeeze(1))
+
+        return torch.cat(qvals, dim=1)
+
