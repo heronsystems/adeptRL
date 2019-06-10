@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
 
-from adept.expcaches.replay import PrioritizedExperienceReplay
+from adept.expcaches.replay import SequencePrioritizedExperienceReplay
 from adept.agents.dqn import BaseDQN
 from adept.utils import listd_to_dlist
 
@@ -60,7 +60,7 @@ class DQN(BaseDQN):
         self.exp_size = int(exp_size / nb_env)
         self.exp_min_size = int(exp_min_size / nb_env)
         self.exp_update_rate = exp_update_rate
-        self._exp_cache = PrioritizedExperienceReplay(
+        self._exp_cache = SequencePrioritizedExperienceReplay(
             0.9, self.exp_size, self.exp_min_size, nb_rollout, self.exp_update_rate, reward_normalizer, ['actions', 'internals']
         )
 

@@ -241,3 +241,94 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         indexes = (np.arange(index, end_index) % self._maxsize).astype(int)
         return indexes
 
+
+class SequencePrioritizedExperienceReplay(PrioritizedExperienceReplay):
+    def __init__(self, alpha, size, min_size, nb_rollout, update_rate, reward_normalizer, keys):
+        size_adj = size // nb_rollout
+        min_size_adj = min_size // nb_rollout
+        super(SequencePrioritizedExperienceReplay, self).__init__(alpha, size_adj, min_size_adj, nb_rollout, update_rate, reward_normalizer, keys)
+        self._current_seq = []
+        self._num_seen = 0
+        self._store_next_write = False
+        self._last_forward = None
+
+    def write_forward(self, **kwargs):
+        self._last_forward = kwargs
+
+    def write_env(self, obs, rewards, terminals, infos):
+        self._num_seen += 1
+        if self._store_next_write:
+            # move current seq cache to storage
+            self._store_current_seq(obs)
+            self._store_next_write = False
+
+        # forward already written, add env info
+        dict_at_ind = self._last_forward
+        self._last_forward = None
+
+        rewards = torch.tensor(
+            [self.reward_normalizer(reward) for reward in rewards]
+        )
+        terminals = (
+            1. - torch.from_numpy(np.array(terminals, dtype=np.float32))
+        )
+
+        dict_at_ind['states'] = obs
+        dict_at_ind['rewards'] = rewards
+        dict_at_ind['terminals'] = terminals
+
+        self._current_seq.append(dict_at_ind)
+        if len(self._current_seq) == self.nb_rollout:
+            # set store flag
+            self._store_next_write = True
+
+    def _sample(self, beta=0.6):
+        # TODO: beta from agent, support burn in
+        assert beta > 0
+
+        # TODO: unbind envs and sample batchsize
+        index = self._sample_proportional()
+
+        self._last_sample_idx = index
+        sample_exp = self._storage[index]
+        weights = np.ones(self.nb_rollout)
+        return sample_exp['rollout'], sample_exp['next_obs'], weights
+
+    def update_priorities(self, priorities):
+        """Update priority of sampled transitions.
+        Sets priority of transition of last sample
+        Parameters
+        ----------
+        priorities: float
+            Priority corresponding to
+            transitions at the sampled index.
+        """
+        priority = priorities.mean()
+        self._it_sum[self._last_sample_idx] = priority ** self._alpha
+        self._it_min[self._last_sample_idx] = priority ** self._alpha
+        self._max_priority = max(self._max_priority, priority)
+
+    def is_ready(self):
+        if self._full or len(self) > self._minsize:
+            return self._num_seen % self._update_rate == 0
+        return False
+
+    def _store_current_seq(self, next_obs):
+        # move from sequence cache to long term storage
+        if not self._full and self._next_idx >= len(self._storage):
+            self._storage.append({'rollout': self._current_seq, 'next_obs': next_obs})
+        else:
+            self._storage[self._next_idx] = {'rollout': self._current_seq, 'next_obs': next_obs}
+
+        # set priority
+        self._it_sum[self._next_idx] = self._max_priority ** self._alpha
+        self._it_min[self._next_idx] = self._max_priority ** self._alpha
+
+        # increment next idx
+        self._next_idx = int((self._next_idx + 1) % self._maxsize)
+        # when index wraps exp is full
+        if self._next_idx == 0:
+            self._full = True
+
+        self._current_seq = []
+
