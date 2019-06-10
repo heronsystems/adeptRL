@@ -274,7 +274,7 @@ class OnlineQRDDQN(OnlineQRDQN):
         for k in self._action_keys:
             v = predictions[k]
             adv = v.view(v.shape[0], -1, self.num_atoms)
-            norm_adv = adv - adv.mean(-1, keepdim=True)
+            norm_adv = adv - adv.mean(1, keepdim=True)
             pred[k] = norm_adv + predictions['value'].unsqueeze(1)
         return pred
 
@@ -304,7 +304,7 @@ class QRDDQN(QRDQN):
         for key in self._action_keys:
             vals = predictions[key]
             vals = vals.view(vals.shape[0], -1, self.num_atoms)
-            norm_adv = vals - vals.mean(-1, keepdim=True)
+            norm_adv = vals - vals.mean(1, keepdim=True)
             true_val = norm_adv + predictions['value'].unsqueeze(1)
             action_select = actions[key].unsqueeze(-1).unsqueeze(-1).expand(-1, 1, self.num_atoms)
             qvals.append(true_val.gather(1, action_select).squeeze(1))
