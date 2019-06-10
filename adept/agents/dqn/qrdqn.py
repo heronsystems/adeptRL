@@ -294,7 +294,7 @@ class QRDDQN(QRDQN):
         for k in self._action_keys:
             v = predictions[k]
             adv = v.view(v.shape[0], -1, self.num_atoms)
-            norm_adv = adv - adv.mean(-1, keepdim=True)
+            norm_adv = adv - adv.mean(1, keepdim=True)
             pred[k] = norm_adv + predictions['value'].unsqueeze(1)
         return pred
 
