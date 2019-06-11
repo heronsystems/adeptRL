@@ -35,10 +35,10 @@ class Linear(SubModule1D):
 
         bias = not normalize
         self.linear = torch.nn.Linear(
-            nb_input_channel, self._nb_output_channel, bias=bias
+            input_shape[0], self._nb_output_channel, bias=bias
         )
         if normalize:
-            self.bn_linear = BatchNorm1d(nb_output_channel)
+            self.bn_linear = BatchNorm1d(input_shape[0])
         else:
             self.bn_linear = Identity()
 

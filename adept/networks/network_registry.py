@@ -73,6 +73,9 @@ class NetworkRegistry:
         for name, submod_cls in net_4d_cls_by_name.items():
             self.register_submodule(submod_cls)
 
+        from adept.networks.custom import I2A
+        self.register_custom_net(I2A)
+
     def register_custom_net(self, net_cls):
         """
         Add your custom network.

@@ -189,7 +189,11 @@ class WritesSummaries(abc.ABC):
             for l_name, loss in loss_dict.items():
                 writer.add_scalar('loss/' + l_name, loss.item(), step_count)
             for m_name, metric in metric_dict.items():
-                writer.add_scalar('metric/' + m_name, metric.item(), step_count)
+                if len(metric.shape) <= 1:
+                    writer.add_scalar('metric/' + m_name, metric.item(), step_count)
+                # image data
+                if len(metric.shape) == 3:
+                    writer.add_image(m_name, metric, step_count)
             for p_name, param in self.network.named_parameters():
                 p_name = p_name.replace('.', '/')
                 writer.add_scalar(p_name, torch.norm(param).item(), step_count)
