@@ -66,9 +66,9 @@ class I2A(OnlineQRDDQN):
         # next states as categorical label
         states_list = listd_to_dlist(rollouts.states)[self.network._obs_key]
         next_states = states_list[1:] + [next_obs[self.network._obs_key]]
-        next_states = torch.stack(next_states)
+        next_states = torch.stack(next_states).to(self.device).long()
         # next_states is nb_rollout * nb_env * 84 * 84
-        next_states_flat = next_states.view(-1).to(self.device).long()
+        next_states_flat = next_states.view(-1)
 
         # convert predictions to [nb_rollout * nb_env * 84 * 84, 255]
         predicted_next_obs_flat = predicted_next_obs.permute(0, 2, 3, 1).contiguous()
@@ -95,7 +95,7 @@ class I2A(OnlineQRDDQN):
 
         # predicted_next_obs to image
         predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 255, 84, 84)[:5, 0].argmax(dim=1, keepdim=True)
-        autoencoder_img = torch.cat([predicted_next_obs, next_states[:5, 0].long()], 0)
+        autoencoder_img = torch.cat([predicted_next_obs, next_states[:5, 0]], 0)
         autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
         losses = {'value_loss': value_loss.mean(), 'autoencoder_loss': autoencoder_loss.mean()}
         metrics = {'autoencoder_img': autoencoder_img}
