@@ -35,6 +35,7 @@ class I2A(NetworkModule):
         self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
         conv_out_shape = np.prod(self.conv_stack.output_shape())
         self.lstm = LSTM((conv_out_shape, ), 'lstm', True, 512)
+        self.auto_lstm = LSTM((conv_out_shape, ), 'autolstm', True, 512)
         self.pol_outputs = nn.ModuleDict(
             {k: nn.Linear(512, v[0]) for k, v in output_space.items()}
         )
@@ -75,7 +76,10 @@ class I2A(NetworkModule):
 
         :return: Dict[InternalKey, torch.Tensor (ND)]
         """
-        return self.lstm.new_internals(device)
+        return {
+            **self.lstm.new_internals(device),
+            **self.auto_lstm.new_internals(device)
+        }
 
     def forward(self, observation, internals, ret_lstm=False):
         """
@@ -92,11 +96,13 @@ class I2A(NetworkModule):
         conv_out, _ = self.conv_stack(obs, {})
         conv_flat = conv_out.view(*conv_out.shape[0:-3], -1)
         hx, cx = self.lstm(conv_flat, internals)
+        auto_hx, auto_cx = self.auto_lstm(conv_flat, internals)
 
         pol_outs = {k: self.pol_outputs[k](hx) for k in self.pol_outputs.keys()}
         if ret_lstm:
-            pol_outs['lstm_out'] = hx
-        return pol_outs, cx
+            pol_outs['lstm_out'] = auto_hx
+
+        return pol_outs, self._merge_internals([cx, auto_cx])
 
     def pred_next(self, lstm_hidden, actions):
         # view lstm_hidden as conv (512 == 32x4x4)
@@ -108,6 +114,13 @@ class I2A(NetworkModule):
 
         predicted_next_obs = self.upsample_stack(cat_lstm_act)
         return predicted_next_obs
+
+    def _merge_internals(self, internals):
+        merged_internals = {}
+        for internal in internals:
+            for k, v in internal.items():
+                merged_internals[k] = v
+        return merged_internals
 
 
 class PixelShuffleFourConv(nn.Module):
