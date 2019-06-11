@@ -71,8 +71,8 @@ class I2A(OnlineQRDDQN):
         next_states_flat = next_states.view(-1)
 
         # convert predictions to [nb_rollout * nb_env * 84 * 84, 255]
-        predicted_next_obs_flat = predicted_next_obs.permute(0, 2, 3, 1).contiguous()
-        predicted_next_obs_flat = predicted_next_obs.view(-1, 255)
+        predicted_next_obs_cont = predicted_next_obs.permute(0, 2, 3, 1).contiguous()
+        predicted_next_obs_flat = predicted_next_obs_cont.view(-1, 255)
         autoencoder_loss = F.cross_entropy(predicted_next_obs_flat, next_states_flat, reduction='none')
         # don't predict next state for terminal 
         terminal_mask = torch.stack(rollouts.terminals).unsqueeze(-1)
