@@ -59,9 +59,10 @@ class I2A(OnlineQRDDQN):
 
     def compute_loss(self, rollouts, next_obs):
         # forward of upsample
-        lstm_outs = torch.stack(rollouts.lstm_out).view(self.nb_rollout * self._nb_env, -1)
+        encoder_outs = torch.stack(rollouts.lstm_out)
+        encoder_outs = encoder_outs.view(self.nb_rollout * self._nb_env, *encoder_outs.shape[2:])
         actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
-        predicted_next_obs = self.network.pred_next(lstm_outs, actions)
+        predicted_next_obs = self.network.pred_next(encoder_outs, actions)
         predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
         # autoencoder loss
         # next states as categorical label

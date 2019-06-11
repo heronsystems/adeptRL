@@ -35,14 +35,14 @@ class I2A(NetworkModule):
         self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
         conv_out_shape = np.prod(self.conv_stack.output_shape())
         self.lstm = LSTM((conv_out_shape, ), 'lstm', True, 512)
-        self.auto_lstm = LSTM((conv_out_shape, ), 'autolstm', True, 512)
+        self.auto_lstm = LSTM((conv_out_shape, ), 'autolstm', True, 800)
         self.pol_outputs = nn.ModuleDict(
             {k: nn.Linear(512, v[0]) for k, v in output_space.items()}
         )
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
-        # upsample_stack needs to make a 1x84x84 from 32x4x4
-        self.upsample_stack = PixelShuffleFourConv(32+self._nb_action)
+        # upsample_stack needs to make a 1x84x84 from 64x5x5
+        self.upsample_stack = PixelShuffleFourConv(64+self._nb_action)
 
     @classmethod
     def from_args(
@@ -100,17 +100,15 @@ class I2A(NetworkModule):
 
         pol_outs = {k: self.pol_outputs[k](hx) for k in self.pol_outputs.keys()}
         if ret_lstm:
-            pol_outs['lstm_out'] = auto_hx
+            pol_outs['lstm_out'] = torch.cat([conv_out, auto_hx.view(-1, 32, 5, 5)], dim=1)
 
         return pol_outs, self._merge_internals([cx, auto_cx])
 
-    def pred_next(self, lstm_hidden, actions):
-        # view lstm_hidden as conv (512 == 32x4x4)
-        lstm_reshaped = lstm_hidden.view(-1, 32, 4, 4)
+    def pred_next(self, encoder, actions):
         # tile actions
-        actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 4, 4)
+        actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 5, 5)
         # cat
-        cat_lstm_act = torch.cat([lstm_reshaped, actions_tiled], dim=1)
+        cat_lstm_act = torch.cat([encoder, actions_tiled], dim=1)
 
         predicted_next_obs = self.upsample_stack(cat_lstm_act)
         return predicted_next_obs
@@ -123,20 +121,29 @@ class I2A(NetworkModule):
         return merged_internals
 
 
+def pixel_norm(xs):
+    return xs * torch.rsqrt(torch.mean(xs ** 2, dim=1, keepdim=True) + 1e-8)
+
+
 class PixelShuffleFourConv(nn.Module):
-    def __init__(self, in_channel):
+    def __init__(self, in_channel, batch_norm=False):
         super().__init__()
         self._out_shape = None
         self.conv1 = ConvTranspose2d(in_channel, 32*4, 5, bias=False)
-        self.conv2 = ConvTranspose2d(32, 32*4, 5, bias=False)
+        self.conv2 = ConvTranspose2d(32, 32*4, 3, bias=False)
         self.conv3 = ConvTranspose2d(32, 32*4, 3, bias=False)
         self.conv4 = ConvTranspose2d(32, 1, 3, padding=1, bias=True)
         # if cross entropy
         # self.conv4 = ConvTranspose2d(32, 255, 7, bias=True)
 
-        self.bn1 = BatchNorm2d(32*4)
-        self.bn2 = BatchNorm2d(32*4)
-        self.bn3 = BatchNorm2d(32*4)
+        if not batch_norm:
+            self.n1 = pixel_norm
+            self.n2 = pixel_norm
+            self.n3 = pixel_norm
+        else:
+            self.n1 = BatchNorm2d(32*4)
+            self.n2 = BatchNorm2d(32*4)
+            self.n3 = BatchNorm2d(32*4)
 
         relu_gain = init.calculate_gain('relu')
         self.conv1.weight.data.mul_(relu_gain)
@@ -144,37 +151,9 @@ class PixelShuffleFourConv(nn.Module):
         self.conv3.weight.data.mul_(relu_gain)
 
     def forward(self, xs):
-        xs = F.relu(F.pixel_shuffle(self.bn1(self.conv1(xs)), 2))
-        xs = F.relu(F.pixel_shuffle(self.bn2(self.conv2(xs)), 2))
-        xs = F.relu(F.pixel_shuffle(self.bn3(self.conv3(xs)), 2))
-        xs = self.conv4(xs)
-        return xs
-
-
-class UpsampleFourConv(nn.Module):
-    def __init__(self, in_channel):
-        super().__init__()
-        self._out_shape = None
-        self.conv1 = ConvTranspose2d(in_channel, 32, 7, bias=False)
-        self.conv2 = ConvTranspose2d(32, 32, 5, bias=False)
-        self.conv3 = ConvTranspose2d(32, 32, 3, bias=False)
-        self.conv4 = ConvTranspose2d(32, 1, 3, bias=True)
-        # if cross entropy
-        # self.conv4 = ConvTranspose2d(32, 255, 7, bias=True)
-
-        self.bn1 = BatchNorm2d(32)
-        self.bn2 = BatchNorm2d(32)
-        self.bn3 = BatchNorm2d(32)
-
-        relu_gain = init.calculate_gain('relu')
-        self.conv1.weight.data.mul_(relu_gain)
-        self.conv2.weight.data.mul_(relu_gain)
-        self.conv3.weight.data.mul_(relu_gain)
-
-    def forward(self, xs):
-        xs = F.relu(F.interpolate(self.bn1(self.conv1(xs)), scale_factor=1.75, mode='bilinear'))
-        xs = F.relu(F.interpolate(self.bn2(self.conv2(xs)), scale_factor=2, mode='bilinear'))
-        xs = F.relu(F.interpolate(self.bn3(self.conv3(xs)), size=(82, 82), mode='bilinear'))
+        xs = F.relu(F.pixel_shuffle(self.n1(self.conv1(xs)), 2))
+        xs = F.relu(F.pixel_shuffle(self.n2(self.conv2(xs)), 2))
+        xs = F.relu(F.pixel_shuffle(self.n3(self.conv3(xs)), 2))
         xs = self.conv4(xs)
         return xs
 
