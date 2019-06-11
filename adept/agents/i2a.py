@@ -51,8 +51,8 @@ class I2A(OnlineQRDDQN):
             values.append(self._get_rollout_values(q_vals[key], action, batch_size))
 
         values = torch.cat(values, dim=1)
-        one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0])
-        one_hot_action = one_hot_action.scatter_(1, action, 1).to(self.device)
+        one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
+        one_hot_action = one_hot_action.scatter_(1, action, 1)
         self.exp_cache.write_forward(values=values, actions=one_hot_action, lstm_out=lstm_output)
         self.internals = internals
         return actions

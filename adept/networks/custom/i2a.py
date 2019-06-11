@@ -35,7 +35,9 @@ class I2A(NetworkModule):
         self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
         conv_out_shape = np.prod(self.conv_stack.output_shape())
         self.lstm = LSTM((conv_out_shape, ), 'lstm', True, 512)
-        self.pol_outputs = {k: nn.Linear(512, v[0]) for k, v in output_space.items()}
+        self.pol_outputs = nn.ModuleDict(
+            {k: nn.Linear(512, v[0]) for k, v in output_space.items()}
+        )
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
         # upsample_stack needs to make a 1x84x84 from 32x4x4
