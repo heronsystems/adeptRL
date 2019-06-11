@@ -70,7 +70,7 @@ class I2A(OnlineQRDDQN):
 
         # mse loss
         next_states = torch.stack(next_states).to(self.device).float() / 255.0
-        autoencoder_loss = 0.5 * torch.mean((predicted_next_obs.view(self.nb_rollout, self._nb_env, -1) - next_states.view(self.nb_rollout, self._nb_env, -1)) ** 2, dim=-1 )
+        autoencoder_loss = torch.mean(torch.abs(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1) - next_states.view(self.nb_rollout, self._nb_env, -1)), dim=-1)
         terminal_mask = torch.stack(rollouts.terminals)
         autoencoder_loss = autoencoder_loss * terminal_mask
 
