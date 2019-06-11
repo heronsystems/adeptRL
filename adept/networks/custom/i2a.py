@@ -116,7 +116,9 @@ class UpsampleFourConv(nn.Module):
         self.conv1 = ConvTranspose2d(in_channel, 32, 3, bias=False)
         self.conv2 = ConvTranspose2d(32, 32, 3, bias=False)
         self.conv3 = ConvTranspose2d(32, 32, 3, bias=False)
-        self.conv4 = ConvTranspose2d(32, 255, 7, bias=True)
+        self.conv4 = ConvTranspose2d(32, 1, 7, bias=True)
+        # if cross entropy
+        # self.conv4 = ConvTranspose2d(32, 255, 7, bias=True)
 
         self.bn1 = BatchNorm2d(32)
         self.bn2 = BatchNorm2d(32)
@@ -131,6 +133,6 @@ class UpsampleFourConv(nn.Module):
         xs = F.relu(F.interpolate(self.bn1(self.conv1(xs)), scale_factor=2, mode='bilinear'))
         xs = F.relu(F.interpolate(self.bn2(self.conv2(xs)), scale_factor=2, mode='bilinear'))
         xs = F.relu(F.interpolate(self.bn3(self.conv3(xs)), size=(78, 78), mode='bilinear'))
-        xs = F.softmax(self.conv4(xs), dim=1)
+        xs = self.conv4(xs)
         return xs
 

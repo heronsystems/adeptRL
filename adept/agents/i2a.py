@@ -62,21 +62,30 @@ class I2A(OnlineQRDDQN):
         lstm_outs = torch.stack(rollouts.lstm_out).view(self.nb_rollout * self._nb_env, -1)
         actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
         predicted_next_obs = self.network.pred_next(lstm_outs, actions)
+        predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
         # autoencoder loss
         # next states as categorical label
         states_list = listd_to_dlist(rollouts.states)[self.network._obs_key]
         next_states = states_list[1:] + [next_obs[self.network._obs_key]]
-        next_states = torch.stack(next_states).to(self.device).long()
-        # next_states is nb_rollout * nb_env * 84 * 84
-        next_states_flat = next_states.view(-1)
 
-        # convert predictions to [nb_rollout * nb_env * 84 * 84, 255]
-        predicted_next_obs_cont = predicted_next_obs.permute(0, 2, 3, 1).contiguous()
-        predicted_next_obs_flat = predicted_next_obs_cont.view(-1, 255)
-        autoencoder_loss = F.cross_entropy(predicted_next_obs_flat, next_states_flat, reduction='none')
-        # don't predict next state for terminal 
-        terminal_mask = torch.stack(rollouts.terminals).unsqueeze(-1)
-        autoencoder_loss = autoencoder_loss.view(self.nb_rollout, self._nb_env, -1) * terminal_mask
+        # mse loss
+        next_states = torch.stack(next_states).to(self.device).float() / 255.0
+        autoencoder_loss = 0.5 * torch.mean((predicted_next_obs.view(self.nb_rollout, self._nb_env, -1) - next_states.view(self.nb_rollout, self._nb_env, -1)) ** 2, dim=-1 )
+        terminal_mask = torch.stack(rollouts.terminals)
+        autoencoder_loss = autoencoder_loss * terminal_mask
+
+        # cross_entropy loss
+        # next_states = torch.stack(next_states).to(self.device).long()
+        # # next_states is nb_rollout * nb_env * 84 * 84
+        # next_states_flat = next_states.view(-1)
+
+        # # convert predictions to [nb_rollout * nb_env * 84 * 84, 255]
+        # predicted_next_obs_cont = predicted_next_obs.permute(0, 2, 3, 1).contiguous()
+        # predicted_next_obs_flat = predicted_next_obs_cont.view(-1, 255)
+        # autoencoder_loss = F.cross_entropy(predicted_next_obs_flat, next_states_flat, reduction='none')
+        # # don't predict next state for terminal 
+        # terminal_mask = torch.stack(rollouts.terminals).unsqueeze(-1)
+        # autoencoder_loss = autoencoder_loss.view(self.nb_rollout, self._nb_env, -1) * terminal_mask
 
         # q value loss
         self._possible_update_target()
@@ -94,8 +103,7 @@ class I2A(OnlineQRDDQN):
         # policy distil loss
 
         # predicted_next_obs to image
-        predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 255, 84, 84)[:5, 0].argmax(dim=1, keepdim=True)
-        autoencoder_img = torch.cat([predicted_next_obs, next_states[:5, 0]], 0)
+        autoencoder_img = torch.cat([predicted_next_obs[:5, 0], next_states[:5, 0]], 0)
         autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
         losses = {'value_loss': value_loss.mean(), 'autoencoder_loss': autoencoder_loss.mean()}
         metrics = {'autoencoder_img': autoencoder_img}
