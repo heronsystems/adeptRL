@@ -136,7 +136,7 @@ class I2A(OnlineQRDDQN):
 
         # predicted_next_obs to image
         autoencoder_img = torch.cat([predicted_next_obs[:, 0], next_states[:, 0]], 0)
-        autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
+        autoencoder_img = vutils.make_grid(autoencoder_img, nrow=predicted_next_obs.shape[0])
         losses = {
             'value_loss': value_loss.mean(),
             'autoencoder_loss': autoencoder_loss.mean(),
