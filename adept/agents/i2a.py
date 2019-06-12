@@ -28,6 +28,7 @@ class I2A(OnlineQRDDQN):
         super().__init__(*args, **kwargs)
         self.exp_cache['actions'] = []
         self.exp_cache['lstm_out'] = []
+        self.exp_cache['internals'] = []
         self.ssim = SSIM(1, self.device)
 
     def _act_gym(self, obs):
@@ -55,7 +56,7 @@ class I2A(OnlineQRDDQN):
         values = torch.cat(values, dim=1)
         one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
         one_hot_action = one_hot_action.scatter_(1, action, 1)
-        self.exp_cache.write_forward(values=values, actions=one_hot_action, lstm_out=lstm_output)
+        self.exp_cache.write_forward(values=values, actions=one_hot_action, lstm_out=lstm_output, internals=self.internals)
         self.internals = internals
         return actions
 
@@ -72,8 +73,9 @@ class I2A(OnlineQRDDQN):
 
         # predict_sequence
         first_state = rollouts.states[0][self.network._obs_key].to(self.device).float() / 255.0
-        max_seq = math.ceil(self._act_count / 100000)
-        predicted_next_obs, predicted_reward = self.network.pred_next(first_state, actions, max_seq)
+        max_seq = math.ceil(self._act_count / (1000 / self._nb_env))
+        max_seq = math.ceil(self._act_count / 100)
+        predicted_next_obs, predicted_reward = self.network.pred_next(first_state, rollouts.internals[0], actions, terminal_mask, max_seq)
         next_states = next_states[0:max_seq]
         terminal_mask = terminal_mask[0:max_seq]
 
@@ -102,10 +104,10 @@ class I2A(OnlineQRDDQN):
         # predicted_reward = self._inverse_scale(predicted_reward.view(self.nb_rollout, self._nb_env))
         # reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
         # mae loss
-        # autoencoder_mse_loss = F.l1_loss(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1),
-                                         # next_states.view(self.nb_rollout, self._nb_env, -1), reduction='none')
-        # autoencoder_mse_loss = autoencoder_mse_loss.mean(-1) * terminal_mask
-        # autoencoder_loss = autoencoder_loss * 0.9 + autoencoder_mse_loss * 0.1
+        autoencoder_mse_loss = F.l1_loss(predicted_next_obs.view(-1, *predicted_next_obs.shape[2:]),
+                                         next_states.view(-1, *next_states.shape[2:]), reduction='none').mean(-1).mean(-1)
+        autoencoder_mse_loss = autoencoder_mse_loss.view(-1, self._nb_env) * terminal_mask
+        autoencoder_loss = autoencoder_loss * 0.9 + autoencoder_mse_loss * 0.1
 
         # cross_entropy loss
         # next_states = torch.stack(next_states).to(self.device).long()
