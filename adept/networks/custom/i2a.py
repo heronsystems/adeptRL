@@ -41,6 +41,8 @@ class I2A(NetworkModule):
         )
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
+        # reward prediciton from lstm + action one hot
+        self.reward_pred = nn.Linear(1600+self._nb_action, 1)
         # upsample_stack needs to make a 1x84x84 from 64x5x5
         self.upsample_stack = PixelShuffleFourConv(64+self._nb_action)
 
@@ -107,11 +109,14 @@ class I2A(NetworkModule):
     def pred_next(self, encoder, actions):
         # tile actions
         actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 5, 5)
-        # cat
+        # cat to upsample
         cat_lstm_act = torch.cat([encoder, actions_tiled], dim=1)
+        # cat to reward pred
+        cat_flat_act = torch.cat([encoder.view(-1, 1600), actions], dim=1)
 
         predicted_next_obs = self.upsample_stack(cat_lstm_act)
-        return predicted_next_obs
+        predicted_next_r = self.reward_pred(cat_flat_act)
+        return predicted_next_obs, predicted_next_r
 
     def _merge_internals(self, internals):
         merged_internals = {}

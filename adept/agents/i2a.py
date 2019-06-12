@@ -64,7 +64,7 @@ class I2A(OnlineQRDDQN):
         encoder_outs = torch.stack(rollouts.lstm_out)
         encoder_outs = encoder_outs.view(self.nb_rollout * self._nb_env, *encoder_outs.shape[2:])
         actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
-        predicted_next_obs = self.network.pred_next(encoder_outs, actions)
+        predicted_next_obs, predicted_reward = self.network.pred_next(encoder_outs, actions)
         predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
         # autoencoder loss
         # next states as categorical label
@@ -77,6 +77,12 @@ class I2A(OnlineQRDDQN):
         autoencoder_loss = 1 - self.ssim(predicted_next_obs.view(-1, *predicted_next_obs.shape[2:]),
                                          next_states.view(-1, *next_states.shape[2:]), reduction='none')
         autoencoder_loss = autoencoder_loss.view(self.nb_rollout, self._nb_env, -1).mean(-1) * terminal_mask
+
+        # reward loss huber TODO: probably classification to see if there is a reward, then another
+        # head to predict the value of it
+        rewards = torch.stack(rollouts.rewards)
+        predicted_reward = self._inverse_scale(predicted_reward.view(self.nb_rollout, self._nb_env))
+        reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
         # mse loss
         # autoencoder_loss = torch.mean(torch.abs(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1) - next_states.view(self.nb_rollout, self._nb_env, -1)), dim=-1)
         # autoencoder_loss = autoencoder_loss * terminal_mask
@@ -112,7 +118,11 @@ class I2A(OnlineQRDDQN):
         # predicted_next_obs to image
         autoencoder_img = torch.cat([predicted_next_obs[:5, 0], next_states[:5, 0]], 0)
         autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
-        losses = {'value_loss': value_loss.mean(), 'autoencoder_loss': autoencoder_loss.mean()}
+        losses = {
+            'value_loss': value_loss.mean(),
+            'autoencoder_loss': autoencoder_loss.mean(),
+            'reward_pred_loss': reward_loss
+        }
         metrics = {'autoencoder_img': autoencoder_img}
         return losses, metrics
 
