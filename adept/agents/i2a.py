@@ -73,8 +73,8 @@ class I2A(OnlineQRDDQN):
 
         # predict_sequence
         first_state = rollouts.states[0][self.network._obs_key].to(self.device).float() / 255.0
-        max_seq = math.ceil(self._act_count / (100000 / self._nb_env))
-        predicted_next_obs, predicted_reward = self.network.pred_next(first_state, rollouts.internals[0], actions, terminal_mask, max_seq)
+        max_seq = min(math.ceil(self._act_count / (200000 / self._nb_env)), 5)
+        predicted_qvals, predicted_next_obs, predicted_reward = self.network.pred_next(first_state, rollouts.internals[0], actions, terminal_mask, max_seq)
         next_states = next_states[0:max_seq]
         terminal_mask = terminal_mask[0:max_seq]
 
@@ -88,25 +88,25 @@ class I2A(OnlineQRDDQN):
         #
 
         # distil policy loss same as qloss but between distil and current policy
-        # distil_loss = self._loss_fn(predicted_qvals, batch_values.detach())
-        # print(distil_loss.shape)
+        distil_loss = self._loss_fn(predicted_qvals, batch_values.detach()[0:max_seq])
 
         # autoencoder loss
         # ssim loss
         autoencoder_loss = 1 - self.ssim(predicted_next_obs.view(-1, *predicted_next_obs.shape[2:]),
                                          next_states.view(-1, *next_states.shape[2:]), reduction='none').mean(-1).mean(-1)
         autoencoder_loss = autoencoder_loss.view(-1, self._nb_env) * terminal_mask
-
-        # reward loss huber TODO: probably classification to see if there is a reward, then another
-        # head to predict the value of it
-        # rewards = torch.stack(rollouts.rewards)
-        # predicted_reward = self._inverse_scale(predicted_reward.view(self.nb_rollout, self._nb_env))
-        # reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
         # mae loss
         autoencoder_mse_loss = F.l1_loss(predicted_next_obs.view(-1, *predicted_next_obs.shape[2:]),
                                          next_states.view(-1, *next_states.shape[2:]), reduction='none').mean(-1).mean(-1)
         autoencoder_mse_loss = autoencoder_mse_loss.view(-1, self._nb_env) * terminal_mask
         autoencoder_loss = autoencoder_loss * 0.9 + autoencoder_mse_loss * 0.1
+        # end autoencoder_loss
+
+        # reward loss huber TODO: probably classification to see if there is a reward, then another
+        # head to predict the value of it
+        rewards = torch.stack(rollouts.rewards)
+        predicted_reward = self._inverse_scale(predicted_reward.view(-1, self._nb_env))
+        reward_loss = F.smooth_l1_loss(predicted_reward, rewards[0:max_seq])
 
         # cross_entropy loss
         # next_states = torch.stack(next_states).to(self.device).long()
@@ -139,7 +139,8 @@ class I2A(OnlineQRDDQN):
         losses = {
             'value_loss': value_loss.mean(),
             'autoencoder_loss': autoencoder_loss.mean(),
-            # 'reward_pred_loss': reward_loss
+            'reward_pred_loss': reward_loss.mean(),
+            'distil_loss': distil_loss.mean()
         }
         metrics = {'autoencoder_img': autoencoder_img}
         return losses, metrics

@@ -47,10 +47,7 @@ class I2A(NetworkModule):
         # upsample_stack needs to make a 1x84x84 from 64x5x5
         self.upsample_stack = PixelShuffleFourConv(64+self._nb_action)
         # distil policy from imagination
-        # self.distil_conv_stack = None
-        # self.distil_pol_outputs = nn.ModuleDict(
-            # {k: nn.Linear(512, v[0]) for k, v in output_space.items()}
-        # )
+        self.distil_pol_outputs = nn.ModuleDict({'Discrete': nn.Linear(800, output_space['Discrete'][0])})
 
     @classmethod
     def from_args(
@@ -122,23 +119,32 @@ class I2A(NetworkModule):
         # cat to reward pred
         cat_flat_act = torch.cat([encoder.view(-1, 1600), actions], dim=1)
 
+        # TODO: this must be sorted in the same way as the agent
+        for k in self.distil_pol_outputs.keys():
+            qvals = self.distil_pol_outputs[k](auto_hx)
+            qvals = qvals.view(actions.shape[0], self._nb_action, -1)
+            action_select = actions.argmax(-1, keepdim=True)
+            action_select = action_select.unsqueeze(-1).expand(action_select.shape[0], 1, qvals.shape[-1]).long()
+            predicted_qvals = qvals.gather(1, action_select).squeeze(1)
+
         predicted_next_obs = self.upsample_stack(cat_lstm_act)
         predicted_next_r = self.reward_pred(cat_flat_act)
-        return predicted_next_obs, predicted_next_r, auto_internals
+        return predicted_qvals, predicted_next_obs, predicted_next_r, auto_internals
 
     def pred_seq(self, state, internals, actions, terminals, max_seq=1):
         # tile actions
         actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, 5, 5)
         # starting from 0 predict the next sequence of states
-        pred_states, pred_reward, internals = self._pred_seq_forward(state, internals, actions[0], actions_tiled[0])
-        pred_states, pred_reward = [pred_states], [pred_reward]
+        pred_qs, pred_states, pred_reward, internals = self._pred_seq_forward(state, internals, actions[0], actions_tiled[0])
+        pred_qs, pred_states, pred_reward = [pred_qs], [pred_states], [pred_reward]
         max_seq = min(max_seq, actions.shape[0])
         for s_ind in range(1, max_seq):
-            pred_s, pred_r, internals = self._pred_seq_forward(pred_states[-1], internals, actions[s_ind], actions_tiled[s_ind])
+            pred_q, pred_s, pred_r, internals = self._pred_seq_forward(pred_states[-1], internals, actions[s_ind], actions_tiled[s_ind])
+            pred_qs.append(pred_q)
             pred_states.append(pred_s)
             pred_reward.append(pred_r)
             # TODO: check for terminal and reset internals
-        return torch.stack(pred_states), torch.stack(pred_reward)
+        return torch.stack(pred_qs), torch.stack(pred_states), torch.stack(pred_reward)
 
     def pred_next(self, encoder, internals, actions, terminals, max_seq=1):
         return self.pred_seq(encoder, internals, actions, terminals, max_seq)
