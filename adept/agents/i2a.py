@@ -60,19 +60,34 @@ class I2A(OnlineQRDDQN):
         return actions
 
     def compute_loss(self, rollouts, next_obs):
-        # forward of upsample
-        encoder_outs = torch.stack(rollouts.lstm_out)
-        encoder_outs = encoder_outs.view(self.nb_rollout * self._nb_env, *encoder_outs.shape[2:])
-        actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
-        predicted_next_obs, predicted_reward = self.network.pred_next(encoder_outs, actions)
-        predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
-        # autoencoder loss
-        # next states as categorical label
+        # qvals from policy
+        batch_values = torch.stack(rollouts.values)
+
+        # states, actions, terminals to tensors
         states_list = listd_to_dlist(rollouts.states)[self.network._obs_key]
         next_states = states_list[1:] + [next_obs[self.network._obs_key]]
         next_states = torch.stack(next_states).to(self.device).float() / 255.0
         terminal_mask = torch.stack(rollouts.terminals)
+        actions = torch.stack(rollouts.actions)
 
+        # predict_sequence
+        first_state = rollouts.states[0][self.network._obs_key].to(self.device).float() / 255.0
+        predicted_next_obs, predicted_reward = self.network.pred_next(first_state, actions)
+
+        # predict next state only
+        # forward of upsample
+        # encoder_outs = torch.stack(rollouts.lstm_out)
+        # encoder_outs = encoder_outs.view(self.nb_rollout * self._nb_env, *encoder_outs.shape[2:])
+        # actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
+        # predicted_qvals, predicted_next_obs, predicted_reward = self.network.pred_next(encoder_outs, actions)
+        # predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
+        #
+
+        # distil policy loss same as qloss but between distil and current policy
+        # distil_loss = self._loss_fn(predicted_qvals, batch_values.detach())
+        # print(distil_loss.shape)
+
+        # autoencoder loss
         # ssim loss
         autoencoder_loss = 1 - self.ssim(predicted_next_obs.view(-1, *predicted_next_obs.shape[2:]),
                                          next_states.view(-1, *next_states.shape[2:]), reduction='none')
@@ -84,10 +99,10 @@ class I2A(OnlineQRDDQN):
         predicted_reward = self._inverse_scale(predicted_reward.view(self.nb_rollout, self._nb_env))
         reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
         # mae loss
-        autoencoder_mse_loss = F.l1_loss(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1),
-                                         next_states.view(self.nb_rollout, self._nb_env, -1), reduction='none')
-        autoencoder_mse_loss = autoencoder_mse_loss.mean(-1) * terminal_mask
-        autoencoder_loss = autoencoder_loss * 0.9 + autoencoder_mse_loss * 0.1
+        # autoencoder_mse_loss = F.l1_loss(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1),
+                                         # next_states.view(self.nb_rollout, self._nb_env, -1), reduction='none')
+        # autoencoder_mse_loss = autoencoder_mse_loss.mean(-1) * terminal_mask
+        # autoencoder_loss = autoencoder_loss * 0.9 + autoencoder_mse_loss * 0.1
 
         # cross_entropy loss
         # next_states = torch.stack(next_states).to(self.device).long()
@@ -109,16 +124,13 @@ class I2A(OnlineQRDDQN):
         last_values = self._compute_estimated_values(next_obs, self.internals)
 
         # compute nstep return and advantage over batch
-        batch_values = torch.stack(rollouts.values)
         value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
 
         # batched q loss
         value_loss = self._loss_fn(batch_values, value_targets)
 
-        # policy distil loss
-
         # predicted_next_obs to image
-        autoencoder_img = torch.cat([predicted_next_obs[:5, 0], next_states[:5, 0]], 0)
+        autoencoder_img = torch.cat([predicted_next_obs[:, 0], next_states[:, 0]], 0)
         autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
         losses = {
             'value_loss': value_loss.mean(),

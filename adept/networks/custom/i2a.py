@@ -15,6 +15,7 @@
 import numpy as np
 
 
+from adept.utils import listd_to_dlist
 from adept.networks import NetworkModule
 from adept.networks.net3d.four_conv import FourConv
 from adept.networks.net1d.lstm import LSTM
@@ -45,6 +46,11 @@ class I2A(NetworkModule):
         self.reward_pred = nn.Linear(1600+self._nb_action, 1)
         # upsample_stack needs to make a 1x84x84 from 64x5x5
         self.upsample_stack = PixelShuffleFourConv(64+self._nb_action)
+        # distil policy from imagination
+        # self.distil_conv_stack = None
+        # self.distil_pol_outputs = nn.ModuleDict(
+            # {k: nn.Linear(512, v[0]) for k, v in output_space.items()}
+        # )
 
     @classmethod
     def from_args(
@@ -97,16 +103,44 @@ class I2A(NetworkModule):
         obs = observation[self._obs_key]
         conv_out, _ = self.conv_stack(obs, {})
         conv_flat = conv_out.view(*conv_out.shape[0:-3], -1)
-        hx, cx = self.lstm(conv_flat, internals)
-        auto_hx, auto_cx = self.auto_lstm(conv_flat, internals)
+        hx, lstm_internals = self.lstm(conv_flat, internals)
+        auto_hx, auto_internals = self.auto_lstm(conv_flat, internals)
 
         pol_outs = {k: self.pol_outputs[k](hx) for k in self.pol_outputs.keys()}
         if ret_lstm:
             pol_outs['lstm_out'] = torch.cat([conv_out, auto_hx.view(-1, 32, 5, 5)], dim=1)
 
-        return pol_outs, self._merge_internals([cx, auto_cx])
+        return pol_outs, self._merge_internals([lstm_internals, auto_internals])
+
+    def _pred_seq_forward(self, state, internals, actions, actions_tiled):
+        conv_out, _ = self.conv_stack(state, {})
+        conv_flat = conv_out.view(*conv_out.shape[0:-3], -1)
+        auto_hx, auto_internals = self.auto_lstm(conv_flat, internals)
+        encoder = torch.cat([conv_out, auto_hx.view(-1, 32, 5, 5)], dim=1)
+        # cat to upsample
+        cat_lstm_act = torch.cat([encoder, actions_tiled], dim=1)
+        # cat to reward pred
+        cat_flat_act = torch.cat([encoder.view(-1, 1600), actions], dim=1)
+
+        predicted_next_obs = self.upsample_stack(cat_lstm_act)
+        predicted_next_r = self.reward_pred(cat_flat_act)
+        return predicted_next_obs, predicted_next_r, auto_internals
+
+    def pred_seq(self, state, actions):
+        # tile actions
+        actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, 5, 5)
+        # starting from 0 predict the next sequence of states
+        internals = listd_to_dlist([self.auto_lstm.new_internals(state.device) for i in range(state.shape[0])])
+        pred_states, pred_reward, internals = self._pred_seq_forward(state, internals, actions[0], actions_tiled[0])
+        pred_states, pred_reward = [pred_states], [pred_reward]
+        for s_ind in range(1, actions.shape[0]):
+            pred_s, pred_r, internals = self._pred_seq_forward(pred_states[-1], internals, actions[s_ind], actions_tiled[s_ind])
+            pred_states.append(pred_s)
+            pred_reward.append(pred_r)
+        return torch.stack(pred_states), torch.stack(pred_reward)
 
     def pred_next(self, encoder, actions):
+        return self.pred_seq(encoder, actions)
         # tile actions
         actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 5, 5)
         # cat to upsample
@@ -159,6 +193,6 @@ class PixelShuffleFourConv(nn.Module):
         xs = F.relu(F.pixel_shuffle(self.n1(self.conv1(xs)), 2))
         xs = F.relu(F.pixel_shuffle(self.n2(self.conv2(xs)), 2))
         xs = F.relu(F.pixel_shuffle(self.n3(self.conv3(xs)), 2))
-        xs = self.conv4(xs)
+        xs = F.leaky_relu(self.conv4(xs))
         return xs
 
