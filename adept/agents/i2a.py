@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import OrderedDict
+import math
 import torch
 from torch.nn import functional as F
 import torchvision.utils as vutils
@@ -27,6 +28,7 @@ class I2A(OnlineQRDDQN):
         super().__init__(*args, **kwargs)
         self.exp_cache['actions'] = []
         self.exp_cache['lstm_out'] = []
+        self.ssim = SSIM(1, self.device)
 
     def _act_gym(self, obs):
         predictions, internals = self.network(
@@ -68,12 +70,16 @@ class I2A(OnlineQRDDQN):
         # next states as categorical label
         states_list = listd_to_dlist(rollouts.states)[self.network._obs_key]
         next_states = states_list[1:] + [next_obs[self.network._obs_key]]
-
-        # mse loss
         next_states = torch.stack(next_states).to(self.device).float() / 255.0
-        autoencoder_loss = torch.mean(torch.abs(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1) - next_states.view(self.nb_rollout, self._nb_env, -1)), dim=-1)
         terminal_mask = torch.stack(rollouts.terminals)
-        autoencoder_loss = autoencoder_loss * terminal_mask
+
+        # ssim loss
+        autoencoder_loss = 1 - self.ssim(predicted_next_obs.view(-1, *predicted_next_obs.shape[2:]),
+                                         next_states.view(-1, *next_states.shape[2:]), reduction='none')
+        autoencoder_loss = autoencoder_loss.view(self.nb_rollout, self._nb_env, -1).mean(-1) * terminal_mask
+        # mse loss
+        # autoencoder_loss = torch.mean(torch.abs(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1) - next_states.view(self.nb_rollout, self._nb_env, -1)), dim=-1)
+        # autoencoder_loss = autoencoder_loss * terminal_mask
 
         # cross_entropy loss
         # next_states = torch.stack(next_states).to(self.device).long()
@@ -85,7 +91,7 @@ class I2A(OnlineQRDDQN):
         # predicted_next_obs_flat = predicted_next_obs_cont.view(-1, 255)
         # autoencoder_loss = F.cross_entropy(predicted_next_obs_flat, next_states_flat, reduction='none')
         # # don't predict next state for terminal 
-        # terminal_mask = torch.stack(rollouts.terminals).unsqueeze(-1)
+        # terminal_mask = terminal_mask.unsqueeze(-1)
         # autoencoder_loss = autoencoder_loss.view(self.nb_rollout, self._nb_env, -1) * terminal_mask
 
         # q value loss
@@ -109,4 +115,67 @@ class I2A(OnlineQRDDQN):
         losses = {'value_loss': value_loss.mean(), 'autoencoder_loss': autoencoder_loss.mean()}
         metrics = {'autoencoder_img': autoencoder_img}
         return losses, metrics
+
+
+class SSIM:
+    def __init__(self, channels, device, kernel_size=11, kernel_sigma=1.5):
+        self.channels = channels
+        self.window = self.create_window(channels, kernel_size, kernel_sigma).to(device)
+
+    def __call__(self, inputs, targets, reduction='mean'):
+        """
+        Assumes float in range 0, 1
+        """
+        c1 = 0.01 ** 2
+        c2 = 0.03 ** 2
+
+        # from https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/ops/image_ops_impl.py#L2609
+        # luminance
+        mu1 = F.conv2d(inputs, self.window, groups=self.channels)
+        mu2 = F.conv2d(targets, self.window, groups=self.channels)
+        num0 = mu1 * mu2 * 2.0
+        den0 = mu1 ** 2 + mu2 ** 2
+        luminance = (num0 + c1) / (den0 + c1)
+
+        # contrast structure
+        num1 = F.conv2d(inputs * targets, self.window, groups=self.channels) * 2.0
+        den1 = F.conv2d((inputs ** 2) + (targets ** 2), self.window, groups=self.channels)
+        cs = (num1 - num0 + c2) / (den1 - den0 + c2)
+
+        loss = luminance * cs
+
+        if reduction == 'none':
+            return loss
+        elif reduction == 'mean':
+            return loss.mean()
+        else:
+            return loss.sum()
+
+    # from https://discuss.pytorch.org/t/is-there-anyway-to-do-gaussian-filtering-for-an-image-2d-3d-in-pytorch/12351/10
+    @staticmethod
+    def create_window(channels, kernel_size, sigma, dim=2):
+        kernel_size = [kernel_size] * dim
+        sigma = [sigma] * dim
+
+        # The gaussian kernel is the product of the
+        # gaussian function of each dimension.
+        kernel = 1
+        meshgrids = torch.meshgrid(
+            [
+                torch.arange(size, dtype=torch.float32)
+                for size in kernel_size
+            ]
+        )
+        for size, std, mgrid in zip(kernel_size, sigma, meshgrids):
+            mean = (size - 1) / 2
+            kernel *= 1 / (std * math.sqrt(2 * math.pi)) * \
+                      torch.exp(-((mgrid - mean) / std) ** 2 / 2)
+
+        # Make sure sum of values in gaussian kernel equals 1.
+        kernel = kernel / torch.sum(kernel)
+
+        # Reshape to depthwise convolutional weight
+        kernel = kernel.view(1, 1, *kernel.size())
+        kernel = kernel.repeat(channels, *[1] * (kernel.dim() - 1))
+        return kernel
 
