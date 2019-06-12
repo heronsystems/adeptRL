@@ -73,7 +73,7 @@ class I2A(OnlineQRDDQN):
 
         # predict_sequence
         first_state = rollouts.states[0][self.network._obs_key].to(self.device).float() / 255.0
-        max_seq = math.ceil(self._act_count / (1000 / self._nb_env))
+        max_seq = math.ceil(self._act_count / (100000 / self._nb_env))
         predicted_next_obs, predicted_reward = self.network.pred_next(first_state, rollouts.internals[0], actions, terminal_mask, max_seq)
         next_states = next_states[0:max_seq]
         terminal_mask = terminal_mask[0:max_seq]
