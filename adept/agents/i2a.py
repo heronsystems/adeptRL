@@ -72,7 +72,10 @@ class I2A(OnlineQRDDQN):
 
         # predict_sequence
         first_state = rollouts.states[0][self.network._obs_key].to(self.device).float() / 255.0
-        predicted_next_obs, predicted_reward = self.network.pred_next(first_state, actions)
+        max_seq = math.ceil(self._act_count / 100000)
+        predicted_next_obs, predicted_reward = self.network.pred_next(first_state, actions, max_seq)
+        next_states = next_states[0:max_seq]
+        terminal_mask = terminal_mask[0:max_seq]
 
         # predict next state only
         # forward of upsample
@@ -90,14 +93,14 @@ class I2A(OnlineQRDDQN):
         # autoencoder loss
         # ssim loss
         autoencoder_loss = 1 - self.ssim(predicted_next_obs.view(-1, *predicted_next_obs.shape[2:]),
-                                         next_states.view(-1, *next_states.shape[2:]), reduction='none')
-        autoencoder_loss = autoencoder_loss.view(self.nb_rollout, self._nb_env, -1).mean(-1) * terminal_mask
+                                         next_states.view(-1, *next_states.shape[2:]), reduction='none').mean(-1).mean(-1)
+        autoencoder_loss = autoencoder_loss.view(-1, self._nb_env) * terminal_mask
 
         # reward loss huber TODO: probably classification to see if there is a reward, then another
         # head to predict the value of it
-        rewards = torch.stack(rollouts.rewards)
-        predicted_reward = self._inverse_scale(predicted_reward.view(self.nb_rollout, self._nb_env))
-        reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
+        # rewards = torch.stack(rollouts.rewards)
+        # predicted_reward = self._inverse_scale(predicted_reward.view(self.nb_rollout, self._nb_env))
+        # reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
         # mae loss
         # autoencoder_mse_loss = F.l1_loss(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1),
                                          # next_states.view(self.nb_rollout, self._nb_env, -1), reduction='none')
@@ -135,7 +138,7 @@ class I2A(OnlineQRDDQN):
         losses = {
             'value_loss': value_loss.mean(),
             'autoencoder_loss': autoencoder_loss.mean(),
-            'reward_pred_loss': reward_loss
+            # 'reward_pred_loss': reward_loss
         }
         metrics = {'autoencoder_img': autoencoder_img}
         return losses, metrics

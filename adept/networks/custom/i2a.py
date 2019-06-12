@@ -126,21 +126,23 @@ class I2A(NetworkModule):
         predicted_next_r = self.reward_pred(cat_flat_act)
         return predicted_next_obs, predicted_next_r, auto_internals
 
-    def pred_seq(self, state, actions):
+    def pred_seq(self, state, actions, max_seq=1):
         # tile actions
         actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, 5, 5)
         # starting from 0 predict the next sequence of states
         internals = listd_to_dlist([self.auto_lstm.new_internals(state.device) for i in range(state.shape[0])])
         pred_states, pred_reward, internals = self._pred_seq_forward(state, internals, actions[0], actions_tiled[0])
         pred_states, pred_reward = [pred_states], [pred_reward]
-        for s_ind in range(1, actions.shape[0]):
+        max_seq = min(max_seq, actions.shape[0])
+        for s_ind in range(1, max_seq):
             pred_s, pred_r, internals = self._pred_seq_forward(pred_states[-1], internals, actions[s_ind], actions_tiled[s_ind])
             pred_states.append(pred_s)
             pred_reward.append(pred_r)
+            # TODO: check for terminal and reset internals
         return torch.stack(pred_states), torch.stack(pred_reward)
 
-    def pred_next(self, encoder, actions):
-        return self.pred_seq(encoder, actions)
+    def pred_next(self, encoder, actions, max_seq=1):
+        return self.pred_seq(encoder, actions, max_seq)
         # tile actions
         actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 5, 5)
         # cat to upsample
