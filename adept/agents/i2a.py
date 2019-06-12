@@ -83,9 +83,11 @@ class I2A(OnlineQRDDQN):
         rewards = torch.stack(rollouts.rewards)
         predicted_reward = self._inverse_scale(predicted_reward.view(self.nb_rollout, self._nb_env))
         reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
-        # mse loss
-        # autoencoder_loss = torch.mean(torch.abs(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1) - next_states.view(self.nb_rollout, self._nb_env, -1)), dim=-1)
-        # autoencoder_loss = autoencoder_loss * terminal_mask
+        # mae loss
+        autoencoder_mse_loss = F.l1_loss(predicted_next_obs.view(self.nb_rollout, self._nb_env, -1),
+                                         next_states.view(self.nb_rollout, self._nb_env, -1), reduction='none')
+        autoencoder_mse_loss = autoencoder_mse_loss.mean(-1) * terminal_mask
+        autoencoder_loss = autoencoder_loss * 0.9 + autoencoder_mse_loss * 0.1
 
         # cross_entropy loss
         # next_states = torch.stack(next_states).to(self.device).long()
