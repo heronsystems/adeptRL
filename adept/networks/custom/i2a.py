@@ -18,7 +18,7 @@ import numpy as np
 from adept.utils import listd_to_dlist
 from adept.networks import NetworkModule
 from adept.networks.net3d.four_conv import FourConv
-from adept.networks.net1d.lstm import LSTM
+from adept.networks.net3d.convlstm import ConvLSTM
 
 import torch
 from torch import nn
@@ -33,26 +33,29 @@ class I2A(NetworkModule):
     def __init__(self, args, obs_space, output_space):
         super().__init__()
         self.nb_imagination_rollout = args.nb_imagination_rollout
+        self._nb_action = int(output_space['Discrete'][0] / 51)
 
+        # encode state with recurrence captured
         self._obs_key = list(obs_space.keys())[0]
         self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
-        conv_out_shape = np.prod(self.conv_stack.output_shape())
-        self.lstm = LSTM((conv_out_shape, ), 'lstm', True, 800)
+        self.lstm = ConvLSTM(self.conv_stack.output_shape(), 'lstm', True, 32, 3)
+        lstm_out_shape = np.prod(self.lstm.output_shape())
+
+        # policy output
         self.pol_outputs = nn.ModuleDict(
-            {k: nn.Linear(800+512, v[0]) for k, v in output_space.items()}
+            {k: nn.Linear(lstm_out_shape+512, v[0]) for k, v in output_space.items()}
         )
-        self._nb_action = int(output_space['Discrete'][0] / 51)
 
         # imagined state encoder
         self.imag_conv_encoder = FourConv(obs_space[self._obs_key], 'imagfourconv', True)
-        self.imag_encoder = nn.Linear(conv_out_shape + 1, 128, bias=False)
+        self.imag_encoder = nn.Linear(np.prod(self.imag_conv_encoder.output_shape()) + 1, 128, bias=False)
         self.imag_encoder_bn = nn.BatchNorm1d(128)
         # reward prediciton from lstm + action one hot
-        self.reward_pred = nn.Linear(800+self._nb_action, 1)
+        self.reward_pred = nn.Linear(lstm_out_shape+self._nb_action, 1)
         # upsample_stack needs to make a 1x84x84 from 64x5x5
-        self.upsample_stack = PixelShuffleFourConv(64+self._nb_action)
+        self.upsample_stack = PixelShuffleFourConv(32+self._nb_action)
         # distil policy from imagination
-        self.distil_pol_outputs = nn.Linear(800, output_space['Discrete'][0])
+        self.distil_pol_outputs = nn.Linear(lstm_out_shape, output_space['Discrete'][0])
 
     @classmethod
     def from_args(
@@ -90,6 +93,12 @@ class I2A(NetworkModule):
             **self.lstm.new_internals(device),
         }
 
+    def _encode_observation(self, observation, internals):
+        conv_out, _ = self.conv_stack(observation, {})
+        hx, lstm_internals = self.lstm(conv_out, internals)
+        lstm_flat = hx.view(*hx.shape[0:-3], -1)
+        return lstm_flat, lstm_internals
+
     def forward(self, observation, internals, ret_imag=False):
         """
         Compute forward pass.
@@ -102,62 +111,56 @@ class I2A(NetworkModule):
         :return: Dict[str, torch.Tensor (ND)]
         """
         obs = observation[self._obs_key]
-        conv_out, _ = self.conv_stack(obs, {})
-        conv_flat = conv_out.view(*conv_out.shape[0:-3], -1)
-        hx, lstm_internals = self.lstm(conv_flat, internals)
+        encoded_obs, lstm_internals = self._encode_observation(obs, internals)
 
         # imagination rollout
-        imag_conv_out = conv_out
-        imag_auto_hx, imag_internals = hx, lstm_internals
-        imag_qs, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
-        imag_encoded = self._encode_imag(imag_state, imag_r)
+        imag_encoded_obs, imag_internals = encoded_obs, lstm_internals
+        imag_qs, imag_obs, imag_r = self._imag_forward(encoded_obs)
+        imag_encoded = self._encode_imag(imag_obs, imag_r)
         # store for later
-        first_imag_qs, first_imag_state, first_imag_r = imag_qs, imag_state, imag_r
-        all_imag_states = [imag_state]
+        first_imag_qs, first_imag_state, first_imag_r = imag_qs, imag_obs, imag_r
+        all_imag_obs = [imag_obs]
         all_imag_encoded = [imag_encoded]
         for i in range(self.nb_imagination_rollout - 1):
-            # TODO: how can we incorporate world model errors to train on them?
+            # TODO: how can we incorporate world model sequential errors to train on them?
             with torch.no_grad():
-                imag_conv_out, _ = self.conv_stack(imag_state, {})
-                imag_conv_flat = imag_conv_out.view(*conv_out.shape[0:-3], -1)
-                imag_auto_hx, imag_internals = self.lstm(imag_conv_flat, imag_internals)
-                _, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
-            imag_encoded = self._encode_imag(imag_state.detach(), imag_r.detach())
+                imag_encoded_obs, imag_internals = self._encode_observation(imag_obs, imag_internals)
+                _, imag_obs, imag_r = self._imag_forward(imag_encoded_obs)
+            imag_encoded = self._encode_imag(imag_obs.detach(), imag_r.detach())
             all_imag_encoded.append(imag_encoded)
-            all_imag_states.append(imag_state)
+            all_imag_obs.append(imag_obs)
 
         # concat imagination encodings
         imagination_rollout_encoding = torch.cat(all_imag_encoded, dim=1)
-        policy_embedding = torch.cat([imagination_rollout_encoding, hx], dim=1)
+        policy_embedding = torch.cat([imagination_rollout_encoding, encoded_obs], dim=1)
         pol_outs = {k: self.pol_outputs[k](policy_embedding) for k in self.pol_outputs.keys()}
 
         # return cached stuff for training
         if ret_imag:
             pol_outs['imag_qs'] = first_imag_qs
-            pol_outs['imag_lstm'] = hx
-            pol_outs['imag_conv'] = conv_out
-            pol_outs['imag_states'] = torch.stack(all_imag_states)
+            pol_outs['imag_encoded'] = encoded_obs
+            pol_outs['imag_obs'] = torch.stack(all_imag_obs)
 
         return pol_outs, lstm_internals
 
-    def _imag_forward(self, imag_conv_out, imag_auto_hx):
+    def _imag_forward(self, encoded_obs):
         # compute imagined action 
-        imag_q = self.distil_pol_outputs(imag_auto_hx).view(-1, self._nb_action, 51)
+        imag_q = self.distil_pol_outputs(encoded_obs).view(-1, self._nb_action, 51)
         imag_action = imag_q.mean(2).argmax(-1, keepdim=True).detach()
         imag_one_hot_action = torch.zeros(imag_action.shape[0], self._nb_action, device=imag_action.device)
         imag_one_hot_action = imag_one_hot_action.scatter_(1, imag_action, 1)
 
-        # encoding is conv concat with lstm
-        encoder = torch.cat([imag_conv_out, imag_auto_hx.view(-1, 32, 5, 5)], dim=1)
-
         # reward prediction
-        imag_r = self.reward_pred(torch.cat([imag_auto_hx, imag_one_hot_action], dim=1))
+        imag_r = self.reward_pred(torch.cat([encoded_obs, imag_one_hot_action], dim=1))
 
         # state prediction
+        # encoder back to conv
+        encoded_obs_conv = encoded_obs.view(-1, 32, 3, 3)
+
         # tile actions
-        actions_tiled = imag_one_hot_action.view(imag_action.shape[0], self._nb_action, 1, 1).repeat(1, 1, 5, 5)
+        actions_tiled = imag_one_hot_action.view(imag_action.shape[0], self._nb_action, 1, 1).repeat(1, 1, 3, 3)
         # cat to upsample
-        cat_lstm_act = torch.cat([encoder, actions_tiled], dim=1)
+        cat_lstm_act = torch.cat([encoded_obs_conv, actions_tiled], dim=1)
 
         imag_next_state = self.upsample_stack(cat_lstm_act)
         return imag_q, imag_next_state, imag_r
@@ -205,16 +208,16 @@ class I2A(NetworkModule):
             # # TODO: check for terminal and reset internals
         # return torch.stack(pred_qs), torch.stack(pred_states), torch.stack(pred_reward)
 
-    def pred_next_from_action(self, imag_conv, imag_lstm, actions):
+    def pred_next_from_action(self, imag_encoded, actions):
         # reward prediction
-        predicted_r = self.reward_pred(torch.cat([imag_lstm, actions], dim=1))
+        predicted_r = self.reward_pred(torch.cat([imag_encoded, actions], dim=1))
 
         # state prediction
-        imag_conv_cat_lstm = torch.cat([imag_conv, imag_lstm.view(-1, 32, 5, 5)], dim=1)
+        imag_conv_lstm = imag_encoded.view(-1, 32, 3, 3)
         # tile actions
-        actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 5, 5)
+        actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 3, 3)
         # cat to upsample
-        cat_lstm_conv_act = torch.cat([imag_conv_cat_lstm, actions_tiled], dim=1)
+        cat_lstm_conv_act = torch.cat([imag_conv_lstm, actions_tiled], dim=1)
 
         predicted_next_obs = self.upsample_stack(cat_lstm_conv_act)
         return predicted_next_obs, predicted_r
@@ -235,9 +238,9 @@ class PixelShuffleFourConv(nn.Module):
     def __init__(self, in_channel, batch_norm=False):
         super().__init__()
         self._out_shape = None
-        self.conv1 = ConvTranspose2d(in_channel, 32*4, 5, bias=False)
-        self.conv2 = ConvTranspose2d(32, 32*4, 3, bias=False)
-        self.conv3 = ConvTranspose2d(32, 32*4, 3, bias=False)
+        self.conv1 = ConvTranspose2d(in_channel, 32*4, 7, bias=False)
+        self.conv2 = ConvTranspose2d(32, 32*4, 4, bias=False)
+        self.conv3 = ConvTranspose2d(32, 32*4, 3, padding=1, bias=False)
         self.conv4 = ConvTranspose2d(32, 1, 3, padding=1, bias=True)
         # if cross entropy
         # self.conv4 = ConvTranspose2d(32, 255, 7, bias=True)

@@ -27,10 +27,9 @@ class I2A(OnlineQRDDQN):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.exp_cache['actions'] = []
-        self.exp_cache['imag_lstm'] = []
-        self.exp_cache['imag_conv'] = []
+        self.exp_cache['imag_encoded'] = []
         self.exp_cache['imag_qs'] = []
-        self.exp_cache['imag_states'] = []
+        self.exp_cache['imag_obs'] = []
         self.exp_cache['internals'] = []
         self.ssim = SSIM(1, self.device)
 
@@ -58,9 +57,9 @@ class I2A(OnlineQRDDQN):
         values = torch.cat(values, dim=1)
         one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
         one_hot_action = one_hot_action.scatter_(1, action, 1)
-        self.exp_cache.write_forward(values=values, actions=one_hot_action, imag_conv=predictions['imag_conv'],
-                                     imag_states=predictions['imag_states'],
-                                     imag_lstm=predictions['imag_lstm'], imag_qs=predictions['imag_qs'], internals=self.internals)
+        self.exp_cache.write_forward(values=values, actions=one_hot_action, imag_encoded=predictions['imag_encoded'],
+                                     imag_obs=predictions['imag_obs'],
+                                     imag_qs=predictions['imag_qs'], internals=self.internals)
         self.internals = internals
         return actions
 
@@ -84,12 +83,10 @@ class I2A(OnlineQRDDQN):
 
         # predict next state only
         # forward of upsample
-        imag_conv = torch.stack(rollouts.imag_conv)
-        imag_conv = imag_conv.view(self.nb_rollout * self._nb_env, *imag_conv.shape[2:])
-        imag_lstm = torch.stack(rollouts.imag_lstm)
-        imag_lstm = imag_lstm.view(self.nb_rollout * self._nb_env, *imag_lstm.shape[2:])
+        imag_encoded = torch.stack(rollouts.imag_encoded)
+        imag_encoded = imag_encoded.view(self.nb_rollout * self._nb_env, *imag_encoded.shape[2:])
         actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
-        predicted_next_obs, predicted_reward = self.network.pred_next_from_action(imag_conv, imag_lstm, actions)
+        predicted_next_obs, predicted_reward = self.network.pred_next_from_action(imag_encoded, actions)
         predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
 
         # distil policy loss same as qloss but between distil and current policy
@@ -148,7 +145,7 @@ class I2A(OnlineQRDDQN):
         # get a random integer for which env to view
         rand_int = torch.randint(self._nb_env, (1, ))
         # imagination rollout
-        imag_rollout = rollouts.imag_states[0][:, rand_int].squeeze(1)
+        imag_rollout = rollouts.imag_obs[0][:, rand_int].squeeze(1)
         imag_rollout_view = torch.cat([next_states[0, rand_int], imag_rollout], dim=0)
         imag_rollout_view = vutils.make_grid(imag_rollout_view, nrow=5)
         # predicted_next_obs to image
