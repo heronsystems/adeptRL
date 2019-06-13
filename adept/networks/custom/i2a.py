@@ -48,8 +48,7 @@ class I2A(NetworkModule):
 
         # imagined state encoder
         self.imag_conv_encoder = FourConv(obs_space[self._obs_key], 'imagfourconv', True)
-        self.imag_encoder = nn.Linear(np.prod(self.imag_conv_encoder.output_shape()) + 1, 128, bias=False)
-        self.imag_encoder_bn = nn.BatchNorm1d(128)
+        self.imag_encoder = nn.Linear(np.prod(self.imag_conv_encoder.output_shape()) + 1, 128, bias=True)
         # reward prediciton from lstm + action one hot
         self.reward_pred = nn.Linear(lstm_out_shape+self._nb_action, 1)
         # upsample_stack needs to make a 1x84x84 from 64x5x5
@@ -167,7 +166,7 @@ class I2A(NetworkModule):
         imag_conv_encoded, _ = self.imag_conv_encoder(imag_state, {})
         imag_conv_flat = imag_conv_encoded.view(*imag_conv_encoded.shape[0:-3], -1)
         imag_cat_r = torch.cat([imag_conv_flat, imag_r], dim=1)
-        imag_encoded = F.relu(self.imag_encoder_bn(self.imag_encoder(imag_cat_r)))
+        imag_encoded = F.relu(self.imag_encoder(imag_cat_r))
         return imag_encoded
 
 #     def _pred_seq_forward(self, state, internals, actions, actions_tiled):
