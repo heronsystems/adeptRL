@@ -37,16 +37,15 @@ class I2A(NetworkModule):
         self._obs_key = list(obs_space.keys())[0]
         self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
         conv_out_shape = np.prod(self.conv_stack.output_shape())
-        self.lstm = LSTM((conv_out_shape, ), 'lstm', True, 512)
-        self.auto_lstm = LSTM((conv_out_shape, ), 'autolstm', True, 800)
+        self.lstm = LSTM((conv_out_shape, ), 'lstm', True, 800)
         self.pol_outputs = nn.ModuleDict(
-            {k: nn.Linear(1024, v[0]) for k, v in output_space.items()}
+            {k: nn.Linear(800+512, v[0]) for k, v in output_space.items()}
         )
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
         # imagined state encoder
         self.imag_conv_encoder = FourConv(obs_space[self._obs_key], 'imagfourconv', True)
-        self.imag_encoder = nn.Linear(conv_out_shape + 1, 128)
+        self.imag_encoder = nn.Linear(conv_out_shape + 1, 128, bias=False)
         self.imag_encoder_bn = nn.BatchNorm1d(128)
         # reward prediciton from lstm + action one hot
         self.reward_pred = nn.Linear(800+self._nb_action, 1)
@@ -89,7 +88,6 @@ class I2A(NetworkModule):
         """
         return {
             **self.lstm.new_internals(device),
-            **self.auto_lstm.new_internals(device)
         }
 
     def forward(self, observation, internals, ret_imag=False):
@@ -109,9 +107,8 @@ class I2A(NetworkModule):
         hx, lstm_internals = self.lstm(conv_flat, internals)
 
         # imagination rollout
-        auto_hx, auto_internals = self.auto_lstm(conv_flat, internals)
         imag_conv_out = conv_out
-        imag_auto_hx, imag_internals = auto_hx, auto_internals
+        imag_auto_hx, imag_internals = hx, lstm_internals
         imag_qs, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
         imag_encoded = self._encode_imag(imag_state, imag_r)
         # store for later
@@ -123,7 +120,7 @@ class I2A(NetworkModule):
             with torch.no_grad():
                 imag_conv_out, _ = self.conv_stack(imag_state, {})
                 imag_conv_flat = imag_conv_out.view(*conv_out.shape[0:-3], -1)
-                imag_auto_hx, imag_internals = self.auto_lstm(imag_conv_flat, imag_internals)
+                imag_auto_hx, imag_internals = self.lstm(imag_conv_flat, imag_internals)
                 _, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
             imag_encoded = self._encode_imag(imag_state.detach(), imag_r.detach())
             all_imag_encoded.append(imag_encoded)
@@ -137,11 +134,11 @@ class I2A(NetworkModule):
         # return cached stuff for training
         if ret_imag:
             pol_outs['imag_qs'] = first_imag_qs
-            pol_outs['imag_lstm'] = auto_hx
+            pol_outs['imag_lstm'] = hx
             pol_outs['imag_conv'] = conv_out
             pol_outs['imag_states'] = torch.stack(all_imag_states)
 
-        return pol_outs, self._merge_internals([lstm_internals, auto_internals])
+        return pol_outs, lstm_internals
 
     def _imag_forward(self, imag_conv_out, imag_auto_hx):
         # compute imagined action 
