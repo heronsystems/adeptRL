@@ -118,15 +118,13 @@ class I2A(NetworkModule):
         imag_qs, imag_obs, imag_r = self._imag_forward(encoded_obs)
         imag_encoded = self._encode_imag(imag_obs, imag_r)
         # store for later
-        first_imag_qs, first_imag_state, first_imag_r = imag_qs, imag_obs, imag_r
         all_imag_obs = [imag_obs]
         all_imag_encoded = [imag_encoded]
         for i in range(self.nb_imagination_rollout - 1):
             # TODO: how can we incorporate world model sequential errors to train on them?
-            with torch.no_grad():
-                imag_encoded_obs, imag_internals = self._encode_observation(imag_obs, imag_internals)
-                _, imag_obs, imag_r = self._imag_forward(imag_encoded_obs)
-            imag_encoded = self._encode_imag(imag_obs.detach(), imag_r.detach())
+            imag_encoded_obs, imag_internals = self._encode_observation(imag_obs, imag_internals)
+            _, imag_obs, imag_r = self._imag_forward(imag_encoded_obs)
+            imag_encoded = self._encode_imag(imag_obs, imag_r)
             all_imag_encoded.append(imag_encoded)
             all_imag_obs.append(imag_obs)
 
@@ -137,7 +135,7 @@ class I2A(NetworkModule):
 
         # return cached stuff for training
         if ret_imag:
-            pol_outs['imag_qs'] = first_imag_qs
+            pol_outs['imag_qs'] = imag_qs
             pol_outs['imag_encoded'] = encoded_obs
             pol_outs['imag_obs'] = torch.stack(all_imag_obs)
 
