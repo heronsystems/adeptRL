@@ -47,6 +47,7 @@ class I2A(NetworkModule):
         # imagined state encoder
         self.imag_conv_encoder = FourConv(obs_space[self._obs_key], 'imagfourconv', True)
         self.imag_encoder = nn.Linear(conv_out_shape + 1, 128)
+        self.imag_encoder_bn = nn.BatchNorm1d(128)
         # reward prediciton from lstm + action one hot
         self.reward_pred = nn.Linear(800+self._nb_action, 1)
         # upsample_stack needs to make a 1x84x84 from 64x5x5
@@ -118,11 +119,13 @@ class I2A(NetworkModule):
         all_imag_states = [imag_state]
         all_imag_encoded = [imag_encoded]
         for i in range(self.nb_imagination_rollout - 1):
-            imag_conv_out, _ = self.conv_stack(imag_state, {})
-            imag_conv_flat = imag_conv_out.view(*conv_out.shape[0:-3], -1)
-            imag_auto_hx, imag_internals = self.auto_lstm(imag_conv_flat, imag_internals)
-            _, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
-            imag_encoded = self._encode_imag(imag_state, imag_r)
+            # TODO: how can we incorporate world model errors to train on them?
+            with torch.no_grad():
+                imag_conv_out, _ = self.conv_stack(imag_state, {})
+                imag_conv_flat = imag_conv_out.view(*conv_out.shape[0:-3], -1)
+                imag_auto_hx, imag_internals = self.auto_lstm(imag_conv_flat, imag_internals)
+                _, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
+            imag_encoded = self._encode_imag(imag_state.detach(), imag_r.detach())
             all_imag_encoded.append(imag_encoded)
             all_imag_states.append(imag_state)
 
@@ -143,7 +146,7 @@ class I2A(NetworkModule):
     def _imag_forward(self, imag_conv_out, imag_auto_hx):
         # compute imagined action 
         imag_q = self.distil_pol_outputs(imag_auto_hx).view(-1, self._nb_action, 51)
-        imag_action = imag_q.mean(2).argmax(-1, keepdim=True)
+        imag_action = imag_q.mean(2).argmax(-1, keepdim=True).detach()
         imag_one_hot_action = torch.zeros(imag_action.shape[0], self._nb_action, device=imag_action.device)
         imag_one_hot_action = imag_one_hot_action.scatter_(1, imag_action, 1)
 
@@ -166,7 +169,7 @@ class I2A(NetworkModule):
         imag_conv_encoded, _ = self.imag_conv_encoder(imag_state, {})
         imag_conv_flat = imag_conv_encoded.view(*imag_conv_encoded.shape[0:-3], -1)
         imag_cat_r = torch.cat([imag_conv_flat, imag_r], dim=1)
-        imag_encoded = self.imag_encoder(imag_cat_r)
+        imag_encoded = F.relu(self.imag_encoder_bn(self.imag_encoder(imag_cat_r)))
         return imag_encoded
 
 #     def _pred_seq_forward(self, state, internals, actions, actions_tiled):

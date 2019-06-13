@@ -99,7 +99,6 @@ class I2A(OnlineQRDDQN):
         action_select = action_select.unsqueeze(-1).expand(action_select.shape[0], 1, imag_qs.shape[-1]).long()
         imag_qs_a = imag_qs.gather(1, action_select).squeeze(1)
         imag_qs_a = imag_qs_a.view(self.nb_rollout, self._nb_env, -1)
-
         distil_loss = self._loss_fn(imag_qs_a, batch_values.detach())
 
         # autoencoder loss
@@ -145,13 +144,16 @@ class I2A(OnlineQRDDQN):
         # batched q loss
         value_loss = self._loss_fn(batch_values, value_targets)
 
+        # metrics
+        # get a random integer for which env to view
+        rand_int = torch.randint(self._nb_env, (1, ))
         # imagination rollout
-        imag_rollout = rollouts.imag_states[0][:, 0]
-        imag_rollout_view = torch.cat([next_states[0, 0:1], imag_rollout], dim=0)
+        imag_rollout = rollouts.imag_states[0][:, rand_int].squeeze(1)
+        imag_rollout_view = torch.cat([next_states[0, rand_int], imag_rollout], dim=0)
         imag_rollout_view = vutils.make_grid(imag_rollout_view, nrow=5)
         # predicted_next_obs to image
-        autoencoder_img = torch.cat([predicted_next_obs[:, 0], next_states[:, 0]], 0)
-        autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
+        autoencoder_img = torch.cat([predicted_next_obs[:5, rand_int], next_states[:5, rand_int]], 0)
+        autoencoder_img = vutils.make_grid(autoencoder_img.squeeze(1), nrow=5)
         losses = {
             'value_loss': value_loss.mean(),
             'autoencoder_loss': autoencoder_loss.mean(),
