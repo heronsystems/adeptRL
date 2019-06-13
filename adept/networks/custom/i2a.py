@@ -27,10 +27,12 @@ from torch.nn import UpsamplingBilinear2d
 
 class I2A(NetworkModule):
     args = {
+        'nb_imagination_rollout': 4
     }
 
     def __init__(self, args, obs_space, output_space):
         super().__init__()
+        self.nb_imagination_rollout = args.nb_imagination_rollout
 
         self._obs_key = list(obs_space.keys())[0]
         self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
@@ -38,16 +40,19 @@ class I2A(NetworkModule):
         self.lstm = LSTM((conv_out_shape, ), 'lstm', True, 512)
         self.auto_lstm = LSTM((conv_out_shape, ), 'autolstm', True, 800)
         self.pol_outputs = nn.ModuleDict(
-            {k: nn.Linear(512, v[0]) for k, v in output_space.items()}
+            {k: nn.Linear(1024, v[0]) for k, v in output_space.items()}
         )
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
+        # imagined state encoder
+        self.imag_conv_encoder = FourConv(obs_space[self._obs_key], 'imagfourconv', True)
+        self.imag_encoder = nn.Linear(conv_out_shape + 1, 128)
         # reward prediciton from lstm + action one hot
-        self.reward_pred = nn.Linear(1600+self._nb_action, 1)
+        self.reward_pred = nn.Linear(800+self._nb_action, 1)
         # upsample_stack needs to make a 1x84x84 from 64x5x5
         self.upsample_stack = PixelShuffleFourConv(64+self._nb_action)
         # distil policy from imagination
-        self.distil_pol_outputs = nn.ModuleDict({'Discrete': nn.Linear(800, output_space['Discrete'][0])})
+        self.distil_pol_outputs = nn.Linear(800, output_space['Discrete'][0])
 
     @classmethod
     def from_args(
@@ -86,7 +91,7 @@ class I2A(NetworkModule):
             **self.auto_lstm.new_internals(device)
         }
 
-    def forward(self, observation, internals, ret_lstm=False):
+    def forward(self, observation, internals, ret_imag=False):
         """
         Compute forward pass.
 
@@ -101,63 +106,118 @@ class I2A(NetworkModule):
         conv_out, _ = self.conv_stack(obs, {})
         conv_flat = conv_out.view(*conv_out.shape[0:-3], -1)
         hx, lstm_internals = self.lstm(conv_flat, internals)
-        auto_hx, auto_internals = self.auto_lstm(conv_flat, internals)
 
-        pol_outs = {k: self.pol_outputs[k](hx) for k in self.pol_outputs.keys()}
-        if ret_lstm:
-            pol_outs['lstm_out'] = torch.cat([conv_out, auto_hx.view(-1, 32, 5, 5)], dim=1)
+        # imagination rollout
+        auto_hx, auto_internals = self.auto_lstm(conv_flat, internals)
+        imag_conv_out = conv_out
+        imag_auto_hx, imag_internals = auto_hx, auto_internals
+        imag_qs, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
+        imag_encoded = self._encode_imag(imag_state, imag_r)
+        # store for later
+        first_imag_qs, first_imag_state, first_imag_r = imag_qs, imag_state, imag_r
+        all_imag_states = [imag_state]
+        all_imag_encoded = [imag_encoded]
+        for i in range(self.nb_imagination_rollout - 1):
+            imag_conv_out, _ = self.conv_stack(imag_state, {})
+            imag_conv_flat = imag_conv_out.view(*conv_out.shape[0:-3], -1)
+            imag_auto_hx, imag_internals = self.auto_lstm(imag_conv_flat, imag_internals)
+            _, imag_state, imag_r = self._imag_forward(imag_conv_out, imag_auto_hx)
+            imag_encoded = self._encode_imag(imag_state, imag_r)
+            all_imag_encoded.append(imag_encoded)
+            all_imag_states.append(imag_state)
+
+        # concat imagination encodings
+        imagination_rollout_encoding = torch.cat(all_imag_encoded, dim=1)
+        policy_embedding = torch.cat([imagination_rollout_encoding, hx], dim=1)
+        pol_outs = {k: self.pol_outputs[k](policy_embedding) for k in self.pol_outputs.keys()}
+
+        # return cached stuff for training
+        if ret_imag:
+            pol_outs['imag_qs'] = first_imag_qs
+            pol_outs['imag_lstm'] = auto_hx
+            pol_outs['imag_conv'] = conv_out
+            pol_outs['imag_states'] = torch.stack(all_imag_states)
 
         return pol_outs, self._merge_internals([lstm_internals, auto_internals])
 
-    def _pred_seq_forward(self, state, internals, actions, actions_tiled):
-        conv_out, _ = self.conv_stack(state, {})
-        conv_flat = conv_out.view(*conv_out.shape[0:-3], -1)
-        auto_hx, auto_internals = self.auto_lstm(conv_flat, internals)
-        encoder = torch.cat([conv_out, auto_hx.view(-1, 32, 5, 5)], dim=1)
+    def _imag_forward(self, imag_conv_out, imag_auto_hx):
+        # compute imagined action 
+        imag_q = self.distil_pol_outputs(imag_auto_hx).view(-1, self._nb_action, 51)
+        imag_action = imag_q.mean(2).argmax(-1, keepdim=True)
+        imag_one_hot_action = torch.zeros(imag_action.shape[0], self._nb_action, device=imag_action.device)
+        imag_one_hot_action = imag_one_hot_action.scatter_(1, imag_action, 1)
+
+        # encoding is conv concat with lstm
+        encoder = torch.cat([imag_conv_out, imag_auto_hx.view(-1, 32, 5, 5)], dim=1)
+
+        # reward prediction
+        imag_r = self.reward_pred(torch.cat([imag_auto_hx, imag_one_hot_action], dim=1))
+
+        # state prediction
+        # tile actions
+        actions_tiled = imag_one_hot_action.view(imag_action.shape[0], self._nb_action, 1, 1).repeat(1, 1, 5, 5)
         # cat to upsample
         cat_lstm_act = torch.cat([encoder, actions_tiled], dim=1)
-        # cat to reward pred
-        cat_flat_act = torch.cat([encoder.view(-1, 1600), actions], dim=1)
 
-        # TODO: this must be sorted in the same way as the agent
-        for k in self.distil_pol_outputs.keys():
-            qvals = self.distil_pol_outputs[k](auto_hx)
-            qvals = qvals.view(actions.shape[0], self._nb_action, -1)
-            action_select = actions.argmax(-1, keepdim=True)
-            action_select = action_select.unsqueeze(-1).expand(action_select.shape[0], 1, qvals.shape[-1]).long()
-            predicted_qvals = qvals.gather(1, action_select).squeeze(1)
+        imag_next_state = self.upsample_stack(cat_lstm_act)
+        return imag_q, imag_next_state, imag_r
 
-        predicted_next_obs = self.upsample_stack(cat_lstm_act)
-        predicted_next_r = self.reward_pred(cat_flat_act)
-        return predicted_qvals, predicted_next_obs, predicted_next_r, auto_internals
+    def _encode_imag(self, imag_state, imag_r):
+        imag_conv_encoded, _ = self.imag_conv_encoder(imag_state, {})
+        imag_conv_flat = imag_conv_encoded.view(*imag_conv_encoded.shape[0:-3], -1)
+        imag_cat_r = torch.cat([imag_conv_flat, imag_r], dim=1)
+        imag_encoded = self.imag_encoder(imag_cat_r)
+        return imag_encoded
 
-    def pred_seq(self, state, internals, actions, terminals, max_seq=1):
-        # tile actions
-        actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, 5, 5)
-        # starting from 0 predict the next sequence of states
-        pred_qs, pred_states, pred_reward, internals = self._pred_seq_forward(state, internals, actions[0], actions_tiled[0])
-        pred_qs, pred_states, pred_reward = [pred_qs], [pred_states], [pred_reward]
-        max_seq = min(max_seq, actions.shape[0])
-        for s_ind in range(1, max_seq):
-            pred_q, pred_s, pred_r, internals = self._pred_seq_forward(pred_states[-1], internals, actions[s_ind], actions_tiled[s_ind])
-            pred_qs.append(pred_q)
-            pred_states.append(pred_s)
-            pred_reward.append(pred_r)
-            # TODO: check for terminal and reset internals
-        return torch.stack(pred_qs), torch.stack(pred_states), torch.stack(pred_reward)
+#     def _pred_seq_forward(self, state, internals, actions, actions_tiled):
+        # conv_out, _ = self.conv_stack(state, {})
+        # conv_flat = conv_out.view(*conv_out.shape[0:-3], -1)
+        # auto_hx, auto_internals = self.auto_lstm(conv_flat, internals)
+        # encoder = torch.cat([conv_out, auto_hx.view(-1, 32, 5, 5)], dim=1)
+        # # cat to upsample
+        # cat_lstm_act = torch.cat([encoder, actions_tiled], dim=1)
+        # # cat to reward pred
+        # cat_flat_act = torch.cat([encoder.view(-1, 1600), actions], dim=1)
 
-    def pred_next(self, encoder, internals, actions, terminals, max_seq=1):
-        return self.pred_seq(encoder, internals, actions, terminals, max_seq)
+        # # TODO: this must be sorted in the same way as the agent
+        # qvals = self.distil_pol_outputs(auto_hx)
+        # qvals = qvals.view(actions.shape[0], self._nb_action, -1)
+        # action_select = actions.argmax(-1, keepdim=True)
+        # action_select = action_select.unsqueeze(-1).expand(action_select.shape[0], 1, qvals.shape[-1]).long()
+        # predicted_qvals = qvals.gather(1, action_select).squeeze(1)
+
+        # predicted_next_obs = self.upsample_stack(cat_lstm_act)
+        # predicted_next_r = self.reward_pred(cat_flat_act)
+        # return predicted_qvals, predicted_next_obs, predicted_next_r, auto_internals
+
+    # def pred_seq(self, state, internals, actions, terminals, max_seq=1):
+        # # tile actions
+        # actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, 5, 5)
+        # # starting from 0 predict the next sequence of states
+        # pred_qs, pred_states, pred_reward, internals = self._pred_seq_forward(state, internals, actions[0], actions_tiled[0])
+        # pred_qs, pred_states, pred_reward = [pred_qs], [pred_states], [pred_reward]
+        # max_seq = min(max_seq, actions.shape[0])
+        # for s_ind in range(1, max_seq):
+            # pred_q, pred_s, pred_r, internals = self._pred_seq_forward(pred_states[-1], internals, actions[s_ind], actions_tiled[s_ind])
+            # pred_qs.append(pred_q)
+            # pred_states.append(pred_s)
+            # pred_reward.append(pred_r)
+            # # TODO: check for terminal and reset internals
+        # return torch.stack(pred_qs), torch.stack(pred_states), torch.stack(pred_reward)
+
+    def pred_next_from_action(self, imag_conv, imag_lstm, actions):
+        # reward prediction
+        predicted_r = self.reward_pred(torch.cat([imag_lstm, actions], dim=1))
+
+        # state prediction
+        imag_conv_cat_lstm = torch.cat([imag_conv, imag_lstm.view(-1, 32, 5, 5)], dim=1)
         # tile actions
         actions_tiled = actions.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 5, 5)
         # cat to upsample
-        cat_lstm_act = torch.cat([encoder, actions_tiled], dim=1)
-        # cat to reward pred
-        cat_flat_act = torch.cat([encoder.view(-1, 1600), actions], dim=1)
+        cat_lstm_conv_act = torch.cat([imag_conv_cat_lstm, actions_tiled], dim=1)
 
-        predicted_next_obs = self.upsample_stack(cat_lstm_act)
-        predicted_next_r = self.reward_pred(cat_flat_act)
-        return predicted_next_obs, predicted_next_r
+        predicted_next_obs = self.upsample_stack(cat_lstm_conv_act)
+        return predicted_next_obs, predicted_r
 
     def _merge_internals(self, internals):
         merged_internals = {}

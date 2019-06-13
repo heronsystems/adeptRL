@@ -27,15 +27,17 @@ class I2A(OnlineQRDDQN):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.exp_cache['actions'] = []
-        self.exp_cache['lstm_out'] = []
+        self.exp_cache['imag_lstm'] = []
+        self.exp_cache['imag_conv'] = []
+        self.exp_cache['imag_qs'] = []
+        self.exp_cache['imag_states'] = []
         self.exp_cache['internals'] = []
         self.ssim = SSIM(1, self.device)
 
     def _act_gym(self, obs):
         predictions, internals = self.network(
-            self.gpu_preprocessor(obs, self.device), self.internals, ret_lstm=True
+            self.gpu_preprocessor(obs, self.device), self.internals, ret_imag=True
         )
-        lstm_output = predictions['lstm_out']
         q_vals = self._get_qvals_from_pred(predictions)
         batch_size = predictions[self._action_keys[0]].shape[0]
 
@@ -56,7 +58,9 @@ class I2A(OnlineQRDDQN):
         values = torch.cat(values, dim=1)
         one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
         one_hot_action = one_hot_action.scatter_(1, action, 1)
-        self.exp_cache.write_forward(values=values, actions=one_hot_action, lstm_out=lstm_output, internals=self.internals)
+        self.exp_cache.write_forward(values=values, actions=one_hot_action, imag_conv=predictions['imag_conv'],
+                                     imag_states=predictions['imag_states'],
+                                     imag_lstm=predictions['imag_lstm'], imag_qs=predictions['imag_qs'], internals=self.internals)
         self.internals = internals
         return actions
 
@@ -72,23 +76,31 @@ class I2A(OnlineQRDDQN):
         actions = torch.stack(rollouts.actions)
 
         # predict_sequence
-        first_state = rollouts.states[0][self.network._obs_key].to(self.device).float() / 255.0
-        max_seq = min(math.ceil(self._act_count / (200000 / self._nb_env)), 5)
-        predicted_qvals, predicted_next_obs, predicted_reward = self.network.pred_next(first_state, rollouts.internals[0], actions, terminal_mask, max_seq)
-        next_states = next_states[0:max_seq]
-        terminal_mask = terminal_mask[0:max_seq]
+        # first_state = rollouts.states[0][self.network._obs_key].to(self.device).float() / 255.0
+        # max_seq = min(math.ceil(self._act_count / (200000 / self._nb_env)), 5)
+        # predicted_qvals, predicted_next_obs, predicted_reward = self.network.pred_next(first_state, rollouts.internals[0], actions, terminal_mask, max_seq)
+        # next_states = next_states[0:max_seq]
+        # terminal_mask = terminal_mask[0:max_seq]
 
         # predict next state only
         # forward of upsample
-        # encoder_outs = torch.stack(rollouts.lstm_out)
-        # encoder_outs = encoder_outs.view(self.nb_rollout * self._nb_env, *encoder_outs.shape[2:])
-        # actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
-        # predicted_qvals, predicted_next_obs, predicted_reward = self.network.pred_next(encoder_outs, actions)
-        # predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
-        #
+        imag_conv = torch.stack(rollouts.imag_conv)
+        imag_conv = imag_conv.view(self.nb_rollout * self._nb_env, *imag_conv.shape[2:])
+        imag_lstm = torch.stack(rollouts.imag_lstm)
+        imag_lstm = imag_lstm.view(self.nb_rollout * self._nb_env, *imag_lstm.shape[2:])
+        actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
+        predicted_next_obs, predicted_reward = self.network.pred_next_from_action(imag_conv, imag_lstm, actions)
+        predicted_next_obs = predicted_next_obs.view(self.nb_rollout, self._nb_env, 1, 84, 84)
 
         # distil policy loss same as qloss but between distil and current policy
-        distil_loss = self._loss_fn(predicted_qvals, batch_values.detach()[0:max_seq])
+        imag_qs = torch.stack(rollouts.imag_qs)
+        imag_qs = imag_qs.view(self.nb_rollout * self._nb_env, *imag_qs.shape[2:])
+        action_select = actions.argmax(-1, keepdim=True)
+        action_select = action_select.unsqueeze(-1).expand(action_select.shape[0], 1, imag_qs.shape[-1]).long()
+        imag_qs_a = imag_qs.gather(1, action_select).squeeze(1)
+        imag_qs_a = imag_qs_a.view(self.nb_rollout, self._nb_env, -1)
+
+        distil_loss = self._loss_fn(imag_qs_a, batch_values.detach())
 
         # autoencoder loss
         # ssim loss
@@ -106,7 +118,7 @@ class I2A(OnlineQRDDQN):
         # head to predict the value of it
         rewards = torch.stack(rollouts.rewards)
         predicted_reward = self._inverse_scale(predicted_reward.view(-1, self._nb_env))
-        reward_loss = F.smooth_l1_loss(predicted_reward, rewards[0:max_seq])
+        reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
 
         # cross_entropy loss
         # next_states = torch.stack(next_states).to(self.device).long()
@@ -133,16 +145,20 @@ class I2A(OnlineQRDDQN):
         # batched q loss
         value_loss = self._loss_fn(batch_values, value_targets)
 
+        # imagination rollout
+        imag_rollout = rollouts.imag_states[0][:, 0]
+        imag_rollout_view = torch.cat([next_states[0, 0:1], imag_rollout], dim=0)
+        imag_rollout_view = vutils.make_grid(imag_rollout_view, nrow=5)
         # predicted_next_obs to image
         autoencoder_img = torch.cat([predicted_next_obs[:, 0], next_states[:, 0]], 0)
-        autoencoder_img = vutils.make_grid(autoencoder_img, nrow=predicted_next_obs.shape[0])
+        autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
         losses = {
             'value_loss': value_loss.mean(),
             'autoencoder_loss': autoencoder_loss.mean(),
             'reward_pred_loss': reward_loss.mean(),
             'distil_loss': distil_loss.mean()
         }
-        metrics = {'autoencoder_img': autoencoder_img}
+        metrics = {'autoencoder_img': autoencoder_img, 'imag_rollout': imag_rollout_view}
         return losses, metrics
 
 
