@@ -59,9 +59,12 @@ class BaseDQN(AgentModule):
         self.discount = discount
         self.double_dqn = double_dqn
         self.target_copy_steps = target_copy_steps / nb_env
-        self._next_target_copy = self.target_copy_steps
-        self._target_net = deepcopy(network)
-        self._target_net.eval()
+        if self.target_copy_steps == 0:
+            self._target_net = network
+        else:
+            self._next_target_copy = self.target_copy_steps
+            self._target_net = deepcopy(network)
+            self._target_net.eval()
         self._act_count = 0
         self._action_keys = list(sorted(action_space.keys()))
 
@@ -200,6 +203,7 @@ class BaseDQN(AgentModule):
     def _compute_estimated_values(self, next_obs, internals):
         # estimate value of next state
         with torch.no_grad():
+            self._target_net.eval()
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
             results, _ = self._target_net(next_obs_on_device, internals)
             target_q = self._get_qvals_from_pred(results)
@@ -235,10 +239,11 @@ class BaseDQN(AgentModule):
 
     def _possible_update_target(self):
         # copy target network
-        if self._act_count > self._next_target_copy:
-            self._target_net = deepcopy(self.network)
-            self._target_net.eval()
-            self._next_target_copy += self.target_copy_steps
+        if self.target_copy_steps != 0:
+            if self._act_count > self._next_target_copy:
+                self._target_net.load_state_dict(self.network.state_dict())
+                self._target_net.eval()
+                self._next_target_copy += self.target_copy_steps
 
     def _action_from_q_vals(self, q_vals):
         return q_vals.argmax(dim=-1, keepdim=True)
