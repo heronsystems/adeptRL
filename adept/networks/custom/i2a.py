@@ -121,8 +121,9 @@ class I2A(NetworkModule):
         all_imag_encoded = [imag_encoded]
         for i in range(self.nb_imagination_rollout - 1):
             # TODO: how can we incorporate world model sequential errors to train on them?
-            imag_encoded_obs, imag_internals = self._encode_observation(imag_obs, imag_internals)
-            _, imag_obs, imag_r = self._imag_forward(imag_encoded_obs)
+            with torch.no_grad():
+                imag_encoded_obs, imag_internals = self._encode_observation(imag_obs, imag_internals)
+                _, imag_obs, imag_r = self._imag_forward(imag_encoded_obs)
             imag_encoded = self._encode_imag(imag_obs, imag_r)
             all_imag_encoded.append(imag_encoded)
             all_imag_obs.append(imag_obs)
