@@ -64,6 +64,18 @@ class I2A(OnlineQRDDQN):
         return actions
 
     def compute_loss(self, rollouts, next_obs):
+        # q value loss
+        self._possible_update_target()
+
+        # estimate value of next state
+        last_values = self._compute_estimated_values(next_obs, self.internals)
+
+        # compute nstep return and advantage over batch
+        value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
+
+        # batched q loss
+        value_loss = self._loss_fn(batch_values, value_targets)
+
         # qvals from policy
         batch_values = torch.stack(rollouts.values)
 
@@ -114,7 +126,7 @@ class I2A(OnlineQRDDQN):
         # head to predict the value of it
         rewards = torch.stack(rollouts.rewards)
         predicted_reward = self._inverse_scale(predicted_reward.view(-1, self._nb_env))
-        reward_loss = F.smooth_l1_loss(predicted_reward, rewards)
+        reward_loss = 0.5 * torch.mean((predicted_reward - rewards) ** 2)
 
         # cross_entropy loss
         # next_states = torch.stack(next_states).to(self.device).long()
@@ -128,18 +140,6 @@ class I2A(OnlineQRDDQN):
         # # don't predict next state for terminal 
         # terminal_mask = terminal_mask.unsqueeze(-1)
         # autoencoder_loss = autoencoder_loss.view(self.nb_rollout, self._nb_env, -1) * terminal_mask
-
-        # q value loss
-        self._possible_update_target()
-
-        # estimate value of next state
-        last_values = self._compute_estimated_values(next_obs, self.internals)
-
-        # compute nstep return and advantage over batch
-        value_targets = self._compute_returns_advantages(last_values, rollouts.rewards, rollouts.terminals)
-
-        # batched q loss
-        value_loss = self._loss_fn(batch_values, value_targets)
 
         # metrics
         # get a random integer for which env to view
