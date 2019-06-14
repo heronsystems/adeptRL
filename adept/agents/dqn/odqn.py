@@ -19,6 +19,9 @@ from adept.agents.dqn import BaseDQN
 
 
 class OnlineDQN(BaseDQN):
+    # disable target network for online, it hurts perf
+    args = {**BaseDQN.args}
+    args['target_copy_steps'] = 0
     def __init__(
         self,
         network,
