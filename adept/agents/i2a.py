@@ -64,6 +64,9 @@ class I2A(OnlineQRDDQN):
         return actions
 
     def compute_loss(self, rollouts, next_obs):
+        # qvals from policy
+        batch_values = torch.stack(rollouts.values)
+
         # q value loss
         self._possible_update_target()
 
@@ -75,9 +78,6 @@ class I2A(OnlineQRDDQN):
 
         # batched q loss
         value_loss = self._loss_fn(batch_values, value_targets)
-
-        # qvals from policy
-        batch_values = torch.stack(rollouts.values)
 
         # states, actions, terminals to tensors
         states_list = listd_to_dlist(rollouts.states)[self.network._obs_key]
