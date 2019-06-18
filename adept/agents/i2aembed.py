@@ -90,11 +90,17 @@ class I2AEmbed(OnlineQRDDQN):
         # distil policy loss same as qloss but between distil and current policy
         imag_qs = torch.stack(rollouts.imag_qs)
         imag_qs = imag_qs.view(self.nb_rollout * self._nb_env, *imag_qs.shape[2:])
-        action_select = actions.argmax(-1, keepdim=True)
-        action_select = action_select.unsqueeze(-1).expand(action_select.shape[0], 1, imag_qs.shape[-1]).long()
+        actions_argmax = actions.argmax(-1, keepdim=True)
+        action_select = actions_argmax.unsqueeze(-1).expand(actions_argmax.shape[0], 1, imag_qs.shape[-1]).long()
         imag_qs_a = imag_qs.gather(1, action_select).squeeze(1)
         imag_qs_a = imag_qs_a.view(self.nb_rollout, self._nb_env, -1)
         distil_loss = self._loss_fn(imag_qs_a, batch_values.detach())
+
+        # imagined policy accuracy
+        with torch.no_grad():
+            imag_action = imag_qs.mean(-1).argmax(-1, keepdim=True)
+            imag_policy_accuracy = (imag_action == actions_argmax).view(self.nb_rollout, self._nb_env)[:, -1].cpu()
+            imag_policy_accuracy = imag_policy_accuracy.sum() / self.nb_rollout
 
         # predict next embedding loss
         # mse loss, have to chop off last
@@ -116,6 +122,6 @@ class I2AEmbed(OnlineQRDDQN):
             'reward_pred_loss': reward_loss.mean(),
             'distil_loss': distil_loss.mean()
         }
-        metrics = {}
+        metrics = {'distil_policy_accuracy': imag_policy_accuracy}
         return losses, metrics
 
