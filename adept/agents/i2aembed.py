@@ -113,8 +113,8 @@ class I2AEmbed(OnlineQRDDQN):
         # reward loss huber TODO: probably classification to see if there is a reward, then another
         # head to predict the value of it
         rewards = torch.stack(rollouts.rewards)
-        predicted_reward = self._inverse_scale(predicted_reward.view(-1, self._nb_env))
-        reward_loss = 0.5 * torch.mean((predicted_reward - rewards) ** 2)
+        predicted_reward = predicted_reward.view(-1, self._nb_env)
+        reward_loss = 0.5 * torch.mean((predicted_reward - self._scale(rewards)) ** 2)
 
         losses = {
             'value_loss': value_loss.mean(),
