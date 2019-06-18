@@ -25,7 +25,7 @@ class AgentRegistry:
 
         self.register_agent(self._load_actor_critic())
         self.register_agent(self._load_actor_critic_vtrace())
-        self.register_agent(self._load_i2a())
+        self.register_i2a_agents()
         self.register_dqn_agents()
 
     @staticmethod
@@ -38,10 +38,11 @@ class AgentRegistry:
         from adept.agents.impala.actor_critic_vtrace import ActorCriticVtrace
         return ActorCriticVtrace
 
-    @staticmethod
-    def _load_i2a():
+    def register_i2a_agents(self):
         from adept.agents.i2a import I2A
-        return I2A
+        from adept.agents.i2aembed import I2AEmbed
+        self.register_agent(I2A)
+        self.register_agent(I2AEmbed)
 
     def register_dqn_agents(self):
         from adept.agents.dqn import DQN, DDQN, OnlineDQN, OnlineDDQN, ActorLearnerDQN, ActorLearnerDDQN, QRDQN, QRDDQN
