@@ -26,21 +26,22 @@ from adept.agents.dqn import OnlineQRDDQN
 class Embedder(OnlineQRDDQN):
     args = {**OnlineQRDDQN.args}
     args['autoencoder_loss'] = True
+    args['reward_pred_loss'] = True
 
     def __init__(self, *args, **kwargs):
         self._autoencode_loss = kwargs['autoencoder_loss']
+        self._reward_pred_loss = kwargs['reward_pred_loss']
         del kwargs['autoencoder_loss']
+        del kwargs['reward_pred_loss']
 
         super().__init__(*args, **kwargs)
         self.ssim = SSIM(1, self.device)
 
         if self._autoencode_loss:
             self.exp_cache['ae_state_pred'] = []
-        self.exp_cache['actions'] = []
-        self.exp_cache['imag_encoded'] = []
-        self.exp_cache['imag_qs'] = []
-        self.exp_cache['imag_obs'] = []
-        self.exp_cache['internals'] = []
+        if self._reward_pred_loss:
+            self.exp_cache['encoded_obs'] = []
+            self.exp_cache['actions'] = []
 
     @classmethod
     def from_args(
@@ -64,7 +65,8 @@ class Embedder(OnlineQRDDQN):
             target_copy_steps=args.target_copy_steps / denom,
             double_dqn=args.double_dqn,
             num_atoms=args.num_atoms,
-            autoencoder_loss=args.autoencoder_loss
+            autoencoder_loss=args.autoencoder_loss,
+            reward_pred_loss=args.reward_pred_loss
         )
 
     def _act_gym(self, obs):
@@ -93,9 +95,11 @@ class Embedder(OnlineQRDDQN):
         exp_cache = {'values': values}
         if self._autoencode_loss:
             exp_cache['ae_state_pred'] = predictions['ae_state_pred']
-
-        # one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
-        # one_hot_action = one_hot_action.scatter_(1, action, 1)
+        if self._reward_pred_loss:
+            exp_cache['encoded_obs'] = predictions['encoded_obs']
+            one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
+            one_hot_action = one_hot_action.scatter_(1, action, 1)
+            exp_cache['actions'] = one_hot_action
 
         self.exp_cache.write_forward(**exp_cache)
         self.internals = internals
@@ -139,6 +143,17 @@ class Embedder(OnlineQRDDQN):
             autoencoder_img = torch.cat([states_pred[-5:], states_tensor[-5:]], 0)
             autoencoder_img = vutils.make_grid(autoencoder_img, nrow=5)
             metrics['ae_state'] = autoencoder_img
+
+        if self._reward_pred_loss:
+            actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
+            encoded_obs = view(torch.stack(rollouts.encoded_obs))
+            predicted_reward = self.network.predict_reward(encoded_obs, actions)
+            # reward loss huber TODO: probably classification to see if there is a reward, then another
+            # head to predict the value of it
+            rewards = torch.stack(rollouts.rewards)
+            predicted_reward = predicted_reward.view(-1, self._nb_env)
+            reward_loss = 0.5 * torch.mean((predicted_reward - self._scale(rewards)) ** 2)
+            losses['reward_pred_loss'] = reward_loss.mean()
 
         return losses, metrics
 

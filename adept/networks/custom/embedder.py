@@ -32,12 +32,14 @@ def flatten(tensor):
 
 class Embedder(NetworkModule):
     args = {
-        'autoencoder': True
+        'autoencoder': True,
+        'reward_pred': True
     }
 
     def __init__(self, args, obs_space, output_space):
         super().__init__()
         self._autoencoder = args.autoencoder
+        self._reward_pred = args.reward_pred
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
         # encode state with recurrence captured
@@ -53,6 +55,13 @@ class Embedder(NetworkModule):
 
         if self._autoencoder:
             self.ae_upsample = PixelShuffleFourConv(self.lstm.output_shape()[0])
+
+        if self._reward_pred:
+            self.reward_pred = nn.Sequential(
+                nn.Linear(lstm_out_shape+self._nb_action, 128),
+                nn.BatchNorm1d(128),
+                nn.Linear(128, 1)
+            )
 
         # imagined next embedding
         # self.imag_embed_encoder = ResEmbed(self.lstm.output_shape()[0]+self._nb_action, 32)
@@ -126,8 +135,14 @@ class Embedder(NetworkModule):
                 # upsample back to pixels
                 ae_state_pred = self.ae_upsample(encoded_obs)
                 pol_outs['ae_state_pred'] = ae_state_pred
+            if self._reward_pred:
+                pol_outs['encoded_obs'] = encoded_obs
 
         return pol_outs, lstm_internals
+
+    def predict_reward(self, encoded_obs, action_taken):
+        # reward prediction
+        return self.reward_pred(torch.cat([flatten(encoded_obs), action_taken], dim=1))
 
 
 def pixel_norm(xs):
