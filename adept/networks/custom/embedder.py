@@ -60,6 +60,7 @@ class Embedder(NetworkModule):
             self.reward_pred = nn.Sequential(
                 nn.Linear(lstm_out_shape+self._nb_action, 128),
                 nn.BatchNorm1d(128),
+                nn.ReLU(),
                 nn.Linear(128, 1)
             )
 
