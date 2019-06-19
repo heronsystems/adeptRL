@@ -28,6 +28,9 @@ class AgentRegistry:
         self.register_i2a_agents()
         self.register_dqn_agents()
 
+        from adept.agents.embedder import Embedder
+        self.register_agent(Embedder)
+
     @staticmethod
     def _load_actor_critic():
         from adept.agents.actor_critic import ActorCritic
