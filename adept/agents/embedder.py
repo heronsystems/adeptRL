@@ -40,8 +40,7 @@ class Embedder(OnlineQRDDQN):
         if self._autoencode_loss:
             self.exp_cache['ae_state_pred'] = []
         if self._reward_pred_loss:
-            self.exp_cache['encoded_obs'] = []
-            self.exp_cache['actions'] = []
+            self.exp_cache['predicted_reward'] = []
 
     @classmethod
     def from_args(
@@ -96,10 +95,10 @@ class Embedder(OnlineQRDDQN):
         if self._autoencode_loss:
             exp_cache['ae_state_pred'] = predictions['ae_state_pred']
         if self._reward_pred_loss:
-            exp_cache['encoded_obs'] = predictions['encoded_obs']
             one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
             one_hot_action = one_hot_action.scatter_(1, action, 1)
-            exp_cache['actions'] = one_hot_action
+            predicted_reward = self.network.predict_reward(predictions['encoded_obs'], one_hot_action)
+            exp_cache['predicted_reward'] = predicted_reward.squeeze(-1)
 
         self.exp_cache.write_forward(**exp_cache)
         self.internals = internals
@@ -145,13 +144,10 @@ class Embedder(OnlineQRDDQN):
             metrics['ae_state'] = autoencoder_img
 
         if self._reward_pred_loss:
-            actions = torch.stack(rollouts.actions).view(self.nb_rollout * self._nb_env, -1)
-            encoded_obs = view(torch.stack(rollouts.encoded_obs))
-            predicted_reward = self.network.predict_reward(encoded_obs, actions)
             # reward loss huber TODO: probably classification to see if there is a reward, then another
             # head to predict the value of it
             rewards = torch.stack(rollouts.rewards)
-            predicted_reward = predicted_reward.view(-1, self._nb_env)
+            predicted_reward = torch.stack(rollouts.predicted_reward)
             reward_loss = 0.5 * torch.mean((predicted_reward - self._scale(rewards)) ** 2)
             losses['reward_pred_loss'] = reward_loss.mean()
 
