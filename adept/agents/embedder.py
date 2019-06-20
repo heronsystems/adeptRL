@@ -26,7 +26,7 @@ from adept.agents.dqn import OnlineQRDDQN
 class Embedder(OnlineQRDDQN):
     args = {**OnlineQRDDQN.args}
     args['autoencoder_loss'] = True
-    args['reward_pred_loss'] = False
+    args['reward_pred_loss'] = True
     args['next_embed_pred_loss'] = True
     args['inv_model_loss'] = True
 
@@ -173,12 +173,18 @@ class Embedder(OnlineQRDDQN):
             metrics['ae_state'] = autoencoder_img
 
         if self._reward_pred_loss:
-            # reward loss huber TODO: probably classification to see if there is a reward, then another
-            # head to predict the value of it
-            rewards = torch.stack(rollouts.rewards)
-            predicted_reward = torch.stack(rollouts.predicted_reward)
-            reward_loss = 0.5 * torch.mean((predicted_reward - self._scale(rewards)) ** 2)
-            losses['reward_pred_loss'] = reward_loss.mean()
+            # reward prediction as mse doesn't work well
+            rewards = view(torch.stack(rollouts.rewards))
+            non_z_rewards = rewards.nonzero()
+            # negative is class 0 so add 1 to sign
+            rewards_class = (rewards.sign() + 1).long()
+            predicted_reward = view(torch.stack(rollouts.predicted_reward))
+            predicted_reward_class = predicted_reward.argmax(-1)
+            losses['reward_pred_loss'] = F.cross_entropy(predicted_reward, rewards_class)
+            reward_accuracy = torch.sum(predicted_reward_class == rewards_class).float() / rewards.shape[0]
+            metrics['reward_pred_accuracy'] = reward_accuracy
+            reward_nonzero_accuracy = torch.sum(predicted_reward_class[non_z_rewards] == rewards_class[non_z_rewards]).float() / non_z_rewards.shape[0]
+            metrics['reward_pred_nonzero_accuracy'] = reward_nonzero_accuracy
 
         if self._next_embed_pred_loss or self._inv_model_loss:
             terminal_mask = view(torch.stack(rollouts.terminals[:-1]))
@@ -189,7 +195,7 @@ class Embedder(OnlineQRDDQN):
             # this is obs time + 1
             obs_embed = view(torch.stack(rollouts.obs_embed[1:])).detach()
             obs_embed_flat = obs_embed.view(obs_embed.shape[0], -1)
-            pred_mse_loss = 0.5 * torch.mean((predicted_next_embed_flat - obs_embed_flat.detach())**2, dim=1)
+            pred_mse_loss = 0.5 * torch.mean((predicted_next_embed_flat - obs_embed_flat)**2, dim=1)
             losses['next_embed_pred_loss'] = (pred_mse_loss * terminal_mask).mean()
 
         if self._inv_model_loss:

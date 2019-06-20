@@ -33,7 +33,7 @@ def flatten(tensor):
 class Embedder(NetworkModule):
     args = {
         'autoencoder': True,
-        'reward_pred': False,
+        'reward_pred': True,
         'next_embed_pred': True,
         'inv_model': True
     }
@@ -61,13 +61,14 @@ class Embedder(NetworkModule):
         if self._autoencoder:
             self.ae_upsample = PixelShuffleFourConv(self.lstm.output_shape()[0])
 
-        # predict reward given encoded_obs and action
+        # predict reward negative, zero, positive given encoded_obs and action
         if self._reward_pred:
             self.reward_pred = nn.Sequential(
                 nn.Linear(lstm_out_shape+self._nb_action, 128),
                 nn.BatchNorm1d(128),
                 nn.ReLU(),
-                nn.Linear(128, 1)
+                nn.Linear(128, 3),
+                nn.Softmax(dim=1)
             )
 
         # predict next encoded_obs
