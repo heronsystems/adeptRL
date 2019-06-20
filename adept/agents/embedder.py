@@ -29,7 +29,7 @@ class Embedder(OnlineQRDDQN):
     args['reward_pred_loss'] = True
     args['next_embed_pred_loss'] = True
     args['inv_model_loss'] = True
-    args['vae_loss'] = True
+    args['vae_loss'] = False
 
     def __init__(self, *args, **kwargs):
         self._autoencode_loss = kwargs['autoencoder_loss']

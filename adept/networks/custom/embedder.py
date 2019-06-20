@@ -33,10 +33,11 @@ def flatten(tensor):
 class Embedder(NetworkModule):
     args = {
         'autoencoder': True,
-        'vae': True,
+        'vae': False,
         'reward_pred': True,
         'next_embed_pred': True,
-        'inv_model': True
+        'inv_model': True,
+        'additive_embed': True
     }
 
     def __init__(self, args, obs_space, output_space):
@@ -46,6 +47,7 @@ class Embedder(NetworkModule):
         self._next_embed_pred = args.next_embed_pred
         self._inv_model = args.inv_model
         self._vae = args.vae
+        self._additive_embed = args.additive_embed
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
         # encode state with recurrence captured
@@ -85,7 +87,10 @@ class Embedder(NetworkModule):
 
         # predict next encoded_obs
         if self._next_embed_pred:
-            self.embed_pred = ResEmbed(embed_shape[0]+self._nb_action, embed_shape[0])
+            if self._additive_embed:
+                self.embed_pred = ResEmbed(self._nb_action, embed_shape[0])
+            else:
+                self.embed_pred = ResEmbed(embed_shape[0]+self._nb_action, embed_shape[0])
 
         # predict action given encoded_obs, encoded_obs_tp1
         if self._inv_model:
@@ -189,9 +194,14 @@ class Embedder(NetworkModule):
     def predict_next_embed(self, encoded_obs, action_taken):
         # tile actions
         actions_tiled = action_taken.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 3, 3)
-        # cat along channel dim
-        cat_embed_act = torch.cat([encoded_obs, actions_tiled], dim=1)
-        return self.embed_pred(cat_embed_act)
+
+        if self._additive_embed:
+            # only the actions are passed
+            return self.embed_pred(actions_tiled) + encoded_obs
+        else:
+            # cat along channel dim
+            cat_embed_act = torch.cat([encoded_obs, actions_tiled], dim=1)
+            return self.embed_pred(cat_embed_act)
 
     def predict_inv_action(self, encoded_obs, encoded_obs_tp1):
         # concat along channel
