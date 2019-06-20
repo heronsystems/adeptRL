@@ -34,7 +34,8 @@ class Embedder(NetworkModule):
     args = {
         'autoencoder': True,
         'reward_pred': False,
-        'next_embed_pred': True
+        'next_embed_pred': True,
+        'inv_model': True
     }
 
     def __init__(self, args, obs_space, output_space):
@@ -42,6 +43,7 @@ class Embedder(NetworkModule):
         self._autoencoder = args.autoencoder
         self._reward_pred = args.reward_pred
         self._next_embed_pred = args.next_embed_pred
+        self._inv_model = args.inv_model
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
         # encode state with recurrence captured
@@ -55,9 +57,11 @@ class Embedder(NetworkModule):
             {k: nn.Linear(lstm_out_shape, v[0]) for k, v in output_space.items()}
         )
 
+        # upsample back to image
         if self._autoencoder:
             self.ae_upsample = PixelShuffleFourConv(self.lstm.output_shape()[0])
 
+        # predict reward given encoded_obs and action
         if self._reward_pred:
             self.reward_pred = nn.Sequential(
                 nn.Linear(lstm_out_shape+self._nb_action, 128),
@@ -66,8 +70,13 @@ class Embedder(NetworkModule):
                 nn.Linear(128, 1)
             )
 
+        # predict next encoded_obs
         if self._next_embed_pred:
-            self.embed_pred = ResEmbed(self.lstm.output_shape()[0]+self._nb_action)
+            self.embed_pred = ResEmbed(self.lstm.output_shape()[0]+self._nb_action, self.lstm.output_shape()[0])
+
+        # predict action given encoded_obs, encoded_obs_tp1
+        if self._inv_model:
+            self.inv_pred = InvModel(self.lstm.output_shape()[0] * 2, self._nb_action)
 
         # imagined next embedding
         # self.imag_embed_encoder = ResEmbed(self.lstm.output_shape()[0]+self._nb_action, 32)
@@ -157,18 +166,23 @@ class Embedder(NetworkModule):
         cat_embed_act = torch.cat([encoded_obs, actions_tiled], dim=1)
         return self.embed_pred(cat_embed_act)
 
+    def predict_inv_action(self, encoded_obs, encoded_obs_tp1):
+        # concat along channel
+        all_obs = torch.cat([encoded_obs, encoded_obs_tp1], dim=1)
+        return self.inv_pred(all_obs)
+
 
 def pixel_norm(xs):
     return xs * torch.rsqrt(torch.mean(xs ** 2, dim=1, keepdim=True) + 1e-8)
 
 
 class ResEmbed(nn.Module):
-    def __init__(self, in_channel, batch_norm=False):
+    def __init__(self, in_channel, out_channel, batch_norm=False):
         super().__init__()
         self._out_shape = None
         self.conv1 = nn.Conv2d(in_channel, 32, 3, padding=1, bias=False)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1, bias=False)
-        self.conv3 = nn.Conv2d(64, 32, 3, padding=1, bias=False)
+        self.conv3 = nn.Conv2d(64, out_channel, 3, padding=1, bias=False)
 
         if not batch_norm:
             self.n1 = pixel_norm
@@ -216,5 +230,31 @@ class PixelShuffleFourConv(nn.Module):
         xs = F.relu(F.pixel_shuffle(self.n2(self.conv2(xs)), 2))
         xs = F.relu(F.pixel_shuffle(self.n3(self.conv3(xs)), 2))
         xs = F.leaky_relu(self.conv4(xs))
+        return xs
+
+
+class InvModel(nn.Module):
+    def __init__(self, in_channel, out_channel, batch_norm=False):
+        super().__init__()
+        self._out_shape = None
+        self.conv1 = nn.Conv2d(in_channel, 32, 3, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(32, 64, 3, padding=1, bias=False)
+        self.conv3 = nn.Conv2d(64, out_channel, 3, bias=False)
+
+        if not batch_norm:
+            self.n1 = pixel_norm
+            self.n2 = pixel_norm
+        else:
+            self.n1 = BatchNorm2d(32)
+            self.n2 = BatchNorm2d(64)
+
+        relu_gain = init.calculate_gain('relu')
+        self.conv1.weight.data.mul_(relu_gain)
+        self.conv2.weight.data.mul_(relu_gain)
+
+    def forward(self, xs):
+        xs = F.relu(self.n1(self.conv1(xs)))
+        xs = F.relu(self.n2(self.conv2(xs)))
+        xs = F.softmax(self.conv3(xs).squeeze(), dim=-1)
         return xs
 

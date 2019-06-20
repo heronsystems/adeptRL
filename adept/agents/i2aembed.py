@@ -100,7 +100,7 @@ class I2AEmbed(OnlineQRDDQN):
         with torch.no_grad():
             imag_action = imag_qs.mean(-1).argmax(-1, keepdim=True)
             imag_policy_accuracy = (imag_action == actions_argmax).view(self.nb_rollout, self._nb_env)[:, -1].cpu()
-            imag_policy_accuracy = imag_policy_accuracy.sum() / self.nb_rollout
+            imag_policy_accuracy = imag_policy_accuracy.sum().float() / self.nb_rollout
 
         # predict next embedding loss
         # mse loss, have to chop off last

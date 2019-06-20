@@ -28,14 +28,17 @@ class Embedder(OnlineQRDDQN):
     args['autoencoder_loss'] = True
     args['reward_pred_loss'] = False
     args['next_embed_pred_loss'] = True
+    args['inv_model_loss'] = True
 
     def __init__(self, *args, **kwargs):
         self._autoencode_loss = kwargs['autoencoder_loss']
         self._reward_pred_loss = kwargs['reward_pred_loss']
         self._next_embed_pred_loss = kwargs['next_embed_pred_loss']
+        self._inv_model_loss = kwargs['inv_model_loss']
         del kwargs['autoencoder_loss']
         del kwargs['reward_pred_loss']
         del kwargs['next_embed_pred_loss']
+        del kwargs['inv_model_loss']
 
         super().__init__(*args, **kwargs)
         self.ssim = SSIM(1, self.device)
@@ -47,6 +50,9 @@ class Embedder(OnlineQRDDQN):
         if self._next_embed_pred_loss:
             self.exp_cache['predicted_next_embed'] = []
             self.exp_cache['obs_embed'] = []
+        if self._inv_model_loss:
+            self.exp_cache['inv_action'] = []
+            self.exp_cache['actions'] = []
 
     @classmethod
     def from_args(
@@ -72,7 +78,8 @@ class Embedder(OnlineQRDDQN):
             num_atoms=args.num_atoms,
             autoencoder_loss=args.autoencoder_loss,
             reward_pred_loss=args.reward_pred_loss,
-            next_embed_pred_loss=args.next_embed_pred_loss
+            next_embed_pred_loss=args.next_embed_pred_loss,
+            inv_model_loss=args.inv_model_loss
         )
 
     def _act_gym(self, obs):
@@ -101,7 +108,7 @@ class Embedder(OnlineQRDDQN):
         exp_cache = {'values': values}
         if self._autoencode_loss:
             exp_cache['ae_state_pred'] = predictions['ae_state_pred']
-        if self._reward_pred_loss or self._next_embed_pred_loss:
+        if self._reward_pred_loss or self._next_embed_pred_loss or self._inv_model_loss:
             one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
             one_hot_action = one_hot_action.scatter_(1, action, 1)
         if self._reward_pred_loss:
@@ -110,6 +117,16 @@ class Embedder(OnlineQRDDQN):
         if self._next_embed_pred_loss:
             predicted_next_embed = self.network.predict_next_embed(predictions['encoded_obs'], one_hot_action)
             exp_cache['predicted_next_embed'] = predicted_next_embed
+            exp_cache['obs_embed'] = predictions['encoded_obs']
+        if self._inv_model_loss and len(self.exp_cache) > 0:
+            # last action, last_embed
+            last_action = self.exp_cache['actions'][-1].argmax(dim=1)
+            last_embed = self.exp_cache['obs_embed'][-1]
+            current_embed = predictions['encoded_obs']
+            exp_cache['inv_action'] = self.network.predict_inv_action(last_embed, current_embed)
+        if self._inv_model_loss:
+            exp_cache['actions'] = one_hot_action
+        if self._next_embed_pred_loss or self._inv_model_loss:
             exp_cache['obs_embed'] = predictions['encoded_obs']
 
         self.exp_cache.write_forward(**exp_cache)
@@ -163,8 +180,10 @@ class Embedder(OnlineQRDDQN):
             reward_loss = 0.5 * torch.mean((predicted_reward - self._scale(rewards)) ** 2)
             losses['reward_pred_loss'] = reward_loss.mean()
 
-        if self._next_embed_pred_loss:
+        if self._next_embed_pred_loss or self._inv_model_loss:
             terminal_mask = view(torch.stack(rollouts.terminals[:-1]))
+
+        if self._next_embed_pred_loss:
             predicted_next_embed = view(torch.stack(rollouts.predicted_next_embed[:-1]))
             predicted_next_embed_flat = predicted_next_embed.view(predicted_next_embed.shape[0], -1)
             # this is obs time + 1
@@ -172,6 +191,15 @@ class Embedder(OnlineQRDDQN):
             obs_embed_flat = obs_embed.view(obs_embed.shape[0], -1)
             pred_mse_loss = 0.5 * torch.mean((predicted_next_embed_flat - obs_embed_flat.detach())**2, dim=1)
             losses['next_embed_pred_loss'] = (pred_mse_loss * terminal_mask).mean()
+
+        if self._inv_model_loss:
+            # actions taken
+            actions = view(torch.stack(rollouts.actions[:-1])).argmax(-1)
+            inv_actions = view(torch.stack(rollouts.inv_action))
+            inv_action_loss = F.cross_entropy(inv_actions, actions, reduction='none')
+            losses['inv_action_pred_loss'] = (inv_action_loss * terminal_mask).mean()
+            inv_action_accuracy = torch.sum(inv_actions.argmax(-1) == actions).float() / actions.shape[0]
+            metrics['inv_action_accuracy'] = inv_action_accuracy
 
         return losses, metrics
 
