@@ -136,7 +136,8 @@ class Embedder(OnlineQRDDQN):
             exp_cache['obs_embed'] = predictions['encoded_obs']
         if self._vae_loss:
             mu, logvar = predictions['encoded_mu'], predictions['encoded_logvar']
-            exp_cache['kl_diverge'] = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+            # mean over batch
+            exp_cache['kl_diverge'] = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())) / self._nb_env
 
         self.exp_cache.write_forward(**exp_cache)
         self.internals = internals
