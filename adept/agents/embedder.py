@@ -50,6 +50,7 @@ class Embedder(OnlineQRDDQN):
             self.exp_cache['ae_state_pred'] = []
         if self._reward_pred_loss:
             self.exp_cache['predicted_reward'] = []
+            self._reward_pred_weights = torch.Tensor([0.45, 0.1, 0.45]).to(self.device)
         if self._next_embed_pred_loss:
             self.exp_cache['predicted_next_embed'] = []
             self.exp_cache['obs_embed'] = []
@@ -189,7 +190,7 @@ class Embedder(OnlineQRDDQN):
             rewards_class = (rewards.sign() + 1).long()
             predicted_reward = view(torch.stack(rollouts.predicted_reward))
             predicted_reward_class = predicted_reward.argmax(-1)
-            losses['reward_pred_loss'] = F.cross_entropy(predicted_reward, rewards_class)
+            losses['reward_pred_loss'] = F.cross_entropy(predicted_reward, rewards_class, self._reward_pred_weights)
             reward_accuracy = torch.sum(predicted_reward_class == rewards_class).float() / rewards.shape[0]
             metrics['reward_pred_accuracy'] = reward_accuracy
             reward_nonzero_accuracy = torch.sum(predicted_reward_class[non_z_rewards] == rewards_class[non_z_rewards]).float() / non_z_rewards.shape[0]
