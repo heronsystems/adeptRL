@@ -170,7 +170,7 @@ class Embedder(OnlineQRDDQN):
             # this is obs time + 1
             obs_embed = view(torch.stack(rollouts.obs_embed[1:])).detach()
             obs_embed_flat = obs_embed.view(obs_embed.shape[0], -1)
-            pred_mse_loss = 0.5 * torch.mean((predicted_next_embed_flat - obs_embed_flat)**2, dim=1)
+            pred_mse_loss = 0.5 * torch.mean((predicted_next_embed_flat - obs_embed_flat.detach())**2, dim=1)
             losses['next_embed_pred_loss'] = (pred_mse_loss * terminal_mask).mean()
 
         return losses, metrics
