@@ -47,7 +47,7 @@ class I2AEmbed(NetworkModule):
         )
 
         # imagined next embedding
-        self.imag_embed_encoder = ResEmbed(self.lstm.output_shape()[0]+self._nb_action, 32)
+        self.imag_embed_encoder = ResEmbed(self.lstm.output_shape()[0]+self._nb_action)
         self.imag_encoder = nn.Linear(np.prod(self.lstm.output_shape()) + 1, 128, bias=True)
         # reward prediciton from lstm + action one hot
         self.reward_pred = nn.Linear(lstm_out_shape+self._nb_action, 1)

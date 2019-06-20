@@ -26,13 +26,16 @@ from adept.agents.dqn import OnlineQRDDQN
 class Embedder(OnlineQRDDQN):
     args = {**OnlineQRDDQN.args}
     args['autoencoder_loss'] = True
-    args['reward_pred_loss'] = True
+    args['reward_pred_loss'] = False
+    args['next_embed_pred_loss'] = True
 
     def __init__(self, *args, **kwargs):
         self._autoencode_loss = kwargs['autoencoder_loss']
         self._reward_pred_loss = kwargs['reward_pred_loss']
+        self._next_embed_pred_loss = kwargs['next_embed_pred_loss']
         del kwargs['autoencoder_loss']
         del kwargs['reward_pred_loss']
+        del kwargs['next_embed_pred_loss']
 
         super().__init__(*args, **kwargs)
         self.ssim = SSIM(1, self.device)
@@ -41,6 +44,9 @@ class Embedder(OnlineQRDDQN):
             self.exp_cache['ae_state_pred'] = []
         if self._reward_pred_loss:
             self.exp_cache['predicted_reward'] = []
+        if self._next_embed_pred_loss:
+            self.exp_cache['predicted_next_embed'] = []
+            self.exp_cache['obs_embed'] = []
 
     @classmethod
     def from_args(
@@ -65,7 +71,8 @@ class Embedder(OnlineQRDDQN):
             double_dqn=args.double_dqn,
             num_atoms=args.num_atoms,
             autoencoder_loss=args.autoencoder_loss,
-            reward_pred_loss=args.reward_pred_loss
+            reward_pred_loss=args.reward_pred_loss,
+            next_embed_pred_loss=args.next_embed_pred_loss
         )
 
     def _act_gym(self, obs):
@@ -94,11 +101,16 @@ class Embedder(OnlineQRDDQN):
         exp_cache = {'values': values}
         if self._autoencode_loss:
             exp_cache['ae_state_pred'] = predictions['ae_state_pred']
-        if self._reward_pred_loss:
+        if self._reward_pred_loss or self._next_embed_pred_loss:
             one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
             one_hot_action = one_hot_action.scatter_(1, action, 1)
+        if self._reward_pred_loss:
             predicted_reward = self.network.predict_reward(predictions['encoded_obs'], one_hot_action)
             exp_cache['predicted_reward'] = predicted_reward.squeeze(-1)
+        if self._next_embed_pred_loss:
+            predicted_next_embed = self.network.predict_next_embed(predictions['encoded_obs'], one_hot_action)
+            exp_cache['predicted_next_embed'] = predicted_next_embed
+            exp_cache['obs_embed'] = predictions['encoded_obs']
 
         self.exp_cache.write_forward(**exp_cache)
         self.internals = internals
@@ -150,6 +162,16 @@ class Embedder(OnlineQRDDQN):
             predicted_reward = torch.stack(rollouts.predicted_reward)
             reward_loss = 0.5 * torch.mean((predicted_reward - self._scale(rewards)) ** 2)
             losses['reward_pred_loss'] = reward_loss.mean()
+
+        if self._next_embed_pred_loss:
+            terminal_mask = view(torch.stack(rollouts.terminals[:-1]))
+            predicted_next_embed = view(torch.stack(rollouts.predicted_next_embed[:-1]))
+            predicted_next_embed_flat = predicted_next_embed.view(predicted_next_embed.shape[0], -1)
+            # this is obs time + 1
+            obs_embed = view(torch.stack(rollouts.obs_embed[1:])).detach()
+            obs_embed_flat = obs_embed.view(obs_embed.shape[0], -1)
+            pred_mse_loss = 0.5 * torch.mean((predicted_next_embed_flat - obs_embed_flat)**2, dim=1)
+            losses['next_embed_pred_loss'] = (pred_mse_loss * terminal_mask).mean()
 
         return losses, metrics
 
