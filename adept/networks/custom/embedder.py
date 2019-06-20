@@ -33,6 +33,7 @@ def flatten(tensor):
 class Embedder(NetworkModule):
     args = {
         'autoencoder': True,
+        'vae': True,
         'reward_pred': True,
         'next_embed_pred': True,
         'inv_model': True
@@ -44,27 +45,38 @@ class Embedder(NetworkModule):
         self._reward_pred = args.reward_pred
         self._next_embed_pred = args.next_embed_pred
         self._inv_model = args.inv_model
+        self._vae = args.vae
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
         # encode state with recurrence captured
         self._obs_key = list(obs_space.keys())[0]
         self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
-        self.lstm = ConvLSTM(self.conv_stack.output_shape(), 'lstm', True, 32, 3)
-        lstm_out_shape = np.prod(self.lstm.output_shape())
+
+        if self._vae:
+            # reparameterize
+            self.lstm = ConvLSTM(self.conv_stack.output_shape(), 'lstm', True, 64, 3)
+            embed_shape = list(self.lstm.output_shape())
+            # don't include mu & sigma, num channels will be 32
+            embed_shape[0] = 32
+            embed_shape = tuple(embed_shape)
+        else:
+            self.lstm = ConvLSTM(self.conv_stack.output_shape(), 'lstm', True, 32, 3)
+            embed_shape = self.lstm.output_shape()
+        embed_flat_shape = np.prod(embed_shape)
 
         # policy output
         self.pol_outputs = nn.ModuleDict(
-            {k: nn.Linear(lstm_out_shape, v[0]) for k, v in output_space.items()}
+            {k: nn.Linear(embed_flat_shape, v[0]) for k, v in output_space.items()}
         )
 
         # upsample back to image
         if self._autoencoder:
-            self.ae_upsample = PixelShuffleFourConv(self.lstm.output_shape()[0])
+            self.ae_upsample = PixelShuffleFourConv(embed_shape[0])
 
         # predict reward negative, zero, positive given encoded_obs and action
         if self._reward_pred:
             self.reward_pred = nn.Sequential(
-                nn.Linear(lstm_out_shape+self._nb_action, 128),
+                nn.Linear(embed_flat_shape+self._nb_action, 128),
                 nn.BatchNorm1d(128),
                 nn.ReLU(),
                 nn.Linear(128, 3),
@@ -73,11 +85,11 @@ class Embedder(NetworkModule):
 
         # predict next encoded_obs
         if self._next_embed_pred:
-            self.embed_pred = ResEmbed(self.lstm.output_shape()[0]+self._nb_action, self.lstm.output_shape()[0])
+            self.embed_pred = ResEmbed(embed_shape[0]+self._nb_action, embed_shape[0])
 
         # predict action given encoded_obs, encoded_obs_tp1
         if self._inv_model:
-            self.inv_pred = InvModel(self.lstm.output_shape()[0] * 2, self._nb_action)
+            self.inv_pred = InvModel(embed_shape[0] * 2, self._nb_action)
 
         # imagined next embedding
         # self.imag_embed_encoder = ResEmbed(self.lstm.output_shape()[0]+self._nb_action, 32)
@@ -126,7 +138,15 @@ class Embedder(NetworkModule):
     def _encode_observation(self, observation, internals):
         conv_out, _ = self.conv_stack(observation, {})
         hx, lstm_internals = self.lstm(conv_out, internals)
-        return hx, lstm_internals
+
+        if self._vae:
+            mu = hx[:, :32]
+            logvar = hx[:, 32:]
+            std = torch.exp(0.5 * logvar)
+            eps = torch.randn_like(std)
+            return mu + std * eps, mu, logvar, lstm_internals
+        else:
+            return hx, lstm_internals
 
     def forward(self, observation, internals, ret_imag=False):
         """
@@ -140,7 +160,10 @@ class Embedder(NetworkModule):
         :return: Dict[str, torch.Tensor (ND)]
         """
         obs = observation[self._obs_key]
-        encoded_obs, lstm_internals = self._encode_observation(obs, internals)
+        if self._vae:
+            encoded_obs, encoded_mu, encoded_logvar, lstm_internals = self._encode_observation(obs, internals)
+        else:
+            encoded_obs, lstm_internals = self._encode_observation(obs, internals)
         encoded_obs_flat = flatten(encoded_obs)
 
         pol_outs = {k: self.pol_outputs[k](encoded_obs_flat) for k in self.pol_outputs.keys()}
@@ -153,6 +176,9 @@ class Embedder(NetworkModule):
                 pol_outs['ae_state_pred'] = ae_state_pred
             if self._reward_pred or self._next_embed_pred:
                 pol_outs['encoded_obs'] = encoded_obs
+            if self._vae:
+                pol_outs['encoded_mu'] = encoded_mu
+                pol_outs['encoded_logvar'] = encoded_logvar
 
         return pol_outs, lstm_internals
 

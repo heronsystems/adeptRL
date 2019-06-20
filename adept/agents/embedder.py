@@ -29,16 +29,19 @@ class Embedder(OnlineQRDDQN):
     args['reward_pred_loss'] = True
     args['next_embed_pred_loss'] = True
     args['inv_model_loss'] = True
+    args['vae_loss'] = True
 
     def __init__(self, *args, **kwargs):
         self._autoencode_loss = kwargs['autoencoder_loss']
         self._reward_pred_loss = kwargs['reward_pred_loss']
         self._next_embed_pred_loss = kwargs['next_embed_pred_loss']
         self._inv_model_loss = kwargs['inv_model_loss']
+        self._vae_loss = kwargs['vae_loss']
         del kwargs['autoencoder_loss']
         del kwargs['reward_pred_loss']
         del kwargs['next_embed_pred_loss']
         del kwargs['inv_model_loss']
+        del kwargs['vae_loss']
 
         super().__init__(*args, **kwargs)
         self.ssim = SSIM(1, self.device)
@@ -53,6 +56,8 @@ class Embedder(OnlineQRDDQN):
         if self._inv_model_loss:
             self.exp_cache['inv_action'] = []
             self.exp_cache['actions'] = []
+        if self._vae_loss:
+            self.exp_cache['kl_diverge'] = []
 
     @classmethod
     def from_args(
@@ -79,7 +84,8 @@ class Embedder(OnlineQRDDQN):
             autoencoder_loss=args.autoencoder_loss,
             reward_pred_loss=args.reward_pred_loss,
             next_embed_pred_loss=args.next_embed_pred_loss,
-            inv_model_loss=args.inv_model_loss
+            inv_model_loss=args.inv_model_loss,
+            vae_loss=args.vae_loss
         )
 
     def _act_gym(self, obs):
@@ -128,6 +134,9 @@ class Embedder(OnlineQRDDQN):
             exp_cache['actions'] = one_hot_action
         if self._next_embed_pred_loss or self._inv_model_loss:
             exp_cache['obs_embed'] = predictions['encoded_obs']
+        if self._vae_loss:
+            mu, logvar = predictions['encoded_mu'], predictions['encoded_logvar']
+            exp_cache['kl_diverge'] = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
         self.exp_cache.write_forward(**exp_cache)
         self.internals = internals
@@ -206,6 +215,9 @@ class Embedder(OnlineQRDDQN):
             losses['inv_action_pred_loss'] = (inv_action_loss * terminal_mask).mean()
             inv_action_accuracy = torch.sum(inv_actions.argmax(-1) == actions).float() / actions.shape[0]
             metrics['inv_action_accuracy'] = inv_action_accuracy
+
+        if self._vae_loss:
+            losses['kl_divergence'] = torch.stack(rollouts.kl_diverge).mean()
 
         return losses, metrics
 
