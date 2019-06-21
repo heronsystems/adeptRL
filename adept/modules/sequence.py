@@ -26,16 +26,12 @@ class LSTMCellLayerNorm(Module):
     https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/contrib/rnn/python/ops/rnn_cell.py#L2453
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, forget_bias=1.0):
+    def __init__(self, input_size, hidden_size, forget_bias=1.0):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.ih = Linear(input_size + hidden_size, 4 * hidden_size, bias=bias)
-
-        if bias:
-            self.ih.bias.data.fill_(0)
-            # forget bias init
-            self.ih.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
+        self.forget_bias = forget_bias
+        self.ih = Linear(input_size + hidden_size, 4 * hidden_size, bias=False)
 
         self.ln_preact = LayerNorm(hidden_size * 4)
         self.ln_cell = LayerNorm(hidden_size)
@@ -51,6 +47,10 @@ class LSTMCellLayerNorm(Module):
 
         # Linear mappings
         preact = self.ln_preact(self.ih(torch.cat([x, h], dim=-1)))
+
+        # forget bias
+        if self.forget_bias != 0:
+            preact[:, self.hidden_size:2 * self.hidden_size] += self.forget_bias
 
         # activations
         gates = preact[:, :3 * self.hidden_size].sigmoid()
