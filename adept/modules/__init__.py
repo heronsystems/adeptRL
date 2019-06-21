@@ -14,5 +14,5 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from .norm import Identity
 from .attention import MultiHeadSelfAttention, RMCCell
-from .sequence import LSTMCellLayerNorm
+from .sequence import LSTMCellLayerNorm, JANETCellLayerNorm
 from .spatial import Residual2DPreact, ConvLSTMCellLayerNorm, calc_conv_output_dim

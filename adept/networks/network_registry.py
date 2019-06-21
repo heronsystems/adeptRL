@@ -25,10 +25,12 @@ class NetworkRegistry:
         from adept.networks.net1d.identity_1d import Identity1D
         from adept.networks.net1d.linear import Linear
         from adept.networks.net1d.lstm import LSTM
+        from adept.networks.net1d.janet import JANET
         from adept.networks.net1d.iqn_lstm import IQNLSTM
         net_1d_cls_by_name = {
             'Identity1D': Identity1D,
             'LSTM': LSTM,
+            'JANET': JANET,
             'IQNLSTM': IQNLSTM,
             'Linear': Linear,
         }

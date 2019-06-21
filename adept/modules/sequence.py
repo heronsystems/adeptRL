@@ -68,3 +68,48 @@ class LSTMCellLayerNorm(Module):
         h_t = torch.mul(o_t, c_t.tanh())
 
         return h_t, c_t
+
+
+class JANETCellLayerNorm(Module):
+    """
+    A lstm cell that only has forget gates
+    "The unreasonable effectiveness of the forget gate"
+
+    https://arxiv.org/pdf/1804.04849.pdf
+    """
+
+    def __init__(self, input_size, hidden_size, tmax=20, forget_bias=1.0):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.forget_bias = forget_bias
+        self.ih = Linear(input_size + hidden_size, 2 * hidden_size, bias=False)
+
+        self.ln_s_t = LayerNorm(hidden_size)
+        # chrono init log(uniform(1, Tmax - 1))
+        bias_forget = torch.log(1 + (torch.rand_like(self.ln_s_t.bias.data) * tmax))
+        self.ln_s_t.bias.data = bias_forget
+        self.ln_f_t = LayerNorm(hidden_size)
+
+    def forward(self, x, hidden):
+        """
+        LSTM Cell that layer normalizes the cell state.
+        :param x: Tensor{B, C}
+        :param hidden: A Tuple[Tensor{B, C}, Tensor{B, C}] of (previous output, cell state)
+        :return:
+        """
+        h, c = hidden
+
+        # Linear mappings
+        preact = self.ih(torch.cat([x, h], dim=-1))
+
+        # activations using notation from the paper
+        st, ft = torch.chunk(preact, 2, dim=-1)
+
+        s_t = self.ln_s_t(st)
+        f_t = self.ln_f_t(ft)
+        c_tilda_t = f_t.tanh_()
+        c_t = s_t.sigmoid() * c + (1 - (s_t - self.forget_bias).sigmoid()) * c_tilda_t
+
+        return c_t, c_t
+
