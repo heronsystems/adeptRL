@@ -70,7 +70,7 @@ class ConvLSTMCellLayerNorm(nn.Module):
         # hidden to hidden must be the same size
         self._hidden_padding = int((kernel_size - 1) / 2)
         self.ih = nn.Conv2d(input_size[0], 4 * hidden_size, kernel_size, stride=stride, padding=padding, bias=bias)
-        self.hh = nn.Conv2d(hidden_size, 4 * hidden_size, kernel_size, padding=self._hidden_padding, bias=bias)
+        self.hh = nn.Conv2d(hidden_size, 4 * hidden_size, kernel_size, padding=self._hidden_padding, bias=False)
 
         hh_input_size = calc_conv_output_dim(input_size[1], kernel_size, stride, padding, 1)
 
