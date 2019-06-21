@@ -21,22 +21,23 @@ class LSTMCellLayerNorm(Module):
     A lstm cell that layer norms the cell state
     https://github.com/seba-1511/lstms.pth/blob/master/lstms/lstm.py for reference.
     Original License Apache 2.0
+
+    Modified to follow tensorflow implementation here:
+    https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/contrib/rnn/python/ops/rnn_cell.py#L2453
     """
 
-    def __init__(self, input_size, hidden_size, bias=True, forget_bias=0):
+    def __init__(self, input_size, hidden_size, bias=True, forget_bias=1.0):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.ih = Linear(input_size, 4 * hidden_size, bias=bias)
-        self.hh = Linear(hidden_size, 4 * hidden_size, bias=bias)
+        self.ih = Linear(input_size + hidden_size, 4 * hidden_size, bias=bias)
 
         if bias:
             self.ih.bias.data.fill_(0)
-            self.hh.bias.data.fill_(0)
             # forget bias init
             self.ih.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
-            self.hh.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
 
+        self.ln_preact = LayerNorm(hidden_size * 4)
         self.ln_cell = LayerNorm(hidden_size)
 
     def forward(self, x, hidden):
@@ -49,9 +50,7 @@ class LSTMCellLayerNorm(Module):
         h, c = hidden
 
         # Linear mappings
-        i2h = self.ih(x)
-        h2h = self.hh(h)
-        preact = i2h + h2h
+        preact = self.ln_preact(self.ih(torch.cat([x, h], dim=-1)))
 
         # activations
         gates = preact[:, :3 * self.hidden_size].sigmoid()
