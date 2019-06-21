@@ -61,26 +61,27 @@ class ConvLSTMCellLayerNorm(nn.Module):
     A lstm cell that layer norms the cell state
     https://github.com/seba-1511/lstms.pth/blob/master/lstms/lstm.py for reference.
     Original License Apache 2.0
+
+    Modified to follow tensorflow implementation here:
+    https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/contrib/rnn/python/ops/rnn_cell.py#L2453
     """
 
-    def __init__(self, input_size, hidden_size, kernel_size, stride=0, padding=0, bias=True, forget_bias=0):
+    def __init__(self, input_size, hidden_size, kernel_size, stride=1, padding=0, forget_bias=1.0):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
+        self.forget_bias = forget_bias
         # hidden to hidden must be the same size
         self._hidden_padding = int((kernel_size - 1) / 2)
-        self.ih = nn.Conv2d(input_size[0], 4 * hidden_size, kernel_size, stride=stride, padding=padding, bias=bias)
+        self.ih = nn.Conv2d(input_size[0], 4 * hidden_size, kernel_size, stride=stride, padding=padding, bias=False)
         self.hh = nn.Conv2d(hidden_size, 4 * hidden_size, kernel_size, padding=self._hidden_padding, bias=False)
 
         hh_input_size = calc_conv_output_dim(input_size[1], kernel_size, stride, padding, 1)
 
-        if bias:
-            self.ih.bias.data.fill_(0)
-            self.hh.bias.data.fill_(0)
-            # forget bias init
-            self.ih.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
-            self.hh.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
-
+        self.ln_g_t = nn.LayerNorm([hidden_size, hh_input_size, hh_input_size])
+        self.ln_i_t = nn.LayerNorm([hidden_size, hh_input_size, hh_input_size])
+        self.ln_f_t = nn.LayerNorm([hidden_size, hh_input_size, hh_input_size])
+        self.ln_o_t = nn.LayerNorm([hidden_size, hh_input_size, hh_input_size])
         self.ln_cell = nn.LayerNorm([hidden_size, hh_input_size, hh_input_size])
 
     def forward(self, x, hidden):
@@ -97,14 +98,18 @@ class ConvLSTMCellLayerNorm(nn.Module):
         h2h = self.hh(h)
         preact = i2h + h2h
 
-        # activations
-        gates = preact[:, :3 * self.hidden_size].sigmoid()
-        g_t = preact[:, 3 * self.hidden_size:].tanh()
-        i_t = gates[:, :self.hidden_size]
-        f_t = gates[:, self.hidden_size:2 * self.hidden_size]
-        o_t = gates[:, -self.hidden_size:]
+        # activations, chunk over channels
+        it, ft, ot, gt = torch.chunk(preact, 4, dim=1)
+        i_t = self.ln_i_t(it).sigmoid_()
+        f_t = self.ln_f_t(ft)
+        # forget bias
+        if self.forget_bias != 0:
+            f_t += self.forget_bias
+            f_t.sigmoid_()
+        o_t = self.ln_o_t(ot).sigmoid_()
+        g_t = self.ln_g_t(gt).tanh_()
 
-        # cell computations
+        # cell computations cannot be inplace 
         c_t = torch.mul(c, f_t) + torch.mul(i_t, g_t)
         c_t = self.ln_cell(c_t)
         h_t = torch.mul(o_t, c_t.tanh())
