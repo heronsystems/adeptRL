@@ -52,16 +52,17 @@ class LSTMCellLayerNorm(Module):
         preact = self.ih(torch.cat([x, h], dim=-1))
 
         # activations
-        i_t = self.ln_i_t(preact[:, :self.hidden_size]).sigmoid_()
-        f_t = self.ln_f_t(preact[:, self.hidden_size:2 * self.hidden_size])
+        it, ft, ot, gt = torch.chunk(preact, 4, dim=-1)
+        i_t = self.ln_i_t(it).sigmoid_()
+        f_t = self.ln_f_t(ft)
         # forget bias
         if self.forget_bias != 0:
             f_t += self.forget_bias
             f_t.sigmoid_()
-        o_t = self.ln_o_t(preact[:, 2 * self.hidden_size:-self.hidden_size]).sigmoid_()
-        g_t = self.ln_g_t(preact[:, -self.hidden_size:]).tanh_()
+        o_t = self.ln_o_t(ot).sigmoid_()
+        g_t = self.ln_g_t(gt).tanh_()
 
-        # cell computations
+        # cell computations cannot be inplace 
         c_t = torch.mul(c, f_t) + torch.mul(i_t, g_t)
         c_t = self.ln_cell(c_t)
         h_t = torch.mul(o_t, c_t.tanh())
