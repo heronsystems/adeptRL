@@ -107,8 +107,14 @@ class Embedder(OnlineQRDDQN):
         values = []
         # TODO support multi-dimensional action spaces?
         for key in self._action_keys:
+            # for noisy methods APE-X random actions collapse so add additional noisy actions
+            # anneal epsilon over first 1000000 steps
+            if (self._vae_loss or self._next_embed_pred_nonoise) and self._act_count < 1000000 / self._nb_env:
+                eps_add = 1 - (self._act_count / (1000000 / self._nb_env))
+            else:
+                eps_add = 0
             # random action across some environments based on the actors epsilon
-            rand_mask = (self.epsilon > torch.rand(batch_size)).nonzero().squeeze(-1)
+            rand_mask = (eps_add + self.epsilon > torch.rand(batch_size)).nonzero().squeeze(-1)
             action = self._action_from_q_vals(q_vals[key])
             rand_act = torch.randint(self.action_space[key][0], (rand_mask.shape[0], 1), dtype=torch.long).to(self.device)
             action[rand_mask] = rand_act
@@ -122,8 +128,9 @@ class Embedder(OnlineQRDDQN):
         if self._autoencode_loss:
             exp_cache['ae_state_pred'] = predictions['ae_state_pred']
         if self._reward_pred_loss or self._next_embed_pred_loss or self._inv_model_loss:
-            one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
-            one_hot_action = one_hot_action.scatter_(1, action, 1)
+            with torch.no_grad():
+                one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
+                one_hot_action = one_hot_action.scatter_(1, action, 1)
         if self._reward_pred_loss:
             predicted_reward = self.network.predict_reward(predictions['encoded_obs'], one_hot_action)
             exp_cache['predicted_reward'] = predicted_reward.squeeze(-1)
