@@ -33,7 +33,10 @@ class LSTMCellLayerNorm(Module):
         self.forget_bias = forget_bias
         self.ih = Linear(input_size + hidden_size, 4 * hidden_size, bias=False)
 
-        self.ln_preact = LayerNorm(hidden_size * 4)
+        self.ln_g_t = LayerNorm(hidden_size)
+        self.ln_i_t = LayerNorm(hidden_size)
+        self.ln_f_t = LayerNorm(hidden_size)
+        self.ln_o_t = LayerNorm(hidden_size)
         self.ln_cell = LayerNorm(hidden_size)
 
     def forward(self, x, hidden):
@@ -46,18 +49,17 @@ class LSTMCellLayerNorm(Module):
         h, c = hidden
 
         # Linear mappings
-        preact = self.ln_preact(self.ih(torch.cat([x, h], dim=-1)))
-
-        # forget bias
-        if self.forget_bias != 0:
-            preact[:, self.hidden_size:2 * self.hidden_size] += self.forget_bias
+        preact = self.ih(torch.cat([x, h], dim=-1))
 
         # activations
-        gates = preact[:, :3 * self.hidden_size].sigmoid()
-        g_t = preact[:, 3 * self.hidden_size:].tanh()
-        i_t = gates[:, :self.hidden_size]
-        f_t = gates[:, self.hidden_size:2 * self.hidden_size]
-        o_t = gates[:, -self.hidden_size:]
+        i_t = self.ln_i_t(preact[:, :self.hidden_size]).sigmoid_()
+        f_t = self.ln_f_t(preact[:, self.hidden_size:2 * self.hidden_size])
+        # forget bias
+        if self.forget_bias != 0:
+            f_t += self.forget_bias
+            f_t.sigmoid_()
+        o_t = self.ln_o_t(preact[:, 2 * self.hidden_size:-self.hidden_size]).sigmoid_()
+        g_t = self.ln_g_t(preact[:, -self.hidden_size:]).tanh_()
 
         # cell computations
         c_t = torch.mul(c, f_t) + torch.mul(i_t, g_t)
