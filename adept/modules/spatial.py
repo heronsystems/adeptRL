@@ -63,12 +63,16 @@ class ConvLSTMCellLayerNorm(nn.Module):
     Original License Apache 2.0
     """
 
-    def __init__(self, input_size, hidden_size, kernel_size, bias=True, forget_bias=0):
+    def __init__(self, input_size, hidden_size, kernel_size, stride=0, padding=0, bias=True, forget_bias=0):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.ih = nn.Conv2d(input_size[0], 4 * hidden_size, kernel_size, bias=bias)
-        self.hh = nn.Conv2d(hidden_size, 4 * hidden_size, kernel_size, bias=bias)
+        # hidden to hidden must be the same size
+        self._hidden_padding = int((kernel_size - 1) / 2)
+        self.ih = nn.Conv2d(input_size[0], 4 * hidden_size, kernel_size, stride=stride, padding=padding, bias=bias)
+        self.hh = nn.Conv2d(hidden_size, 4 * hidden_size, kernel_size, padding=self._hidden_padding, bias=bias)
+
+        hh_input_size = calc_conv_output_dim(input_size[1], kernel_size, stride, padding, 1)
 
         if bias:
             self.ih.bias.data.fill_(0)
@@ -77,7 +81,7 @@ class ConvLSTMCellLayerNorm(nn.Module):
             self.ih.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
             self.hh.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
 
-        self.ln_cell = nn.LayerNorm([hidden_size, input_size[1]-kernel_size+1, input_size[2]-kernel_size+1])
+        self.ln_cell = nn.LayerNorm([hidden_size, hh_input_size, hh_input_size])
 
     def forward(self, x, hidden):
         """
@@ -107,3 +111,7 @@ class ConvLSTMCellLayerNorm(nn.Module):
 
         return h_t, c_t
 
+
+def calc_conv_output_dim(dim_size, kernel_size, stride, padding, dilation):
+    numerator = dim_size + 2 * padding - dilation * (kernel_size - 1) - 1
+    return numerator // stride + 1
