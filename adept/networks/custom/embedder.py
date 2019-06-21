@@ -34,19 +34,21 @@ class Embedder(NetworkModule):
     args = {
         'autoencoder': True,
         'vae': False,
+        'tanh': True,
         'reward_pred': True,
         'next_embed_pred': True,
         'inv_model': True,
-        'additive_embed': True
+        'additive_embed': False
     }
 
     def __init__(self, args, obs_space, output_space):
         super().__init__()
         self._autoencoder = args.autoencoder
+        self._vae = args.vae
+        self._tanh = args.tanh
         self._reward_pred = args.reward_pred
         self._next_embed_pred = args.next_embed_pred
         self._inv_model = args.inv_model
-        self._vae = args.vae
         self._additive_embed = args.additive_embed
         self._nb_action = int(output_space['Discrete'][0] / 51)
 
@@ -150,6 +152,15 @@ class Embedder(NetworkModule):
             std = torch.exp(0.5 * logvar)
             eps = torch.randn_like(std)
             return mu + std * eps, mu, logvar, lstm_internals
+        elif self._tanh:
+            # hx is tanh'd add noise
+            with torch.no_grad():
+                maxes = 1 - hx
+                mins = -1 - hx
+                noise = 0.5 * torch.randn_like(hx)
+                # clamp noise
+                noise = torch.max(torch.min(noise, maxes), mins)
+            return noise + hx, hx, lstm_internals
         else:
             return hx, lstm_internals
 
@@ -167,6 +178,8 @@ class Embedder(NetworkModule):
         obs = observation[self._obs_key]
         if self._vae:
             encoded_obs, encoded_mu, encoded_logvar, lstm_internals = self._encode_observation(obs, internals)
+        elif self._tanh:
+            encoded_obs, encoded_obs_nonoise, lstm_internals = self._encode_observation(obs, internals)
         else:
             encoded_obs, lstm_internals = self._encode_observation(obs, internals)
         encoded_obs_flat = flatten(encoded_obs)
@@ -184,6 +197,8 @@ class Embedder(NetworkModule):
             if self._vae:
                 pol_outs['encoded_mu'] = encoded_mu
                 pol_outs['encoded_logvar'] = encoded_logvar
+            if self._tanh:
+                pol_outs['encoded_obs_nonoise'] = encoded_obs_nonoise
 
         return pol_outs, lstm_internals
 

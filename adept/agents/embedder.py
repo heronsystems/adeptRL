@@ -30,6 +30,7 @@ class Embedder(OnlineQRDDQN):
     args['next_embed_pred_loss'] = True
     args['inv_model_loss'] = True
     args['vae_loss'] = False
+    args['next_embed_pred_nonoise'] = True
 
     def __init__(self, *args, **kwargs):
         self._autoencode_loss = kwargs['autoencoder_loss']
@@ -37,11 +38,13 @@ class Embedder(OnlineQRDDQN):
         self._next_embed_pred_loss = kwargs['next_embed_pred_loss']
         self._inv_model_loss = kwargs['inv_model_loss']
         self._vae_loss = kwargs['vae_loss']
+        self._next_embed_pred_nonoise = kwargs['next_embed_pred_nonoise']
         del kwargs['autoencoder_loss']
         del kwargs['reward_pred_loss']
         del kwargs['next_embed_pred_loss']
         del kwargs['inv_model_loss']
         del kwargs['vae_loss']
+        del kwargs['next_embed_pred_nonoise']
 
         super().__init__(*args, **kwargs)
         self.ssim = SSIM(1, self.device)
@@ -54,6 +57,8 @@ class Embedder(OnlineQRDDQN):
         if self._next_embed_pred_loss:
             self.exp_cache['predicted_next_embed'] = []
             self.exp_cache['obs_embed'] = []
+            if self._next_embed_pred_nonoise:
+                self.exp_cache['obs_embed_nonoise'] = []
         if self._inv_model_loss:
             self.exp_cache['inv_action'] = []
             self.exp_cache['actions'] = []
@@ -86,7 +91,8 @@ class Embedder(OnlineQRDDQN):
             reward_pred_loss=args.reward_pred_loss,
             next_embed_pred_loss=args.next_embed_pred_loss,
             inv_model_loss=args.inv_model_loss,
-            vae_loss=args.vae_loss
+            vae_loss=args.vae_loss,
+            next_embed_pred_nonoise=args.next_embed_pred_nonoise
         )
 
     def _act_gym(self, obs):
@@ -124,7 +130,9 @@ class Embedder(OnlineQRDDQN):
         if self._next_embed_pred_loss:
             predicted_next_embed = self.network.predict_next_embed(predictions['encoded_obs'], one_hot_action)
             exp_cache['predicted_next_embed'] = predicted_next_embed
-            exp_cache['obs_embed'] = predictions['encoded_obs']
+
+            if self._next_embed_pred_nonoise:
+                exp_cache['obs_embed_nonoise'] = predictions['encoded_obs_nonoise']
         if self._inv_model_loss and len(self.exp_cache) > 0:
             # last action, last_embed
             last_action = self.exp_cache['actions'][-1].argmax(dim=1)
@@ -203,8 +211,12 @@ class Embedder(OnlineQRDDQN):
             predicted_next_embed = view(torch.stack(rollouts.predicted_next_embed[:-1]))
             predicted_next_embed_flat = predicted_next_embed.view(predicted_next_embed.shape[0], -1)
             # this is obs time + 1
-            obs_embed = view(torch.stack(rollouts.obs_embed[1:])).detach()
-            obs_embed_flat = obs_embed.view(obs_embed.shape[0], -1)
+            if self._next_embed_pred_nonoise:
+                obs_embed = view(torch.stack(rollouts.obs_embed_nonoise[1:])).detach()
+                obs_embed_flat = obs_embed.view(obs_embed.shape[0], -1)
+            else:
+                obs_embed = view(torch.stack(rollouts.obs_embed[1:])).detach()
+                obs_embed_flat = obs_embed.view(obs_embed.shape[0], -1)
             pred_mse_loss = 0.5 * torch.mean((predicted_next_embed_flat - obs_embed_flat)**2, dim=1)
             losses['next_embed_pred_loss'] = (pred_mse_loss * terminal_mask).mean()
 
