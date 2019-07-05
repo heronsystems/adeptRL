@@ -65,6 +65,9 @@ class Embedder(OnlineQRDDQN):
         if self._inv_model_loss:
             self.exp_cache['inv_action'] = []
             self.exp_cache['actions'] = []
+            # must have obs_embed
+            if 'obs_embed' not in self.exp_cache:
+                self.exp_cache['obs_embed'] = []
         if self._vae_loss:
             self.exp_cache['kl_diverge'] = []
         self.exp_cache['kwin_ind'] = []
