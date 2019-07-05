@@ -197,7 +197,7 @@ class Embedder(NetworkModule):
             topk_ind = torch.topk(hx, k=self._kwin, dim=1)[1]
             mask.scatter_(1, topk_ind, 1)
             hx = hx * mask
-            return hx, lstm_internals
+            return hx, lstm_internals, topk_ind
         else:
             return hx, lstm_internals
 
@@ -217,6 +217,8 @@ class Embedder(NetworkModule):
             encoded_obs, encoded_mu, encoded_logvar, lstm_internals = self._encode_observation(obs, internals)
         elif self._tanh:
             encoded_obs, encoded_obs_nonoise, lstm_internals = self._encode_observation(obs, internals)
+        elif self._kwin > 0:
+            encoded_obs, lstm_internals, kwin_ind = self._encode_observation(obs, internals)
         else:
             encoded_obs, lstm_internals = self._encode_observation(obs, internals)
 
@@ -235,6 +237,8 @@ class Embedder(NetworkModule):
                 pol_outs['encoded_logvar'] = encoded_logvar
             if self._tanh:
                 pol_outs['encoded_obs_nonoise'] = encoded_obs_nonoise
+            if self._kwin > 0:
+                pol_outs['kwin_ind'] = kwin_ind
 
         return pol_outs, lstm_internals
 

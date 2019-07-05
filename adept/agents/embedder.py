@@ -67,6 +67,7 @@ class Embedder(OnlineQRDDQN):
             self.exp_cache['actions'] = []
         if self._vae_loss:
             self.exp_cache['kl_diverge'] = []
+        self.exp_cache['kwin_ind'] = []
 
     @classmethod
     def from_args(
@@ -160,6 +161,9 @@ class Embedder(OnlineQRDDQN):
             mu, logvar = predictions['encoded_mu'], predictions['encoded_logvar']
             exp_cache['kl_diverge'] = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
+        if 'kwin_ind' in predictions:
+            exp_cache['kwin_ind'] = predictions['kwin_ind']
+
         self.exp_cache.write_forward(**exp_cache)
         self.internals = internals
         return actions
@@ -181,7 +185,10 @@ class Embedder(OnlineQRDDQN):
         value_loss = self._loss_fn(batch_values, value_targets)
         losses = {'value_loss': value_loss.mean()}
         # histogram the embedding
-        metrics = {'obs_embed': rollouts.obs_embed[-1][-1:]}
+        metrics = {}
+        if hasattr(rollouts, 'kwin_ind'):
+            metrics = {'obs_embed_feat_ind': rollouts.kwin_ind[-1][-1:]}
+
 
         def view(tensor):
             return tensor.view(-1, *tensor.shape[2:])
