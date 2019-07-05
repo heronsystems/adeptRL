@@ -31,6 +31,7 @@ class Embedder(OnlineQRDDQN):
     args['inv_model_loss'] = True
     args['vae_loss'] = False
     args['next_embed_pred_nonoise'] = True
+    args['extra_egreedy'] = False
 
     def __init__(self, *args, **kwargs):
         self._autoencode_loss = kwargs['autoencoder_loss']
@@ -131,9 +132,11 @@ class Embedder(OnlineQRDDQN):
             with torch.no_grad():
                 one_hot_action = torch.zeros(self._nb_env, self.action_space[key][0], device=self.device)
                 one_hot_action = one_hot_action.scatter_(1, action, 1)
+
         if self._reward_pred_loss:
             predicted_reward = self.network.predict_reward(predictions['encoded_obs'], one_hot_action)
             exp_cache['predicted_reward'] = predicted_reward.squeeze(-1)
+
         if self._next_embed_pred_loss:
             predicted_next_embed = self.network.predict_next_embed(predictions['encoded_obs'], one_hot_action)
             exp_cache['predicted_next_embed'] = predicted_next_embed
