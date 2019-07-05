@@ -37,7 +37,7 @@ class Embedder(NetworkModule):
     args = {
         'autoencoder': True,
         'vae': False,
-        'tanh': True,
+        'tanh': False,
         'reward_pred': True,
         'next_embed_pred': True,
         'inv_model': True,

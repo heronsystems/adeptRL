@@ -30,7 +30,7 @@ class Embedder(OnlineQRDDQN):
     args['next_embed_pred_loss'] = True
     args['inv_model_loss'] = True
     args['vae_loss'] = False
-    args['next_embed_pred_nonoise'] = True
+    args['next_embed_pred_nonoise'] = False
     args['extra_egreedy'] = False
 
     def __init__(self, *args, **kwargs):
@@ -40,12 +40,14 @@ class Embedder(OnlineQRDDQN):
         self._inv_model_loss = kwargs['inv_model_loss']
         self._vae_loss = kwargs['vae_loss']
         self._next_embed_pred_nonoise = kwargs['next_embed_pred_nonoise']
+        self._extra_egreedy = kwargs['extra_egreedy']
         del kwargs['autoencoder_loss']
         del kwargs['reward_pred_loss']
         del kwargs['next_embed_pred_loss']
         del kwargs['inv_model_loss']
         del kwargs['vae_loss']
         del kwargs['next_embed_pred_nonoise']
+        del kwargs['extra_egreedy']
 
         super().__init__(*args, **kwargs)
         self.ssim = SSIM(1, self.device)
@@ -93,7 +95,8 @@ class Embedder(OnlineQRDDQN):
             next_embed_pred_loss=args.next_embed_pred_loss,
             inv_model_loss=args.inv_model_loss,
             vae_loss=args.vae_loss,
-            next_embed_pred_nonoise=args.next_embed_pred_nonoise
+            next_embed_pred_nonoise=args.next_embed_pred_nonoise,
+            extra_egreedy=args.extra_egreedy
         )
 
     def _act_gym(self, obs):
@@ -110,7 +113,7 @@ class Embedder(OnlineQRDDQN):
         for key in self._action_keys:
             # for noisy methods APE-X random actions collapse so add additional noisy actions
             # anneal epsilon over first 1000000 steps
-            if (self._vae_loss or self._next_embed_pred_nonoise) and self._act_count < 1000000 / self._nb_env:
+            if self._extra_egreedy and self._act_count < 1000000 / self._nb_env:
                 eps_add = 1 - (self._act_count / (1000000 / self._nb_env))
             else:
                 eps_add = 0
