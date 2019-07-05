@@ -41,7 +41,8 @@ class Embedder(NetworkModule):
         'reward_pred': True,
         'next_embed_pred': True,
         'inv_model': True,
-        'additive_embed': False
+        'additive_embed': False,
+        'kwin': 64
     }
 
     def __init__(self, args, obs_space, output_space):
@@ -54,6 +55,7 @@ class Embedder(NetworkModule):
         self._inv_model = args.inv_model
         self._additive_embed = args.additive_embed
         self._nb_action = int(output_space['Discrete'][0] / 51)
+        self._kwin = args.kwin
 
         # encode state with recurrence captured
         self._obs_key = list(obs_space.keys())[0]
@@ -190,6 +192,12 @@ class Embedder(NetworkModule):
                 # clamp noise
                 noise = torch.max(torch.min(noise, maxes), mins)
             return noise + hx, hx, lstm_internals
+        elif self._kwin > 0:
+            mask = torch.zeros_like(hx)
+            topk_ind = torch.topk(hx, k=self._kwin, dim=1)[1]
+            mask.scatter_(1, topk_ind, 1)
+            hx = hx * mask
+            return hx, lstm_internals
         else:
             return hx, lstm_internals
 
