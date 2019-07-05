@@ -18,6 +18,7 @@ import numpy as np
 from adept.utils import listd_to_dlist
 from adept.networks import NetworkModule
 from adept.networks.net3d.four_conv import FourConv
+from adept.networks.net3d.nature import Nature
 from adept.networks.net1d.lstm import LSTM
 
 import torch
@@ -42,7 +43,8 @@ class Embedder(NetworkModule):
         'next_embed_pred': True,
         'inv_model': True,
         'additive_embed': False,
-        'kwin': 64
+        'kwin': 64,
+        'nature': True
     }
 
     def __init__(self, args, obs_space, output_space):
@@ -56,10 +58,14 @@ class Embedder(NetworkModule):
         self._additive_embed = args.additive_embed
         self._nb_action = int(output_space['Discrete'][0] / 51)
         self._kwin = args.kwin
+        self._nature = args.nature
 
         # encode state with recurrence captured
         self._obs_key = list(obs_space.keys())[0]
-        self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
+        if self._nature:
+            self.conv_stack = Nature(obs_space[self._obs_key], 'nature', True)
+        else:
+            self.conv_stack = FourConv(obs_space[self._obs_key], 'fourconv', True)
         conv_stack_flat_shape = (np.prod(self.conv_stack.output_shape()), )
 
         if self._vae:
