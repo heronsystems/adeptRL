@@ -180,7 +180,8 @@ class Embedder(OnlineQRDDQN):
         # batched q loss
         value_loss = self._loss_fn(batch_values, value_targets)
         losses = {'value_loss': value_loss.mean()}
-        metrics = {}
+        # histogram the embedding
+        metrics = {'obs_embed': rollouts.obs_embed[-1][-1:]}
 
         def view(tensor):
             return tensor.view(-1, *tensor.shape[2:])

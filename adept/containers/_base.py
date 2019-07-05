@@ -189,11 +189,16 @@ class WritesSummaries(abc.ABC):
             for l_name, loss in loss_dict.items():
                 writer.add_scalar('loss/' + l_name, loss.item(), step_count)
             for m_name, metric in metric_dict.items():
-                if len(metric.shape) <= 1:
+                metric_ndim = metric.ndimension()
+                if metric_ndim <= 1:
                     writer.add_scalar('metric/' + m_name, metric.item(), step_count)
+                elif metric_ndim == 2:
+                    writer.add_histogram(m_name, metric.clone().cpu().data.numpy(), step_count)
                 # image data
-                if len(metric.shape) == 3:
+                elif metric_ndim == 3:
                     writer.add_image(m_name, metric, step_count)
+                else:
+                    raise NotImplementedError('Got a metric with {} dims.'.format(metric_ndim))
             for p_name, param in self.network.named_parameters():
                 p_name = p_name.replace('.', '/')
                 writer.add_scalar(p_name, torch.norm(param).item(), step_count)
