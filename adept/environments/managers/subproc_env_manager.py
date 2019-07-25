@@ -25,8 +25,6 @@ from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 import zmq
 import json
-import time
-
 
 ZMQ_CONNECT_METHOD = 'ipc'
 
@@ -47,8 +45,17 @@ class SubProcEnvManager(EnvManager):
         self._zmq_ports = []
         self._zmq_sockets = []
 
+        # make a temporary env to get stuff
+        dummy = env_fns[0]()
+        self._observation_space = dummy.observation_space
+        self._action_space = dummy.action_space
+        self._cpu_preprocessor = dummy.cpu_preprocessor
+        self._gpu_preprocessor = dummy.gpu_preprocessor
+        dummy.close()
+
         # iterate envs to get torch shared memory through pipe then close it
         shared_memories = []
+
         for w_ind in range(self.nb_env):
             pipe, w_pipe = mp.Pipe()
             socket, port = zmq_robust_bind_socket(self._zmq_context)
@@ -59,13 +66,6 @@ class SubProcEnvManager(EnvManager):
             self.processes.append(process)
 
             self._zmq_sockets.append(socket)
-
-            # first worker sets up spaces and processors
-            if w_ind == 0:
-                pipe.send(('get_spaces', None))
-                self._observation_space, self._action_space = pipe.recv()
-                pipe.send(('get_processors', None))
-                self._cpu_preprocessor, self._gpu_preprocessor = pipe.recv()
 
             pipe.send(('get_shared_memory', None))
             shared_memories.append(pipe.recv())
@@ -143,16 +143,6 @@ class SubProcEnvManager(EnvManager):
         self.closed = True
 
 
-def dummy_handle_ob(ob):
-    new_ob = {}
-    for k, v in ob.items():
-        if isinstance(v, np.ndarray):
-            new_ob[k] = torch.from_numpy(v)
-        else:
-            new_ob[k] = v
-    return new_ob
-
-
 def worker(remote, parent_remote, port, env_fn_wrapper):
     """
     Modified.
@@ -176,11 +166,7 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
     python_pipe = True
     while python_pipe:
         cmd, _ = remote.recv()
-        if cmd == 'get_spaces':
-            remote.send((env.observation_space, env.action_space))
-        elif cmd == 'get_processors':
-            remote.send((env.cpu_preprocessor, env.gpu_preprocessor))
-        elif cmd == 'get_shared_memory':
+        if cmd == 'get_shared_memory':
             remote.send(shared_memory)
         elif cmd == 'switch_zmq':
             # close python pipes
@@ -275,4 +261,3 @@ def zmq_robust_bind_socket(zmq_context):
     if socket is None:
         raise Exception("ZMQ couldn't bind socket after 3 tries. {}".format(last_error))
     return socket, port
-
