@@ -20,22 +20,16 @@
 / /_/ / /_/ /  __/ /_/ / /_
 \__,_/\__,_/\___/ .___/\__/
                /_/
-
 Local Mode
-
 Train an agent with a single GPU.
-
 Usage:
     local [options]
     local --resume <path>
     local (-h | --help)
-
 Agent Options:
     --agent <str>           Name of agent class [default: ActorCritic]
-
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
-
 Script Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-env <int>          Number of parallel environments [default: 64]
@@ -46,7 +40,6 @@ Script Options:
     --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
     --eval                  Run an evaluation after training
     -y, --use-defaults      Skip prompts, use defaults
-
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
     --net2d <str>           Network to use for 2d input [default: Identity2D]
@@ -57,18 +50,15 @@ Network Options:
     --head2d <str>          Network to use for 2d output [default: Identity2D]
     --head3d <str>          Network to use for 3d output [default: Identity3D]
     --head4d <str>          Network to use for 4d output [default: Identity4D]
-    --custom-network        Name of custom network class
-
+    --custom-network <str>  Name of custom network class
 Optimizer Options:
     --lr <float>            Learning rate [default: 0.0007]
-
 Logging Options:
     --tag <str>             Name your run [default: None]
     --logdir <path>         Path to logging directory [default: /tmp/adept_logs/]
     --epoch-len <int>       Save a model every <int> frames [default: 1e6]
     --nb-eval-env <int>     Evaluate agent in a separate thread [default: 0]
     --summary-freq <int>    Tensorboard summary frequency [default: 10]
-
 Troubleshooting Options:
     --profile               Profile this script
 """
@@ -133,7 +123,6 @@ def main(
 ):
     """
     Run local training.
-
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvRegistry
@@ -161,14 +150,16 @@ def main(
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(args.net).args
+                net_args = net_registry.lookup_custom_net(
+                    args.custom_network).args
             else:
                 net_args = net_registry.lookup_modular_args(args)
         else:
             agent_args = agent_registry.lookup_agent(args.agent).prompt()
             env_args = env_registry.lookup_env_class(args.env).prompt()
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(args.net).prompt()
+                net_args = net_registry.lookup_custom_net(
+                    args.custom_network).prompt()
             else:
                 net_args = net_registry.prompt_modular_args(args)
         args = DotDict({**args, **agent_args, **env_args, **net_args})
@@ -330,7 +321,7 @@ def main(
 
     if args.eval:
         import subprocess
-        exit(subprocess.call([
+        command = [
             'python',
             '-m',
             'adept.scripts.evaluate',
@@ -340,7 +331,13 @@ def main(
             str(args.gpu_id),
             '--nb-episode',
             str(args.nb_env)
-        ], env=os.environ))
+        ]
+        if args.custom_network:
+            command += [
+                '--custom-network',
+                args.custom_network
+            ]
+        exit(subprocess.call(command, env=os.environ))
 
 
 if __name__ == '__main__':

@@ -20,24 +20,20 @@
 / /_/ / /_/ /  __/ /_/ / /_
 \__,_/\__,_/\___/ .___/\__/
                /_/
-
 Evaluate
-
 Evaluates an agent after training. Computes N-episode average reward by
 loading a saved model from each epoch. N-episode averages are computed by
 running N environments in parallel.
-
 Usage:
     evaluate (--log-id-dir <path>) [options]
     evaluate (-h | --help)
-
 Required:
     --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
-
 Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-episode <int>      Number of episodes to average [default: 30]
     --seed <int>            Seed for random variables [default: 512]
+    --custom-network <str>  Name of custom network class
 """
 import json
 import os
@@ -56,6 +52,7 @@ from adept.networks.modular_network import ModularNetwork
 from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
 from adept.utils.util import DotDict
+from adept.utils.script_helpers import parse_path
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -69,6 +66,7 @@ def parse_args():
     del args['h']
     del args['help']
     args = DotDict(args)
+    args.log_id_dir = parse_path(args.log_id_dir)
     args.gpu_id = int(args.gpu_id)
     args.nb_episode = int(args.nb_episode)
     args.seed = int(args.seed)
@@ -87,7 +85,6 @@ def main(
 ):
     """
     Run an evaluation.
-
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvRegistry

@@ -64,6 +64,7 @@ def parse_args():
     parser.add_argument('--load-network', default=None)
     parser.add_argument('--load-optim', default=None)
     parser.add_argument('--initial-step-count', type=int, default=0)
+    parser.add_argument('--custom-network', default=None)
     args = parser.parse_args()
     return args
 
@@ -191,20 +192,6 @@ def main(
 
     container.run(args.nb_step, initial_count=initial_step_count)
     env.close()
-
-    if args.eval and GLOBAL_RANK == 0:
-        import subprocess
-        exit(subprocess.call([
-            'python',
-            '-m',
-            'adept.scripts.evaluate',
-            '--log-id-dir',
-            log_id_dir,
-            '--gpu-id',
-            str(0),
-            '--nb-episode',
-            str(32)  # TODO
-        ], env=os.environ))
 
 
 if __name__ == '__main__':

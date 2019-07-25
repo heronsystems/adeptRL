@@ -26,12 +26,10 @@ class MyCustomNetwork(NetworkModule):
     ):
         """
         Construct a MyCustomNetwork from arguments.
-
         ArgName = str
         ObsKey = str
         OutputKey = str
         Shape = Tuple[*int]
-
         :param args: Dict[ArgName, Any]
         :param observation_space: Dict[ObsKey, Shape]
         :param output_space: Dict[OutputKey, Shape]
@@ -43,9 +41,7 @@ class MyCustomNetwork(NetworkModule):
     def new_internals(self, device):
         """
         Define any initial hidden states here, move them to device if necessary.
-
         InternalKey=str
-
         :return: Dict[InternalKey, torch.Tensor (ND)]
         """
         pass
@@ -53,10 +49,8 @@ class MyCustomNetwork(NetworkModule):
     def forward(self, observation, internals):
         """
         Compute forward pass.
-
         ObsKey = str
         InternalKey = str
-
         :param observation: Dict[ObsKey, torch.Tensor (1D | 2D | 3D | 4D)]
         :param internals: Dict[InternalKey, torch.Tensor (ND)]
         :return: torch.Tensor
@@ -72,4 +66,4 @@ if __name__ == '__main__':
     main(args, net_registry=network_reg)
 
     # Call script like this to train agent:
-    # python -m custom_network_stub.py --custom-net MyCustomNetwork
+    # python -m custom_network_stub.py --custom-network MyCustomNetwork
