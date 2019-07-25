@@ -25,8 +25,6 @@ from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 import zmq
 import json
-import time
-
 
 ZMQ_CONNECT_METHOD = 'ipc'
 
@@ -143,16 +141,6 @@ class SubProcEnvManager(EnvManager):
         for p in self.processes:
             p.join()
         self.closed = True
-
-
-def dummy_handle_ob(ob):
-    new_ob = {}
-    for k, v in ob.items():
-        if isinstance(v, np.ndarray):
-            new_ob[k] = torch.from_numpy(v)
-        else:
-            new_ob[k] = v
-    return new_ob
 
 
 def worker(remote, parent_remote, port, env_fn_wrapper):

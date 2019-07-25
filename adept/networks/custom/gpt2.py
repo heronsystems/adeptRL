@@ -12,9 +12,9 @@ class GPT2Net(NetworkModule):
     def __init__(self, in_shape, out_space, nb_layer, nb_head,
                  layer_norm_eps, do_scale):
         super(GPT2Net, self).__init__()
-        self.conv1 = Conv2d(in_shape[0], 64, 7, stride=2, padding=1, bias=False)
-        self.conv2 = Conv2d(64, 128, 3, stride=2, padding=1, bias=False)
-        self.conv3 = Conv2d(128, 256, 3, stride=2, padding=1, bias=False)
+        self.conv1 = Conv2d(in_shape[0], 32, 7, stride=2, padding=1, bias=False)
+        self.conv2 = Conv2d(32, 64, 3, stride=2, padding=1, bias=False)
+        self.conv3 = Conv2d(64, 256, 3, stride=2, padding=1, bias=False)
         self.conv4 = Conv2d(256, 510, 3, stride=2, padding=1, bias=False)
         self.gpt2 = GPT2((25, 512), 'gpt2', nb_layer, nb_head,
                          layer_norm_eps, do_scale)
@@ -105,10 +105,10 @@ class GPT2Net(NetworkModule):
         x_enc = self.x_enc.view(1, 1, 1, -1).expand(b, -1, h, -1)
         y_enc = self.y_enc.view(1, 1, -1, 1).expand(b, -1, -1, w)
         x = torch.cat([x, x_enc, y_enc], dim=1).view(b, f + 2, h * w)
-        x = x.permute(0, 2, 1)
+
         x, new_internals = self.gpt2.forward(x, internals)
 
-        x = x.permute(0, 2, 1)
+
         x = x.view(b, f + 2, h, w)
 
         x = self.conv1x1(x)

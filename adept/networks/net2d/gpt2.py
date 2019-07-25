@@ -59,7 +59,10 @@ class GPT2(SubModule2D):
     def _forward(self, input, internals, **kwargs):
         keys = torch.stack(internals[self.id + 'keys'], dim=0).unbind(dim=1)
         values = torch.stack(internals[self.id + 'values'], dim=0).unbind(dim=1)
+
         x = input
+        x = x.permute(0, 2, 1)
+
         new_ks = []
         new_vs = []
         for i, kv in enumerate(zip(keys, values)):
@@ -72,6 +75,7 @@ class GPT2(SubModule2D):
             'values': torch.stack(new_vs, dim=1)
         }
         x = self.ln_f(x)
+        x = x.permute(0, 2, 1)
         return x, {k: list(v.unbind(dim=0)) for k, v in new_internals.items()}
 
     def _new_internals(self):
