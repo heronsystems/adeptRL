@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import division
 
-import torch
+from torch import nn
 from torch.nn import functional as F, BatchNorm1d
 
 from adept.modules import Identity
@@ -25,32 +25,43 @@ from adept.networks.net1d.submodule_1d import SubModule1D
 class Linear(SubModule1D):
     args = {
         'linear_normalize': True,
-        'linear_nb_hidden': 512
+        'linear_nb_hidden': 512,
+        'nb_layer': 1
     }
 
-    def __init__(self, input_shape, id, normalize, nb_hidden):
+    def __init__(self, input_shape, id, normalize, nb_hidden, nb_layer):
         super().__init__(input_shape, id)
         self._nb_hidden = nb_hidden
 
+        nb_input_channel = input_shape[0]
 
         bias = not normalize
-        self.linear = torch.nn.Linear(
-            nb_input_channel, self._nb_output_channel, bias=bias
+        self.linear = nn.Linear(
+            nb_input_channel, nb_hidden, bias=bias
         )
+        self.linears = nn.ModuleList([
+            nn.Linear(nb_hidden, nb_hidden, bias)
+            for _ in range(nb_layer - 1)
+        ])
         if normalize:
-            self.bn_linear = BatchNorm1d(nb_output_channel)
+            self.norms = nn.ModuleList([
+                nn.BatchNorm1d(nb_hidden) for _ in range(nb_layer)
+            ])
         else:
-            self.bn_linear = Identity()
+            self.norms = nn.ModuleList([
+                Identity() for _ in range(nb_layer)
+            ])
 
     @classmethod
     def from_args(cls, args, input_shape, id):
         return cls(
-            input_shape, id, args.linear_nb_hidden, args.linear_nb_hidden
+            input_shape, id, args.linear_nb_hidden, args.linear_nb_hidden, args.nb_layer
         )
 
     def _forward(self, xs, internals, **kwargs):
-        xs = F.relu(self.bn_linear(self.linear(xs)))
-
+        xs = F.relu(self.norms[0](self.linear(xs)))
+        for linear, norm in zip(self.linears, self.norms[1:]):
+            xs = F.relu(norm(linear(xs)))
         return xs, {}
 
     def _new_internals(self):

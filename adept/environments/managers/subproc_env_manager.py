@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+import os
 import pickle
 
 import cloudpickle
@@ -23,6 +23,11 @@ from torch import multiprocessing as mp
 from adept.environments.managers._manager import EnvManager
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 
+import zmq
+import json
+
+ZMQ_CONNECT_METHOD = 'ipc'
+
 
 class SubProcEnvManager(EnvManager):
     """
@@ -30,42 +35,46 @@ class SubProcEnvManager(EnvManager):
     MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
-
     def __init__(self, env_fns, engine):
         super(SubProcEnvManager, self).__init__(env_fns, engine)
-        # TODO: sharing cuda tensors requires spawn or forkserver but these
-        #  do not work with mpi
-        # mp.set_start_method('spawn')
-
         self.waiting = False
         self.closed = False
+        self.processes = []
 
-        self.remotes, self.work_remotes = zip(
-            *[mp.Pipe() for _ in range(self.nb_env)]
-        )
-        self.ps = [
-            mp.Process(
-                target=worker,
-                args=(work_remote, remote, CloudpickleWrapper(env_fn))
-            ) for (work_remote, remote, env_fn) in zip(
-                self.work_remotes, self.remotes, env_fns
-            )
-        ]
-        for p in self.ps:
-            p.daemon = True
-            p.start()
-        for remote in self.work_remotes:
-            remote.close()
+        self._zmq_context = zmq.Context()
+        self._zmq_ports = []
+        self._zmq_sockets = []
 
-        self.remotes[0].send(('get_spaces', None))
-        self._observation_space, self._action_space = self.remotes[0].recv()
-        self.remotes[0].send(('get_processors', None))
-        self._cpu_preprocessor, self._gpu_preprocessor = self.remotes[0].recv()
+        # make a temporary env to get stuff
+        dummy = env_fns[0]()
+        self._observation_space = dummy.observation_space
+        self._action_space = dummy.action_space
+        self._cpu_preprocessor = dummy.cpu_preprocessor
+        self._gpu_preprocessor = dummy.gpu_preprocessor
+        dummy.close()
 
+        # iterate envs to get torch shared memory through pipe then close it
         shared_memories = []
-        for remote in self.remotes:
-            remote.send(('get_shared_memory', None))
-            shared_memories.append(remote.recv())
+
+        for w_ind in range(self.nb_env):
+            pipe, w_pipe = mp.Pipe()
+            socket, port = zmq_robust_bind_socket(self._zmq_context)
+
+            process = mp.Process(target=worker, args=(w_pipe, pipe, port, CloudpickleWrapper(env_fns[w_ind])))
+            process.daemon = True
+            process.start()
+            self.processes.append(process)
+
+            self._zmq_sockets.append(socket)
+
+            pipe.send(('get_shared_memory', None))
+            shared_memories.append(pipe.recv())
+
+            # switch to zmq socket and close pipes
+            pipe.send(('switch_zmq', None))
+            pipe.close()
+            w_pipe.close()
+
         self.shared_memories = listd_to_dlist(shared_memories)
 
     @property
@@ -90,62 +99,51 @@ class SubProcEnvManager(EnvManager):
 
     def step_async(self, actions):
         action_dicts = dlist_to_listd(actions)
-        for remote, action in zip(self.remotes, action_dicts):
-            remote.send(('step', action))
+        # zmq send
+        for socket, action in zip(self._zmq_sockets, action_dicts):
+            msg = json.dumps({k: int(v) for k, v in action.items()})
+            socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
+
         self.waiting = True
 
     def step_wait(self):
-        results = [remote.recv() for remote in self.remotes]
-        self.waiting = False
+        results = [remote.recv() for remote in self._zmq_sockets]
+        results = [json.loads(res.decode()) for res in results]
         obs, rews, dones, infos = zip(*results)
+
+        self.waiting = False
         obs = listd_to_dlist(obs)
-        shared_mems = {
-            k: torch.stack(v)
-            for k, v in self.shared_memories.items()
-        }
+        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
         obs = {**obs, **shared_mems}
         return obs, rews, dones, infos
 
     def reset(self):
-        for remote in self.remotes:
-            remote.send(('reset', None))
-        obs = listd_to_dlist([remote.recv() for remote in self.remotes])
-        shared_mems = {
-            k: torch.stack(v)
-            for k, v in self.shared_memories.items()
-        }
+        for socket in self._zmq_sockets:
+            socket.send('reset'.encode())
+        obs = listd_to_dlist([json.loads(remote.recv().decode()) for remote in self._zmq_sockets])
+        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
         obs = {**obs, **shared_mems}
         return obs
 
     def reset_task(self):
-        for remote in self.remotes:
-            remote.send(('reset_task', None))
-        return [remote.recv() for remote in self.remotes]
+        for socket in self._zmq_sockets:
+            socket.send('reset_task'.encode())
+        return [json.loads(remote.recv().decode()) for remote in self._zmq_sockets]
 
     def close(self):
         if self.closed:
             return
         if self.waiting:
-            for remote in self.remotes:
+            for remote in self._zmq_sockets:
                 remote.recv()
-        for remote in self.remotes:
-            remote.send(('close', None))
-        for p in self.ps:
+        for socket in self._zmq_sockets:
+            socket.send('close'.encode())
+        for p in self.processes:
             p.join()
         self.closed = True
 
 
-def dummy_handle_ob(ob):
-    new_ob = {}
-    for k, v in ob.items():
-        if isinstance(v, np.ndarray):
-            new_ob[k] = torch.from_numpy(v)
-        else:
-            new_ob[k] = v
-    return new_ob
-
-
-def worker(remote, parent_remote, env_fn_wrapper):
+def worker(remote, parent_remote, port, env_fn_wrapper):
     """
     Modified.
     MIT License
@@ -164,33 +162,56 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 tensor = torch.zeros(*shape, dtype=dtypes[name])
             shared_memory[name] = tensor
 
-    while True:
-        cmd, data = remote.recv()
-        if cmd == 'step':
-            ob, reward, done, info = env.step(data)
-            if done:
-                ob = env.reset()
-            ob = handle_ob(ob, shared_memory)
-            remote.send((ob, reward, done, info))
-        elif cmd == 'reset':
+    # initial python pipe setup
+    python_pipe = True
+    while python_pipe:
+        cmd, _ = remote.recv()
+        if cmd == 'get_shared_memory':
+            remote.send(shared_memory)
+        elif cmd == 'switch_zmq':
+            # close python pipes
+            remote.close()
+            python_pipe = False
+        else:
+            raise NotImplementedError
+
+    # zmq setup
+    context = zmq.Context()
+    socket = context.socket(zmq.PAIR)
+    if ZMQ_CONNECT_METHOD == 'tcp':
+        socket.connect("tcp://localhost:{}".format(port))
+    if ZMQ_CONNECT_METHOD == 'ipc':
+        socket.connect("ipc:///tmp/adeptzmq/{}".format(port))
+
+    running = True
+    while running:
+        socket_data = socket.recv()
+        socket_parsed = socket_data.decode()
+
+        # commands that aren't action dictionaries
+        if socket_parsed == 'reset':
             ob = env.reset()
             ob = handle_ob(ob, shared_memory)
-            remote.send(ob)
+            # only the non-shared obs are returned here
+            socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
         elif cmd == 'reset_task':
             ob = env.reset_task()
             ob = handle_ob(ob, shared_memory)
-            remote.send(ob)
-        elif cmd == 'close':
-            remote.close()
-            break
-        elif cmd == 'get_spaces':
-            remote.send((env.observation_space, env.action_space))
-        elif cmd == 'get_processors':
-            remote.send((env.cpu_preprocessor, env.gpu_preprocessor))
-        elif cmd == 'get_shared_memory':
-            remote.send(shared_memory)
+            # only the non-shared obs are returned here
+            socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
+        elif socket_parsed == 'close':
+            env.close()
+            running = False
+        # else action dictionary
         else:
-            raise NotImplementedError
+            action_dictionary = json.loads(socket_parsed)
+            ob, reward, done, info = env.step(action_dictionary)
+            if done:
+                ob = env.reset()
+            ob = handle_ob(ob, shared_memory)
+            # only the non-shared obs are returned here
+            msg = json.dumps((ob, reward, done, info))
+            socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
 
 
 def handle_ob(ob, shared_memory):
@@ -218,3 +239,25 @@ class CloudpickleWrapper(object):
 
     def __setstate__(self, ob):
         self.x = pickle.loads(ob)
+
+
+def zmq_robust_bind_socket(zmq_context):
+    try_count = 0
+    while try_count < 3:
+        try:
+            socket = zmq_context.socket(zmq.PAIR)
+            port = np.random.randint(5000, 30000)
+            if ZMQ_CONNECT_METHOD == 'tcp':
+                socket.bind("tcp://*:{}".format(port))
+            if ZMQ_CONNECT_METHOD == 'ipc':
+                os.makedirs('/tmp/adeptzmq/', exist_ok=True)
+                socket.bind("ipc:///tmp/adeptzmq/{}".format(port))
+        except zmq.error.ZMQError as e:
+            try_count += 1
+            socket = None
+            last_error = e
+            continue
+        break
+    if socket is None:
+        raise Exception("ZMQ couldn't bind socket after 3 tries. {}".format(last_error))
+    return socket, port
