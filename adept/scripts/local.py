@@ -22,10 +22,12 @@
                /_/
 Local Mode
 Train an agent with a single GPU.
+
 Usage:
     local [options]
     local --resume <path>
     local (-h | --help)
+
 Agent Options:
     --agent <str>           Name of agent class [default: ActorCritic]
 Environment Options:

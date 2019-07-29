@@ -25,10 +25,12 @@ Train an agent with multiple GPUs locally or on a cluster.
 More info:
 * https://pytorch.org/docs/stable/distributed.html
 * https://pytorch.org/tutorials/intermediate/dist_tuto.html
+
 Usage:
     distrib [options]
     distrib --resume <path>
     distrib (-h | --help)
+
 Distributed Options:
     --nb-node <int>         Number of distributed nodes [default: 1]
     --node-rank <int>       ID of the node for multi-node training [default: 0]
