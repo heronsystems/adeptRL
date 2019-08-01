@@ -46,7 +46,7 @@ if __name__ == '__main__':
     )
     print('LOCAL_RANK', LOCAL_RANK, 'initialized.')
     # groups = assign_groups()
-    t = torch.Tensor([LOCAL_RANK]).to('cuda:' + str(LOCAL_RANK))
+    t = torch.Tensor([LOCAL_RANK])
     if LOCAL_RANK == 0:
         dist.recv(t)
     else:
