@@ -50,7 +50,7 @@ if __name__ == '__main__':
     if LOCAL_RANK == 0:
         handle = dist.irecv(t, 1)
     else:
-        handle = dist.send(t, 0)
+        handle = dist.isend(t, 0)
 
     handle.wait()
 
