@@ -48,9 +48,11 @@ if __name__ == '__main__':
     # groups = assign_groups()
     t = torch.Tensor([LOCAL_RANK])
     if LOCAL_RANK == 0:
-        dist.recv(t)
+        handle = dist.irecv(t, 1)
     else:
-        dist.send(t, 0)
+        handle = dist.send(t, 0)
+
+    handle.wait()
 
     # dist.broadcast_multigpu([t], src=LOCAL_RANK, group=groups[GLOBAL_RANK])
 
