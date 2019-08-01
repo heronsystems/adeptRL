@@ -17,6 +17,35 @@ from adept.containers._base import HasAgent, HasEnvironment, LogsRewards
 
 class ImpalaWorker(HasAgent, HasEnvironment, LogsRewards):
     def __init__(
-        self, agent, environment, nb_env, logger, global_rank, world_size
+        self,
+        agent,
+        environment,
+        nb_env,
+        logger,
+        global_rank,
+        world_size,
+        host_comm_group
     ):
-        pass
+        self._agent = agent
+        self._environment = environment
+        self._nb_env = nb_env
+        self._logger = logger
+
+    @property
+    def agent(self):
+        return self._agent
+
+    @property
+    def environment(self):
+        return self._environment
+
+    @property
+    def nb_env(self):
+        return self._nb_env
+
+    @property
+    def logger(self):
+        return self._logger
+
+    def run(self, nb_step, initial_step_count=None):
+        
