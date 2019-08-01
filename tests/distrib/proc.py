@@ -40,7 +40,7 @@ def assign_groups():
 if __name__ == '__main__':
     dist.init_process_group(
         backend='gloo',
-        init_method='file:///tmp/test_init',
+        # init_method='file:///tmp/test_init',
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )
