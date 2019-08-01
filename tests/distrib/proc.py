@@ -7,6 +7,11 @@ GLOBAL_RANK = int(os.environ['RANK'])
 LOCAL_RANK = int(os.environ['LOCAL_RANK'])
 NB_NODE = int(os.environ['NB_NODE'])
 
+print('w', WORLD_SIZE)
+print('g', GLOBAL_RANK)
+print('l', LOCAL_RANK)
+print('n', NB_NODE)
+
 
 def assign_groups():
     """
@@ -16,27 +21,37 @@ def assign_groups():
     :return: Group, The group for this node to talk to the host.
     """
     local_size = WORLD_SIZE // NB_NODE
-    host_comm_group = None
+    print('local_size', local_size)
+    groups = {}
     for rank in range(WORLD_SIZE):
+        if rank == 0:
+            continue
+
         local_rank = local_size % rank
+
         if local_rank == 0:
             continue
         else:
             grp = torch.distributed.new_group([0, rank])
-            if rank == GLOBAL_RANK:
-                host_comm_group = grp
-    return host_comm_group
+            groups[rank] = grp
+    return groups
 
 
 if __name__ == '__main__':
     dist.init_process_group(
-        backend='nccl',
+        backend='gloo',
         init_method='file:///tmp/test_init',
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )
     print('LOCAL_RANK', LOCAL_RANK, 'initialized.')
-    host_comm_group = assign_groups()
+    # groups = assign_groups()
     t = torch.Tensor([LOCAL_RANK]).to('cuda:' + str(LOCAL_RANK))
-    dist.broadcast_multigpu([t], src=LOCAL_RANK, group=host_comm_group)
+    if LOCAL_RANK == 0:
+        dist.recv(t)
+    else:
+        dist.send(t, 0)
+
+    # dist.broadcast_multigpu([t], src=LOCAL_RANK, group=groups[GLOBAL_RANK])
+
     print(t)
