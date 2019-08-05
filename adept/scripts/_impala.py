@@ -54,26 +54,6 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
-def assign_groups():
-    """
-    All groups must be created on each node in the same order.
-    See: https://pytorch.org/docs/stable/distributed.html#groups
-
-    :return: Group, The group for this node to talk to the host.
-    """
-    local_size = WORLD_SIZE // NB_NODE
-    host_comm_group = None
-    for rank in range(WORLD_SIZE):
-        local_rank = local_size % rank
-        if local_rank == 0:
-            continue
-        else:
-            grp = torch.distributed.new_group([0, rank])
-            if rank == GLOBAL_RANK:
-                host_comm_group = grp
-    return host_comm_group
-
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--log-id-dir', required=True)
@@ -121,14 +101,10 @@ def main(
     torch.backends.cudnn.benchmark = True
 
     dist.init_process_group(
-        backend='nccl',
-        init_method='file:///tmp/adept_init',
+        backend='gloo',
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )
-
-    # create groups
-    host_comm_group = assign_groups()
 
     logger.info('Rank {} initialized.'.format(GLOBAL_RANK))
     seed = args.seed \
