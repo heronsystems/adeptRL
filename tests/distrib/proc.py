@@ -6,11 +6,20 @@ WORLD_SIZE = int(os.environ['WORLD_SIZE'])
 GLOBAL_RANK = int(os.environ['RANK'])
 LOCAL_RANK = int(os.environ['LOCAL_RANK'])
 NB_NODE = int(os.environ['NB_NODE'])
+LOCAL_SIZE = WORLD_SIZE // NB_NODE
 
 print('w', WORLD_SIZE)
 print('g', GLOBAL_RANK)
 print('l', LOCAL_RANK)
 print('n', NB_NODE)
+
+
+def on_worker():
+    return LOCAL_RANK != 0
+
+
+def on_host():
+    return LOCAL_RANK == 0
 
 
 if __name__ == '__main__':
@@ -21,14 +30,22 @@ if __name__ == '__main__':
     )
     print('LOCAL_RANK', LOCAL_RANK, 'initialized.')
     # groups = assign_groups()
-    t = torch.Tensor([LOCAL_RANK])
-    if LOCAL_RANK == 0:
-        handle = dist.irecv(t, 1)
+    if on_worker():
+        t = torch.Tensor([LOCAL_RANK])
     else:
-        handle = dist.isend(t, 0)
+        ts = [torch.Tensor([LOCAL_RANK]) for _ in range(LOCAL_SIZE - 1)]
 
-    handle.wait()
+    # tags to identify tensors
+    # loop thru workers
+
+    if on_worker():
+        handle = dist.isend(t, 0)
+    else:
+        handles = []
+        for i in range(1, LOCAL_SIZE):
+            handle = dist.irecv(ts[i - 1], i)
+        for handle in handles:
+            handle.wait()
+        print(ts)
 
     # dist.broadcast_multigpu([t], src=LOCAL_RANK, group=groups[GLOBAL_RANK])
-
-    print(t)

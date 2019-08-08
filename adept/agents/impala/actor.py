@@ -21,7 +21,7 @@ from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.agents.agent_module import AgentModule
 
 
-class ActorCriticVtrace(AgentModule):
+class ImpalaActor(AgentModule):
     """
     Reference implementation:
     Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py
@@ -48,7 +48,7 @@ class ActorCriticVtrace(AgentModule):
         minimum_importance_policy,
         entropy_weight
     ):
-        super(ActorCriticVtrace, self).__init__(
+        super(ImpalaActor, self).__init__(
             network,
             device,
             reward_normalizer,
@@ -94,48 +94,39 @@ class ActorCriticVtrace(AgentModule):
 
     def seq_obs_to_pathways(self, obs, device):
         """
-            Converts a dict of sequential observations to a list(of seq len) of
-            dicts
+        Converts a dict of sequential observations to a list(of seq len) of
+        dicts
         """
         pathway_dict = self.gpu_preprocessor(obs, device)
         return dlist_to_listd(pathway_dict)
 
     def act(self, obs):
-        # TODO: set use_local_buffers flag in the agent
-        # The container currently sets network.eval() if batch norm modules are
-        # requested to use the learned parameters instead of per batch stats
-        # self.network.train()
+        raise NotImplementedError
+        self.network.train()
         predictions, internals = self.network(
             self.gpu_preprocessor(obs, self.device), self.internals
         )
-        if 'available_actions' in obs:
-            actions, log_probs, entropies = self.policy.act(
-                predictions, obs['available_actions']
-            )
-        else:
-            actions, log_probs, entropies = self.policy.act(predictions)
+        available_actions = \
+            obs['available_actions'] if 'available_actions' in obs \
+            else None
 
+        actions, extras = self.policy.act(predictions, available_actions)
+        log_probs, entropies = extras['log_probs_host'], extras['entropies']
+
+        return actions
 
     def act_eval(self, obs):
         self.network.eval()
-        if self.engine == 'AdeptSC2Env':
-            return self._act_eval_sc2(obs)
-        else:
-            return self._act_eval_gym(obs)
-
-    def _act_eval_gym(self, obs):
         with torch.no_grad():
             predictions, internals = self.network(
                 self.gpu_preprocessor(obs, self.device), self.internals
             )
-
-            # reduce feature dim, build action_key dim
-            actions = OrderedDict()
-            for key in self._action_keys:
-                logit = predictions[key]
-                prob = F.softmax(logit, dim=1)
-                action = torch.argmax(prob, 1)
-                actions[key] = action.cpu().numpy()
+        if 'available_actions' in obs:
+            actions = self.policy.act_eval(
+                predictions, obs['available_actions']
+            )
+        else:
+            actions = self.policy.act_eval(predictions)
 
         self.internals = internals
         return actions
@@ -195,85 +186,7 @@ class ActorCriticVtrace(AgentModule):
             values
         ), last_values, torch.stack(entropies)
 
-    def _predictions_to_logprobs_ents_host(
-        self, seq_ind, obs, predictions, actions_taken
-    ):
-        if self.engine == 'AdeptSC2Env':
-            return self.__predictions_to_logprobs_ents_host_sc2(
-                seq_ind, obs, predictions, actions_taken
-            )
-        else:
-            return self.__predictions_to_logprobs_ents_host_gym(
-                predictions, actions_taken
-            )
-
-    def __predictions_to_logprobs_ents_host_gym(
-        self, predictions, actions_taken
-    ):
-        log_probs = []
-        entropies = []
-        # TODO support multi-dimensional action spaces?
-        for key_ind, key in enumerate(self._action_keys):
-            logit = predictions[key]
-            prob = F.softmax(logit, dim=1)
-            log_softmax = F.log_softmax(logit, dim=1)
-            # actions taken is batch, num_actions
-            log_prob = log_softmax.gather(
-                1, actions_taken[:, key_ind].unsqueeze(1)
-            )
-            entropy = -(log_softmax * prob).sum(1, keepdim=True)
-
-            log_probs.append(log_prob)
-            entropies.append(entropy)
-
-        log_probs = torch.cat(log_probs, dim=1)
-        entropies = torch.cat(entropies, dim=1)
-
-        return log_probs, entropies
-
-    def __predictions_to_logprobs_ents_host_sc2(
-        self, seq_ind, obs, predictions, actions_taken
-    ):
-        log_probs = []
-        entropies = []
-        head_masks = OrderedDict()
-        # TODO support multi-dimensional action spaces?
-        for key_ind, key in enumerate(self._action_keys):
-            logit = predictions[key]
-            prob = F.softmax(logit, dim=1)
-            log_softmax = F.log_softmax(logit, dim=1)
-            # actions taken is batch, num_actions
-            log_prob = log_softmax.gather(
-                1, actions_taken[:, key_ind].unsqueeze(1)
-            )
-            entropy = -(log_softmax * prob).sum(1, keepdim=True)
-
-            # Initialize masks
-            if key == 'func_id':
-                head_masks[key] = torch.ones_like(log_prob)
-            else:
-                head_masks[key] = torch.zeros_like(log_prob)
-
-            log_probs.append(log_prob)
-            entropies.append(entropy)
-
-        log_probs = torch.cat(log_probs, dim=1)
-        entropies = torch.cat(entropies, dim=1)
-
-        # obs is seq x batch
-        avail_actions = obs['available_actions'][seq_ind]
-        func_id_ind = self._action_keys.index('func_id')
-        actions_func_id = actions_taken[:, func_id_ind].cpu().numpy()
-        self.__mask_sc2_actions_(avail_actions, actions_func_id, head_masks)
-
-        head_masks = torch.cat(
-            [head_mask for head_mask in head_masks.values()], dim=1
-        )
-        log_probs = log_probs * head_masks
-        entropies = entropies * head_masks
-        return log_probs, entropies
-
-    def compute_loss(self, rollouts):
+    def compute_loss(self, rollouts, available_actions):
         # rollouts here are a list of [seq, nb_env]
         # cat along the 1 dim gives [seq, batch = nb_env*nb_batches]
         # pull from rollout and convert to tensors of [seq, batch, ...]

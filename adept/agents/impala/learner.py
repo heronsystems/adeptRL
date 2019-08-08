@@ -15,14 +15,13 @@
 from collections import OrderedDict
 import torch
 from torch.nn import functional as F
-import numpy as np
 
 from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.agents.agent_module import AgentModule
 
 
-class ActorCriticVtrace(AgentModule):
+class ImpalaHostAgent(AgentModule):
     """
     Reference implementation:
     Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py
@@ -49,7 +48,7 @@ class ActorCriticVtrace(AgentModule):
         minimum_importance_policy,
         entropy_weight
     ):
-        super(ActorCriticVtrace, self).__init__(
+        super(ImpalaHostAgent, self).__init__(
             network,
             device,
             reward_normalizer,
@@ -95,21 +94,42 @@ class ActorCriticVtrace(AgentModule):
 
     def seq_obs_to_pathways(self, obs, device):
         """
-        Converts a dict of sequential observations to a list(of seq len) of dicts
+        Converts a dict of sequential observations to a list(of seq len) of
+        dicts
         """
         pathway_dict = self.gpu_preprocessor(obs, device)
         return dlist_to_listd(pathway_dict)
 
     def act(self, obs):
-        # TODO: set use_local_buffers flag in the agent
-        # The container currently sets network.eval() if batch norm modules are
-        # requested to use the learned parameters instead of per batch stats
-        # self.network.train()
+        raise NotImplementedError
+        self.network.train()
+        predictions, internals = self.network(
+            self.gpu_preprocessor(obs, self.device), self.internals
+        )
+        available_actions = \
+            obs['available_actions'] if 'available_actions' in obs \
+            else None
 
-        if self.engine == 'AdeptSC2Env':
-            return self._act_sc2(obs)
+        actions, extras = self.policy.act(predictions, available_actions)
+        log_probs, entropies = extras['log_probs_host'], extras['entropies']
+
+        return actions
+
+    def act_eval(self, obs):
+        self.network.eval()
+        with torch.no_grad():
+            predictions, internals = self.network(
+                self.gpu_preprocessor(obs, self.device), self.internals
+            )
+        if 'available_actions' in obs:
+            actions = self.policy.act_eval(
+                predictions, obs['available_actions']
+            )
         else:
-            return self._act_gym(obs)
+            actions = self.policy.act_eval(predictions)
+
+        self.internals = internals
+        return actions
 
     def act_on_host(
         self, obs, next_obs, terminal_masks, sampled_actions, internals
@@ -126,9 +146,6 @@ class ActorCriticVtrace(AgentModule):
         values = []
         log_probs_of_action = []
         entropies = []
-
-        # numpy to vectorize check for terminals
-        terminal_masks = terminal_masks.numpy()
 
         # if network is modular,
         # trunk can be sped up by combining batch & seq dim
@@ -154,30 +171,28 @@ class ActorCriticVtrace(AgentModule):
             entropies.append(entropies_seq)
 
             # if this state was terminal reset internals
-            terminals = np.where(terminal_masks[seq_ind] == 0)[0]
-            for batch_ind in terminals:
-                reset_internals = self.network.new_internals(self.device)
-                for k, v in reset_internals.items():
-                    internals[k][batch_ind] = v
+            for batch_ind, t_mask in enumerate(terminal_masks[seq_ind]):
+                if t_mask == 0:
+                    reset_internals = self.network.new_internals(self.device)
+                    for k, v in reset_internals.items():
+                        internals[k][batch_ind] = v
 
         # forward on state t+1
         with torch.no_grad():
             results, _ = self.network(next_obs_on_device, internals)
             last_values = results['critic'].squeeze(1)
 
-        return torch.stack(log_probs_of_action),\
-               torch.stack(values),\
-               last_values,\
-               torch.stack(entropies)
+        return torch.stack(log_probs_of_action), torch.stack(
+            values
+        ), last_values, torch.stack(entropies)
 
-
-    def compute_loss(self, rollouts):
+    def compute_loss(self, rollouts, available_actions):
         # rollouts here are a list of [seq, nb_env]
         # cat along the 1 dim gives [seq, batch = nb_env*nb_batches]
         # pull from rollout and convert to tensors of [seq, batch, ...]
         rewards = torch.cat(rollouts['rewards'], 1).to(self.device)
-        terminals_mask = torch.cat(rollouts['terminals'], 1)  # cpu
-        discount_terminal_mask = (self.discount * terminals_mask).to(self.device)
+        terminals_mask = torch.cat(rollouts['terminals'], 1).to(self.device)
+        discount_terminal_mask = self.discount * terminals_mask
         states = {
             k.split('-')[-1]: torch.cat(rollouts[k], 1)
             for k, v in rollouts.items() if 'rollout_obs-' in k

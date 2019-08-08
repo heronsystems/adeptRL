@@ -28,7 +28,7 @@ class ImpalaWorkerPolicy:
         :param logits: Dict[ActionKey, torch.Tensor]
         :return:
             actions: Dict[ActionKey, torch.LongTensor], flattened to (N)
-            log_probs: torch.Tensor, flattened to (N, X)
+            extras: Dict[Name, torch.Tensor flattened to (N, X)]
         """
         with torch.no_grad():
             actions = OrderedDict()
@@ -59,7 +59,7 @@ class ImpalaWorkerPolicy:
 
             log_probs = torch.cat(log_probs, dim=1)
 
-            return actions, log_probs
+            return actions, {'log_probs': log_probs}
 
     def act_eval(self, logits, available_actions=None):
         """

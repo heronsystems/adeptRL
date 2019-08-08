@@ -53,7 +53,7 @@ class Policy:
             log_prob = F.log_softmax(logit, dim=1)
             entropy = -(log_prob * prob).sum(1, keepdim=True)
 
-            action = prob.multinomial(1)  # (N)
+            action = prob.multinomial(1)  # (N, 1)
             log_prob = log_prob.gather(1, action)
 
             actions[k] = action.squeeze(1).cpu()
