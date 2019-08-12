@@ -12,16 +12,28 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+An Agent interacts with the environment and accumulates experience.
+"""
 import abc
 
 from adept.utils import listd_to_dlist
-from adept.utils.requires_args import RequiresArgs
+from adept.utils.requires_args import RequiresArgsMixin
+
+from adept.actor import ActorMixin
+from adept.learner import LearnerMixin
 
 
-class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
+class AgentModule(
+    ActorMixin, LearnerMixin, RequiresArgsMixin, metaclass=abc.ABCMeta
+):
     """
-    An Agent interacts with the environment and accumulates experience.
+    An Agent is an Actor (chooses actions) and a Learner (updates parameters).
+
+    Actors and Learners are treated separately for Actor-Learner architectures
+    where multiple actors send their experience to a single learner.
     """
+
     def __init__(
         self,
         network,
@@ -59,18 +71,6 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
     def output_space(action_space):
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def compute_loss(self, experience, next_obs):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def act(self, obs):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def act_eval(self, obs):
-        raise NotImplementedError
-
     @property
     def device(self):
         """Get experience cache"""
@@ -98,11 +98,6 @@ class AgentModule(RequiresArgs, metaclass=abc.ABCMeta):
     @property
     def policy(self):
         return self._policy
-
-    @property
-    def action_space(self):
-        """Get network"""
-        return self._action_space
 
     def observe(self, obs, rewards, terminals, infos):
         self.exp_cache.write_env(obs, rewards, terminals, infos)

@@ -15,8 +15,8 @@
 import abc
 
 from adept.networks._base import BaseNetwork
-from adept.utils.requires_args import RequiresArgs
+from adept.utils.requires_args import RequiresArgsMixin
 
 
-class NetworkModule(BaseNetwork, RequiresArgs, metaclass=abc.ABCMeta):
+class NetworkModule(BaseNetwork, RequiresArgsMixin, metaclass=abc.ABCMeta):
     pass

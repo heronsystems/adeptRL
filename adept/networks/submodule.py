@@ -2,10 +2,10 @@ import abc
 
 import torch
 
-from adept.utils.requires_args import RequiresArgs
+from adept.utils.requires_args import RequiresArgsMixin
 
 
-class SubModule(torch.nn.Module, RequiresArgs, metaclass=abc.ABCMeta):
+class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
     SubModule of a ModularNetwork.
     """

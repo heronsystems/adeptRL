@@ -14,11 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
 
-from adept.utils.requires_args import RequiresArgs
+from adept.utils.requires_args import RequiresArgsMixin
 from adept.environments._env import EnvBase
 
 
-class EnvModule(EnvBase, RequiresArgs, metaclass=abc.ABCMeta):
+class EnvModule(EnvBase, RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
     Implement this class to add your custom environment. Don't forget to
     implement args.

@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from adept.networks.network_module import NetworkModule
 from adept.networks.net1d.submodule_1d import SubModule
-from adept.utils.requires_args import RequiresArgs
+from adept.utils.requires_args import RequiresArgsMixin
 
 
 class NetworkRegistry:
@@ -136,7 +136,7 @@ class NetworkRegistry:
         :param args: Dict[name, Any]
         :return: Dict[str, Any]
         """
-        return RequiresArgs._prompt(
+        return RequiresArgsMixin._prompt(
             'ModularNetwork',
             self.lookup_modular_args(args)
         )

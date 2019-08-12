@@ -15,7 +15,7 @@
 import json
 
 
-class RequiresArgs:
+class RequiresArgsMixin:
     args = None
 
     @classmethod

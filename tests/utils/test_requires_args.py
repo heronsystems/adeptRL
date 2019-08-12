@@ -2,10 +2,10 @@ import io
 import sys
 import unittest
 
-from adept.utils.requires_args import RequiresArgs
+from adept.utils.requires_args import RequiresArgsMixin
 
 
-class Stub(RequiresArgs):
+class Stub(RequiresArgsMixin):
     args = {
         'k1': 0,
         'k2': False,
