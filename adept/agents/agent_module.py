@@ -23,7 +23,8 @@ from adept.utils.requires_args import RequiresArgsMixin
 
 class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
-    An Agent is an Actor (chooses actions) and a Learner (updates parameters).
+    An Agent is an Actor (chooses actions) and a Learner (updates parameters)
+    and maintains a cache to store a rollout or experience replay.
 
     Actors and Learners are treated separately for Actor-Learner architectures
     where multiple actors send their experience to a single learner.
@@ -32,17 +33,11 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def __init__(
         self,
         network,
-        device,
         reward_normalizer,
         gpu_preprocessor,
-        action_space,
-        nb_env
+        action_space
     ):
-        self._network = network.to(device)
-        self._internals = listd_to_dlist(
-            [self.network.new_internals(device) for _ in range(nb_env)]
-        )
-        self._device = device
+        self._network = network
         self._reward_normalizer = reward_normalizer
         self._gpu_preprocessor = gpu_preprocessor
         self._action_space = action_space
@@ -53,7 +48,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, args, network, device, reward_normalizer, gpu_preprocessor,
+        cls, args, network, reward_normalizer, gpu_preprocessor,
         action_space, **kwargs
     ):
         raise NotImplementedError
@@ -65,22 +60,9 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @property
-    def device(self):
-        return self._device
-
-    @property
     def network(self):
         """Get network"""
         return self._network
-
-    @property
-    def internals(self):
-        """A list of internals"""
-        return self._internals
-
-    @internals.setter
-    def internals(self, new_internals):
-        self._internals = new_internals
 
     @property
     def gpu_preprocessor(self):
@@ -108,18 +90,18 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def compute_loss(self, experiences, next_obs):
         raise NotImplementedError
 
-    def act(self, obs):
+    def act(self, obs, prev_internals):
         """
         :param obs: Dict[str, Tensor]
+        :param prev_internals: previous interal states. Dict[str, Tensor]
         :return:
             actions: Dict[ActionKey, LongTensor (B)]
-            experience: Dict[str, Tensor (B, X)]
+            internal_states: Dict[str, Tensor]
         """
-        predictions, internals = self.network(
-            self.gpu_preprocessor(obs, self.device),
-            self.internals
+        predictions, internal_states = self.network(
+            self.gpu_preprocessor(obs),
+            prev_internals
         )
-        self.internals = internals
 
         if 'available_actions' in obs:
             av_actions = obs['available_actions']
@@ -128,22 +110,8 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
         actions, experience = self.process_predictions(predictions, av_actions)
         self.exp_cache.write_forward(actions, experience)
-        return actions
+        return actions, internal_states
 
     def observe(self, obs, rewards, terminals, infos):
         self.exp_cache.write_env(obs, rewards, terminals, infos)
-        self.reset_internals(terminals)
         return rewards, terminals, infos
-
-    def reset_internals(self, terminals):
-        for i, terminal in enumerate(terminals):
-            if terminal:
-                self._reset_internals_at_index(i)
-
-    def _reset_internals_at_index(self, env_idx):
-        for k, v in self.network.new_internals(self.device).items():
-            self.internals[k][env_idx] = v
-
-    def detach_internals(self):
-        for k, vs in self.internals.items():
-            self.internals[k] = [v.detach() for v in vs]

@@ -18,56 +18,35 @@ info necessary for model updates (learning) to occur.
 """
 import abc
 
-from adept.utils import listd_to_dlist
 from adept.utils.requires_args import RequiresArgsMixin
 
 
-class ActorMixin:
-    """
-    Mixin used for inheritance by an Agent.
-    """
+class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
+    def __init__(self, network, gpu_preprocessor, action_space):
+        self._network = network
+        self._gpu_preprocessor = gpu_preprocessor
+        self._action_space = action_space
+
+    @abc.abstractmethod
     @property
-    @abc.abstractmethod
-    def network(self):
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def device(self):
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def internals(self):
-        raise NotImplementedError
-
-    @internals.setter
-    @abc.abstractmethod
-    def internals(self, new):
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
     def is_train(self):
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
+    def network(self):
+        return self._network
+
+    @property
     def gpu_preprocessor(self):
-        raise NotImplementedError
+        return self._gpu_preprocessor
 
     @property
-    @abc.abstractmethod
     def action_space(self):
-        raise NotImplementedError
+        return self._action_space
 
-    @property
-    def action_keys(self):
-        return list(sorted(self.action_space.keys()))
-
-    @staticmethod
     @abc.abstractmethod
+    @staticmethod
     def output_space(action_space):
         raise NotImplementedError
 
@@ -83,59 +62,29 @@ class ActorMixin:
         """
         raise NotImplementedError
 
-    def act(self, obs):
+    def act(self, obs, prev_internals):
         """
         :param obs: Dict[str, Tensor]
+        :param prev_internals: previous interal states. Dict[str, Tensor]
         :return:
             actions: Dict[ActionKey, LongTensor (B)]
             experience: Dict[str, Tensor (B, X)]
+            internal_states: Dict[str, Tensor]
         """
         if self.is_train:
             self.network.train()
         else:
             self.network.eval()
 
-        predictions, internals = self.network(
-            self.gpu_preprocessor(obs, self.device),
-            self.internals
+        predictions, internal_states = self.network(
+            self.gpu_preprocessor(obs),
+            prev_internals
         )
-        self.internals = internals
 
         if 'available_actions' in obs:
             av_actions = obs['available_actions']
         else:
             av_actions = None
 
-        return self.process_predictions(predictions, av_actions)
-
-
-class ActorModule(ActorMixin, RequiresArgsMixin, metaclass=abc.ABCMeta):
-
-    def __init__(self, network, device, gpu_preprocessor, nb_env, action_space):
-        self._network = network.to(device)
-        self._internals = listd_to_dlist(
-            [self.network.new_internals(device) for _ in range(nb_env)]
-        )
-        self._device = device
-        self._gpu_preprocessor = gpu_preprocessor
-        self._action_space = action_space
-
-    @property
-    def device(self):
-        return self._device
-
-    @property
-    def network(self):
-        return self._network
-
-    @property
-    def internals(self):
-        return self._internals
-
-    @internals.setter
-    def internals(self, new):
-        self._internals = new
-
-    @property
-    def action_space(self):
-        return self._action_space
+        actions, exp = self.process_predictions(predictions, av_actions)
+        return actions, exp, internal_states

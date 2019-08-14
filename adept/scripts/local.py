@@ -29,7 +29,7 @@ Usage:
     local (-h | --help)
 
 Agent Options:
-    --agent <str>           Name of agent class [default: ActorCriticAgent]
+    --agent <str>           Name of agent class [default: ActorCritic]
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
 Script Options:

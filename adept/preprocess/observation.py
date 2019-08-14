@@ -46,14 +46,11 @@ class ObsPreprocessor:
         self.observation_dtypes = updated_obs_dtypes
         self.rank_to_names = rank_to_names
 
-    def __call__(self, obs, device=None):
+    def __call__(self, obs):
         processed_obs = deepcopy(obs)
         for op in self.ops:
             for rank, names in self.rank_to_names.items():
                 for name in names:
-                    if device is not None:
-                        processed_obs[name] = processed_obs[name].to(device)
-
                     if op.filter(name, rank):
                         processed_obs[name] = op.update_obs(processed_obs[name])
         return processed_obs

@@ -28,8 +28,8 @@ class AgentRegistry:
 
     @staticmethod
     def _load_actor_critic():
-        from adept.agents.actor_critic import ActorCriticAgent
-        return ActorCriticAgent
+        from adept.agents.actor_critic import ActorCritic
+        return ActorCritic
 
     @staticmethod
     def _load_actor_critic_vtrace():

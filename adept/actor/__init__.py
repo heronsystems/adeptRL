@@ -1,2 +1,2 @@
-from ._actor import ActorMixin, ActorModule
-from .ac_rollout import ACRolloutActorTrainMixin, ACRolloutActorTrain
+from ._actor import ActorModule
+from .ac_rollout import ACRolloutActorTrain

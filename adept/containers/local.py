@@ -15,6 +15,7 @@
 import torch
 from time import time
 
+from adept.utils import listd_to_dlist
 from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, LogsAndSummarizesRewards
 
 
@@ -83,13 +84,19 @@ class Local(
 
         next_obs = self.environment.reset()
         self.start_time = time()
+        internals = listd_to_dlist([
+            self.agent.network.new_internals(i) for i in self.nb_env
+        ])
         while self.local_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions = self.agent.act(obs)
+            actions = self.agent.act(obs, internals)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             self.agent.observe(obs, rewards, terminals, infos)
-
+            for i, terminal in enumerate(terminals):
+                if terminal:
+                    for k, v in self.network.new_internals(self.device).items():
+                        internals[k][i] = v
             # Perform state updates
             terminal_rewards, terminal_infos = self.update_buffers(
                 rewards, terminals, infos
@@ -103,24 +110,22 @@ class Local(
 
             # Learn
             if self.exp_cache.is_ready():
-                self.learn(next_obs)
+                loss_dict, metric_dict = self.agent.compute_loss(
+                    self.exp_cache.read(), next_obs
+                )
+                total_loss = torch.sum(
+                    torch.stack(tuple(loss for loss in loss_dict.values()))
+                )
 
-    def learn(self, next_obs):
-        loss_dict, metric_dict = self.agent.compute_loss(
-            self.exp_cache.read(), next_obs
-        )
-        total_loss = torch.sum(
-            torch.stack(tuple(loss for loss in loss_dict.values()))
-        )
+                self.optimizer.zero_grad()
+                total_loss.backward()
+                self.optimizer.step()
 
-        self.optimizer.zero_grad()
-        total_loss.backward()
-        self.optimizer.step()
+                self.exp_cache.clear()
+                for k, vs in internals.items():
+                    internals[k] = [v.detach() for v in vs]
 
-        self.exp_cache.clear()
-        self.agent.detach_internals()
-
-        # write summaries
-        self.write_summaries(
-            total_loss, loss_dict, metric_dict, self.local_step_count
-        )
+                # write summaries
+                self.write_summaries(
+                    total_loss, loss_dict, metric_dict, self.local_step_count
+                )
