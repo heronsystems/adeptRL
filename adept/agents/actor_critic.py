@@ -65,14 +65,14 @@ class ActorCriticAgent(
 
     @classmethod
     def from_args(
-        cls, args, network, device, reward_normalizer, gpu_preprocessor, policy,
-        nb_env=None
+        cls, args, network, device, reward_normalizer, gpu_preprocessor,
+        action_space, nb_env=None
     ):
         if nb_env is None:
             nb_env = args.nb_env
 
         return cls(
-            network, device, reward_normalizer, gpu_preprocessor, policy,
+            network, device, reward_normalizer, gpu_preprocessor, action_space,
             nb_env=nb_env,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
@@ -85,3 +85,17 @@ class ActorCriticAgent(
     @property
     def exp_cache(self):
         return self._exp_cache
+
+    @property
+    def is_train(self):
+        return True
+
+    @staticmethod
+    def output_space(action_space):
+        return ACRolloutActorTrainMixin.output_space(action_space)
+
+    def process_predictions(self, predictions, available_actions):
+        return ACRolloutActorTrainMixin.process_predictions(self, predictions, available_actions)
+
+    def compute_loss(self, experiences, next_obs):
+        return ACRolloutLearnerMixin.compute_loss(self, experiences, next_obs)

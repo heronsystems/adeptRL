@@ -17,7 +17,7 @@ import abc
 
 class BaseExperience(abc.ABC):
     @abc.abstractmethod
-    def write_forward(self, experience):
+    def write_forward(self, actions, experience):
         raise NotImplementedError
 
     @abc.abstractmethod

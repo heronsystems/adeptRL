@@ -32,7 +32,7 @@ class ACRollout(dict, BaseExperience):
         self.device = device
         self.reward_normalizer = reward_normalizer
 
-    def write_forward(self, experience):
+    def write_forward(self, actions, experience):
         for k, v in experience.items():
             if k not in self:
                 raise KeyError(f'Incompatible rollout key: {k}')

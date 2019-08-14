@@ -20,13 +20,8 @@ import abc
 from adept.utils import listd_to_dlist
 from adept.utils.requires_args import RequiresArgsMixin
 
-from adept.actor import ActorMixin
-from adept.learner import LearnerMixin
 
-
-class AgentModule(
-    ActorMixin, LearnerMixin, RequiresArgsMixin, metaclass=abc.ABCMeta
-):
+class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
     An Agent is an Actor (chooses actions) and a Learner (updates parameters).
 
@@ -51,6 +46,9 @@ class AgentModule(
         self._reward_normalizer = reward_normalizer
         self._gpu_preprocessor = gpu_preprocessor
         self._action_space = action_space
+
+        # agent only ever trains, never eval
+        self.network.train()
 
     @classmethod
     @abc.abstractmethod
@@ -94,16 +92,42 @@ class AgentModule(
         return self._action_space
 
     @property
-    def is_train(self):
-        """
-        Agents only ever train. Eval only needs an Actor.
-        :return: bool
-        """
-        return True
+    def action_keys(self):
+        return list(sorted(self.action_space.keys()))
 
-    def act_and_save(self, obs):
-        actions, experience = self.act(obs)
-        self.exp_cache.write_forward(experience)
+    @staticmethod
+    @abc.abstractmethod
+    def output_space(action_space):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def process_predictions(self, predictions, available_actions):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def compute_loss(self, experiences, next_obs):
+        raise NotImplementedError
+
+    def act(self, obs):
+        """
+        :param obs: Dict[str, Tensor]
+        :return:
+            actions: Dict[ActionKey, LongTensor (B)]
+            experience: Dict[str, Tensor (B, X)]
+        """
+        predictions, internals = self.network(
+            self.gpu_preprocessor(obs, self.device),
+            self.internals
+        )
+        self.internals = internals
+
+        if 'available_actions' in obs:
+            av_actions = obs['available_actions']
+        else:
+            av_actions = None
+
+        actions, experience = self.process_predictions(predictions, av_actions)
+        self.exp_cache.write_forward(actions, experience)
         return actions
 
     def observe(self, obs, rewards, terminals, infos):
