@@ -62,6 +62,10 @@ class ActorMixin:
     def action_space(self):
         raise NotImplementedError
 
+    @property
+    def action_keys(self):
+        return list(sorted(self.action_space.keys()))
+
     @staticmethod
     @abc.abstractmethod
     def output_space(action_space):
@@ -90,21 +94,19 @@ class ActorMixin:
             self.network.train()
         else:
             self.network.eval()
+
         predictions, internals = self.network(
             self.gpu_preprocessor(obs, self.device),
             self.internals
         )
+        self.internals = internals
+
         if 'available_actions' in obs:
             av_actions = obs['available_actions']
         else:
             av_actions = None
-        actions, experience = self.process_predictions(predictions, av_actions)
-        self.internals = internals
-        return actions, experience
 
-    @property
-    def action_keys(self):
-        return list(sorted(self.action_space.keys()))
+        return self.process_predictions(predictions, av_actions)
 
 
 class ActorModule(ActorMixin, RequiresArgsMixin, metaclass=abc.ABCMeta):
