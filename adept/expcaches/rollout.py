@@ -18,22 +18,24 @@ import torch
 import numpy as np
 
 
-class RolloutCache(dict, BaseExperience):
-    def __init__(self, nb_rollout, device, reward_normalizer, keys):
-        super(RolloutCache, self).__init__()
+class ACRollout(dict, BaseExperience):
+    def __init__(self, nb_rollout, device, reward_normalizer):
+        super(ACRollout, self).__init__()
         assert type(nb_rollout == int)
-        for k in keys:
-            self[k] = []
         self['states'] = []
         self['rewards'] = []
-        # TODO: rename as terminals_mask
         self['terminals'] = []
+        self['values'] = []
+        self['log_probs'] = []
+        self['entropies'] = []
         self.nb_rollout = nb_rollout
         self.device = device
         self.reward_normalizer = reward_normalizer
 
-    def write_forward(self, **kwargs):
-        for k, v in kwargs.items():
+    def write_forward(self, experience):
+        for k, v in experience.items():
+            if k not in self:
+                raise KeyError(f'Incompatible rollout key: {k}')
             self[k].append(v)
 
     def write_env(self, obs, rewards, terminals, infos):
@@ -57,7 +59,7 @@ class RolloutCache(dict, BaseExperience):
             self[k] = []
 
     def is_ready(self):
-        return len(self) == (self.nb_rollout)
+        return len(self) == self.nb_rollout
 
     def __len__(self):
         return len(self['rewards'])

@@ -1,2 +1,2 @@
-from .learner import LearnerMixin, LearnerModule
-from .actor_critic import ActorCriticLearnerMixin, ActorCriticLearner
+from ._learner import LearnerMixin, LearnerModule
+from .ac_rollout import ACRolloutLearnerMixin, ACRolloutLearner

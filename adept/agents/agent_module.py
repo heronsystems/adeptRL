@@ -40,7 +40,7 @@ class AgentModule(
         device,
         reward_normalizer,
         gpu_preprocessor,
-        policy,
+        action_space,
         nb_env
     ):
         self._network = network.to(device)
@@ -50,13 +50,13 @@ class AgentModule(
         self._device = device
         self._reward_normalizer = reward_normalizer
         self._gpu_preprocessor = gpu_preprocessor
-        self._policy = policy
+        self._action_space = action_space
 
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, args, network, device, reward_normalizer, gpu_preprocessor, policy,
-        **kwargs
+        cls, args, network, device, reward_normalizer, gpu_preprocessor,
+        action_space, **kwargs
     ):
         raise NotImplementedError
 
@@ -66,14 +66,8 @@ class AgentModule(
         """Get experience cache"""
         raise NotImplementedError
 
-    @staticmethod
-    @abc.abstractmethod
-    def output_space(action_space):
-        raise NotImplementedError
-
     @property
     def device(self):
-        """Get experience cache"""
         return self._device
 
     @property
@@ -96,8 +90,21 @@ class AgentModule(
         return self._gpu_preprocessor
 
     @property
-    def policy(self):
-        return self._policy
+    def action_space(self):
+        return self._action_space
+
+    @property
+    def is_train(self):
+        """
+        Agents only ever train. Eval only needs an Actor.
+        :return: bool
+        """
+        return True
+
+    def act_and_save(self, obs):
+        actions, experience = self.act(obs)
+        self.exp_cache.write_forward(experience)
+        return actions
 
     def observe(self, obs, rewards, terminals, infos):
         self.exp_cache.write_env(obs, rewards, terminals, infos)

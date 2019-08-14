@@ -29,7 +29,7 @@ Usage:
     local (-h | --help)
 
 Agent Options:
-    --agent <str>           Name of agent class [default: ActorCritic]
+    --agent <str>           Name of agent class [default: ActorCriticAgent]
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
 Script Options:
@@ -226,7 +226,7 @@ def main(
         device,
         env_registry.lookup_reward_normalizer(args.env),
         env.gpu_preprocessor,
-        env_registry.lookup_policy(env.engine)(env.action_space)
+        env.action_space
     )
 
     # Construct the Container

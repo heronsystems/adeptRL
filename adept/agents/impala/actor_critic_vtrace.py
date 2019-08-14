@@ -17,7 +17,7 @@ import torch
 from torch.nn import functional as F
 import numpy as np
 
-from adept.expcaches.rollout import RolloutCache
+from adept.expcaches.rollout import ACRollout
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from adept.agents.agent_module import AgentModule
 
@@ -62,7 +62,7 @@ class ActorCriticVtrace(AgentModule):
         self.minimum_importance_policy = minimum_importance_policy
         self.entropy_weight = entropy_weight
 
-        self._exp_cache = RolloutCache(
+        self._exp_cache = ACRollout(
             nb_rollout, device, reward_normalizer,
             ['log_prob_of_action', 'sampled_action']
         )

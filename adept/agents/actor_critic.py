@@ -14,12 +14,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
 
-from adept.expcaches.rollout import RolloutCache
+from adept.expcaches.rollout import ACRollout
 from adept.agents.agent_module import AgentModule
-from adept.learner import ActorCriticLearnerMixin
+from adept.learner import ACRolloutLearnerMixin
+from adept.actor import ACRolloutActorTrainMixin
 
 
-class ActorCritic(AgentModule, ActorCriticLearnerMixin):
+class ActorCriticAgent(
+    AgentModule,
+    ACRolloutActorTrainMixin,
+    ACRolloutLearnerMixin
+):
     args = {
         'nb_rollout': 20,
         'discount': 0.99,
@@ -35,7 +40,7 @@ class ActorCritic(AgentModule, ActorCriticLearnerMixin):
         device,
         reward_normalizer,
         gpu_preprocessor,
-        policy,
+        action_space,
         nb_env,
         nb_rollout,
         discount,
@@ -44,23 +49,19 @@ class ActorCritic(AgentModule, ActorCriticLearnerMixin):
         normalize_advantage,
         entropy_weight
     ):
-        super(ActorCritic, self).__init__(
+        super(ActorCriticAgent, self).__init__(
             network,
             device,
             reward_normalizer,
             gpu_preprocessor,
-            policy,
+            action_space,
             nb_env
         )
         self.discount, self.gae, self.tau = discount, gae, tau
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
 
-        self._exp_cache = RolloutCache(
-            nb_rollout, device, reward_normalizer,
-            ['values', 'log_probs', 'entropies']
-        )
-        self._func_id_to_headnames = None
+        self._exp_cache = ACRollout(nb_rollout, device, reward_normalizer)
 
     @classmethod
     def from_args(
@@ -84,43 +85,3 @@ class ActorCritic(AgentModule, ActorCriticLearnerMixin):
     @property
     def exp_cache(self):
         return self._exp_cache
-
-    @staticmethod
-    def output_space(action_space):
-        head_dict = {'critic': (1, ), **action_space}
-        return head_dict
-
-    def act(self, obs):
-        self.network.train()
-        predictions, internals = self.network(
-            self.gpu_preprocessor(obs, self.device), self.internals
-        )
-        values = predictions['critic'].squeeze(1)
-        if 'available_actions' in obs:
-            actions, log_probs, entropies = self.policy.act(
-                predictions, obs['available_actions']
-            )
-        else:
-            actions, log_probs, entropies = self.policy.act(predictions)
-
-        self.exp_cache.write_forward(
-            values=values, log_probs=log_probs, entropies=entropies
-        )
-        self.internals = internals
-        return actions
-
-    def act_eval(self, obs):
-        self.network.eval()
-        with torch.no_grad():
-            predictions, internals = self.network(
-                self.gpu_preprocessor(obs, self.device), self.internals
-            )
-        if 'available_actions' in obs:
-            actions = self.policy.act_eval(
-                predictions, obs['available_actions']
-            )
-        else:
-            actions = self.policy.act_eval(predictions)
-
-        self.internals = internals
-        return actions

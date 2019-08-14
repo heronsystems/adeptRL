@@ -86,7 +86,7 @@ class Local(
         while self.local_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions = self.agent.act(obs)
+            actions = self.agent.act_and_save(obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             self.agent.observe(obs, rewards, terminals, infos)
 

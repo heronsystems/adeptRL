@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-A Learner receives agent-environment interactions (experience), which is
-used to compute the loss.
+A Learner receives agent-environment interactions which are used to compute
+loss.
 """
 import abc
 from adept.utils.requires_args import RequiresArgsMixin
@@ -26,7 +26,7 @@ class LearnerMixin:
     """
 
     @abc.abstractmethod
-    def compute_loss(self, experience, next_obs):
+    def compute_loss(self, experiences, next_obs):
         raise NotImplementedError
 
     @property
@@ -47,10 +47,6 @@ class LearnerModule(LearnerMixin, RequiresArgsMixin, metaclass=abc.ABCMeta):
     def __init__(self, network, gpu_preprocessor):
         self._network = network
         self._gpu_preprocessor = gpu_preprocessor
-
-    @abc.abstractmethod
-    def compute_loss(self, experience, next_obs):
-        raise NotImplementedError
 
     @property
     def network(self):

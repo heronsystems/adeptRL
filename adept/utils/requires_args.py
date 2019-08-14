@@ -13,9 +13,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import json
+import abc
 
 
-class RequiresArgsMixin:
+class RequiresArgsMixin(metaclass=abc.ABCMeta):
     args = None
 
     @classmethod
@@ -52,8 +53,7 @@ class RequiresArgsMixin:
             'modify JSON keys then press ENTER.\n'.format(
                 name,
                 json.dumps(args, indent=2, sort_keys=True)
-            ) + 'Example: {"some_key": <new_value>, "another_key": '
-                '<new_value>}\n'
+            ) + 'Example: {"x": True, "gamma": 0.001}\n'
         )
 
         # use defaults if no changes specified
@@ -62,3 +62,7 @@ class RequiresArgsMixin:
 
         updates = json.loads(user_input)
         return {**args, **updates}
+
+    @abc.abstractmethod
+    def from_args(self, *argss, **kwargs):
+        raise NotImplementedError

@@ -2,25 +2,22 @@ import abc
 
 import torch
 
-from adept.learner.learner import LearnerMixin
+from adept.learner._learner import LearnerMixin
 
 
-class ActorCriticLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
+class ACRolloutLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
+    """
+    Actor Critic Rollout Learner
+    """
     args = {
-        'normalize_advantage': False
+        'discount': 0.99,
+        'gae': True,
+        'tau': 1.,
+        'normalize_advantage': False,
+        'entropy_weight': 0.01
     }
 
-    @property
-    @abc.abstractmethod
-    def network(self):
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def gpu_preprocessor(self):
-        raise NotImplementedError
-
-    def compute_loss(self, experience, next_obs):
+    def compute_loss(self, experiences, next_obs):
         # estimate value of next state
         with torch.no_grad():
             next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
@@ -28,9 +25,9 @@ class ActorCriticLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
             last_values = results['critic'].squeeze(1).data
 
         # compute nstep return and advantage over batch
-        batch_values = torch.stack(experience.values)
+        batch_values = torch.stack(experiences.values)
         value_targets, batch_advantages = self._compute_returns_advantages(
-            batch_values, last_values, experience.rewards, experience.terminals
+            batch_values, last_values, experiences.rewards, experiences.terminals
         )
 
         # batched value loss
@@ -44,10 +41,10 @@ class ActorCriticLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
         policy_loss = 0.
         entropy_loss = 0.
 
-        rollout_len = len(experience.rewards)
+        rollout_len = len(experiences.rewards)
         for i in range(rollout_len):
-            log_probs = experience.log_probs[i]
-            entropies = experience.entropies[i]
+            log_probs = experiences.log_probs[i]
+            entropies = experiences.entropies[i]
 
             policy_loss = policy_loss - (
                     log_probs * batch_advantages[i].unsqueeze(1).data
@@ -114,7 +111,7 @@ class ActorCriticLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
         return nstep_target_returns, advantages
 
 
-class ActorCriticLearner(ActorCriticLearnerMixin):
+class ACRolloutLearner(ACRolloutLearnerMixin):
 
     def __init__(self, network, gpu_preprocessor):
         self._network = network
