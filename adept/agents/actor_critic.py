@@ -36,8 +36,7 @@ class ActorCritic(AgentModule):
         gae,
         tau,
         normalize_advantage,
-        entropy_weight,
-        args
+        entropy_weight
     ):
         super(ActorCritic, self).__init__(
             network,
@@ -51,7 +50,15 @@ class ActorCritic(AgentModule):
 
         self._exp_cache = ACRollout(nb_rollout, reward_normalizer)
         self._actor = ACRolloutActorTrain(network, gpu_preprocessor, action_space)
-        self._learner = ACRolloutLearner.from_args(args, network, gpu_preprocessor)
+        self._learner = ACRolloutLearner(
+            network,
+            gpu_preprocessor,
+            discount,
+            gae,
+            tau,
+            normalize_advantage,
+            entropy_weight
+        )
 
     @classmethod
     def from_args(
@@ -67,7 +74,6 @@ class ActorCritic(AgentModule):
             tau=args.tau,
             normalize_advantage=args.normalize_advantage,
             entropy_weight=args.entropy_weight,
-            args=args
         )
 
     @property
