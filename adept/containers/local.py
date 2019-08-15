@@ -25,7 +25,7 @@ class Local(
 ):
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        summary_writer, summary_frequency, saver
+        summary_writer, summary_frequency, saver, device
     ):
         super().__init__()
         self._agent = agent
@@ -37,6 +37,7 @@ class Local(
         self._summary_writer = summary_writer
         self._saver = saver
         self._summary_frequency = summary_frequency
+        self._device = device
 
     @property
     def agent(self):
@@ -75,6 +76,10 @@ class Local(
         return self._saver
 
     @property
+    def device(self):
+        return self._device
+
+    @property
     def world_size(self):
         return 1
 
@@ -83,16 +88,24 @@ class Local(
         self.set_next_save(initial_count)
 
         next_obs = self.environment.reset()
+        next_obs = {k: v.to(self.device) for k, v in next_obs.items()}
         self.start_time = time()
         internals = listd_to_dlist([
-            self.agent.network.new_internals(i) for i in self.nb_env
+            self.agent.network.new_internals(self.device) for _ in range(self.nb_env)
         ])
         while self.local_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions = self.agent.act(obs, internals)
+            actions, internals = self.agent.act(obs, internals)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
-            self.agent.observe(obs, rewards, terminals, infos)
+            next_obs = {k: v.to(self.device) for k, v in next_obs.items()}
+
+            self.agent.observe(
+                obs,
+                rewards.to(self.device),
+                terminals.to(self.device),
+                infos
+            )
             for i, terminal in enumerate(terminals):
                 if terminal:
                     for k, v in self.network.new_internals(self.device).items():
@@ -109,9 +122,9 @@ class Local(
             self.save_model_if_epoch(self.local_step_count)
 
             # Learn
-            if self.exp_cache.is_ready():
+            if self.agent.is_ready():
                 loss_dict, metric_dict = self.agent.compute_loss(
-                    self.exp_cache.read(), next_obs
+                    next_obs, internals
                 )
                 total_loss = torch.sum(
                     torch.stack(tuple(loss for loss in loss_dict.values()))
@@ -121,7 +134,7 @@ class Local(
                 total_loss.backward()
                 self.optimizer.step()
 
-                self.exp_cache.clear()
+                self.agent.clear()
                 for k, vs in internals.items():
                     internals[k] = [v.detach() for v in vs]
 

@@ -213,17 +213,18 @@ def main(
         )
         logger.info('Reloaded network from {}'.format(args.load_network))
 
-    # construct agent
     device = torch.device(
         "cuda:{}".format(args.gpu_id)
         if (torch.cuda.is_available() and args.gpu_id >= 0)
         else "cpu"
     )
+    network = network.to(device)
     torch.backends.cudnn.benchmark = True
+
+    # construct agent
     agent = agent_registry.lookup_agent(args.agent).from_args(
         args,
         network,
-        device,
         env_registry.lookup_reward_normalizer(args.env),
         env.gpu_preprocessor,
         env.action_space
@@ -247,7 +248,7 @@ def main(
     logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
     container = Local(
         agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
-        summary_writer, args.summary_freq, saver
+        summary_writer, args.summary_freq, saver, device
     )
 
     # if running an eval thread create eval env, agent, & logger

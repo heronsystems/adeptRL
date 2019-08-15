@@ -28,8 +28,8 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         self._gpu_preprocessor = gpu_preprocessor
         self._action_space = action_space
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def is_train(self):
         raise NotImplementedError
 
@@ -45,9 +45,17 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def action_space(self):
         return self._action_space
 
-    @abc.abstractmethod
+    @property
+    def action_keys(self):
+        return list(sorted(self.action_space.keys()))
+
     @staticmethod
+    @abc.abstractmethod
     def output_space(action_space):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def from_args(self, args, network, gpu_preprocessor, action_space):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -88,3 +96,6 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
         actions, exp = self.process_predictions(predictions, av_actions)
         return actions, exp, internal_states
+
+    def to(self, device):
+        self._network = self._network.to(device)

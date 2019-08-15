@@ -19,7 +19,7 @@ import numpy as np
 
 
 class ACRollout(dict, BaseExperience):
-    def __init__(self, nb_rollout, device, reward_normalizer):
+    def __init__(self, nb_rollout, reward_normalizer):
         super(ACRollout, self).__init__()
         assert type(nb_rollout == int)
         self['states'] = []
@@ -29,7 +29,6 @@ class ACRollout(dict, BaseExperience):
         self['log_probs'] = []
         self['entropies'] = []
         self.nb_rollout = nb_rollout
-        self.device = device
         self.reward_normalizer = reward_normalizer
 
     def write_forward(self, actions, experience):
@@ -39,12 +38,7 @@ class ACRollout(dict, BaseExperience):
             self[k].append(v)
 
     def write_env(self, obs, rewards, terminals, infos):
-        rewards = torch.tensor(
-            [self.reward_normalizer(reward) for reward in rewards]
-        ).to(self.device)
-        terminals = (
-            1. - torch.from_numpy(np.array(terminals, dtype=np.float32))
-        ).to(self.device)
+        rewards = self.reward_normalizer(rewards)
         self['states'].append(obs)
         self['rewards'].append(rewards)
         # TODO: rename as terminals_mask or don't mask here

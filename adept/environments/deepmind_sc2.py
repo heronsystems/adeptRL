@@ -357,8 +357,8 @@ class SC2RemoveAvailableActions(ObsPreprocessor):
         }
         self.observation_space = filtered_space
 
-    def __call__(self, obs, device=None):
-        result = super().__call__(obs, device)
+    def __call__(self, obs):
+        result = super().__call__(obs)
         return {k: v for k, v in result.items() if k != 'available_actions'}
 
 

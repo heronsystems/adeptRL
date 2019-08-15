@@ -13,11 +13,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+import torch
 
 
 class Normalizer(abc.ABC):
     @abc.abstractmethod
-    def __call__(self, item):
+    def __call__(self, reward):
+        """
+        :param reward: FloatTensor
+        :return:
+        """
         raise NotImplementedError
 
 
@@ -26,13 +31,13 @@ class Clip(Normalizer):
         self.floor = floor
         self.ceil = ceil
 
-    def __call__(self, item):
-        return float(max(min(item, self.ceil), self.floor))
+    def __call__(self, reward):
+        return torch.clamp(reward, self.floor, self.ceil)
 
 
 class Scale(Normalizer):
     def __init__(self, coefficient):
         self.coefficient = coefficient
 
-    def __call__(self, item):
-        return self.coefficient * item
+    def __call__(self, reward):
+        return self.coefficient * reward

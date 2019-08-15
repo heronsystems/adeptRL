@@ -28,21 +28,19 @@ class ActorCritic(AgentModule):
     def __init__(
         self,
         network,
-        device,
         reward_normalizer,
         gpu_preprocessor,
         action_space,
-        nb_env,
         nb_rollout,
         discount,
         gae,
         tau,
         normalize_advantage,
-        entropy_weight
+        entropy_weight,
+        args
     ):
         super(ActorCritic, self).__init__(
             network,
-            device,
             reward_normalizer,
             gpu_preprocessor,
             action_space
@@ -51,24 +49,25 @@ class ActorCritic(AgentModule):
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
 
-        self._exp_cache = ACRollout(nb_rollout, device, reward_normalizer)
+        self._exp_cache = ACRollout(nb_rollout, reward_normalizer)
         self._actor = ACRolloutActorTrain(network, gpu_preprocessor, action_space)
-        self._learner = ACRolloutLearner(network, gpu_preprocessor)
+        self._learner = ACRolloutLearner.from_args(args, network, gpu_preprocessor)
 
     @classmethod
     def from_args(
-        cls, args, network, device, reward_normalizer, gpu_preprocessor,
-        action_space
+        cls, args, network, reward_normalizer, gpu_preprocessor,
+        action_space, **kwargs
     ):
 
         return cls(
-            network, device, reward_normalizer, gpu_preprocessor, action_space,
+            network, reward_normalizer, gpu_preprocessor, action_space,
             nb_rollout=args.nb_rollout,
             discount=args.discount,
             gae=args.gae,
             tau=args.tau,
             normalize_advantage=args.normalize_advantage,
-            entropy_weight=args.entropy_weight
+            entropy_weight=args.entropy_weight,
+            args=args
         )
 
     @property
@@ -86,5 +85,5 @@ class ActorCritic(AgentModule):
     def process_predictions(self, predictions, available_actions):
         return self._actor.process_predictions(predictions, available_actions)
 
-    def compute_loss(self, experiences, next_obs):
-        return self._learner.compute_loss(experiences, next_obs)
+    def compute_loss(self, next_obs, internals):
+        return self._learner.compute_loss(self.exp_cache.read(), next_obs, internals)

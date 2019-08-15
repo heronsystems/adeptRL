@@ -63,7 +63,7 @@ class CountsRewards(abc.ABC):
         self._episode_reward_buffer = updated_buffer
 
     def update_buffers(self, rewards, terminals, infos):
-        self.episode_reward_buffer += torch.tensor(rewards).float()
+        self.episode_reward_buffer += rewards.float()
         self.local_step_count += self.nb_env
         terminal_rewards = []
         terminal_infos = []
@@ -72,7 +72,7 @@ class CountsRewards(abc.ABC):
         ):
             if done and info:
                 terminal_rewards.append(ep_reward.item())
-                terminal_infos.append((info))
+                terminal_infos.append(info)
                 ep_reward.zero_()
         return terminal_rewards, terminal_infos
 
@@ -257,10 +257,6 @@ class HasAgent(abc.ABC):
     @property
     def network(self):
         return self.agent.network
-
-    @property
-    def exp_cache(self):
-        return self.agent.exp_cache
 
 
 class HasEnvironment(abc.ABC):

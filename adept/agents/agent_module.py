@@ -87,8 +87,14 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_loss(self, experiences, next_obs):
+    def compute_loss(self, next_obs, internals):
         raise NotImplementedError
+
+    def is_ready(self):
+        return self.exp_cache.is_ready()
+
+    def clear(self):
+        self.exp_cache.clear()
 
     def act(self, obs, prev_internals):
         """

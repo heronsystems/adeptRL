@@ -2,10 +2,10 @@ import abc
 
 import torch
 
-from adept.learner._learner import LearnerMixin
+from adept.learner._learner import LearnerModule
 
 
-class ACRolloutLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
+class ACRolloutLearner(LearnerModule, metaclass=abc.ABCMeta):
     """
     Actor Critic Rollout Learner
     """
@@ -17,11 +17,48 @@ class ACRolloutLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
         'entropy_weight': 0.01
     }
 
-    def compute_loss(self, experiences, next_obs):
+    def __init__(
+            self,
+            network,
+            gpu_preprocessor,
+            discount,
+            gae,
+            tau,
+            normalize_advantage,
+            entropy_weight
+    ):
+        super(ACRolloutLearner, self).__init__(network, gpu_preprocessor)
+        self.discount = discount
+        self.gae = gae
+        self.tau = tau
+        self.normalize_advantage = normalize_advantage
+        self.entropy_weight = entropy_weight
+
+    @property
+    def network(self):
+        return self._network
+
+    @property
+    def gpu_preprocessor(self):
+        return self._gpu_preprocessor
+
+    @classmethod
+    def from_args(cls, args, network, gpu_preprocessor):
+        return cls(
+            network,
+            gpu_preprocessor,
+            args.discount,
+            args.gae,
+            args.tau,
+            args.normalize_advantage,
+            args.entropy_weight
+        )
+
+    def compute_loss(self, experiences, next_obs, internals):
         # estimate value of next state
         with torch.no_grad():
-            next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            results, _ = self.network(next_obs_on_device, self.internals)
+            next_obs_on_device = self.gpu_preprocessor(next_obs)
+            results, _ = self.network(next_obs_on_device, internals)
             last_values = results['critic'].squeeze(1).data
 
         # compute nstep return and advantage over batch
@@ -81,20 +118,20 @@ class ACRolloutLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
         nstep_target_returns = []
         for i in reversed(range(len(rewards))):
             reward = rewards[i]
-            terminal = terminals[i]
+            terminal_mask = 1. - terminals[i].float()
 
             # Nstep return is always calculated for the critic's target
             # using the GAE target for the critic results in the
             # same or worse performance
-            target_return = reward + self.discount * target_return * terminal
+            target_return = reward + self.discount * target_return * terminal_mask
             nstep_target_returns.append(target_return)
 
             # Generalized Advantage Estimation
             if self.gae:
                 delta_t = reward \
-                          + self.discount * next_value * terminal \
+                          + self.discount * next_value * terminal_mask \
                           - values[i].data
-                gae = gae * self.discount * self.tau * terminal + delta_t
+                gae = gae * self.discount * self.tau * terminal_mask + delta_t
                 gae_advantages.append(gae)
                 next_value = values[i].data
 
@@ -109,18 +146,3 @@ class ACRolloutLearnerMixin(LearnerMixin, metaclass=abc.ABCMeta):
             advantages = nstep_target_returns - values.data
 
         return nstep_target_returns, advantages
-
-
-class ACRolloutLearner(ACRolloutLearnerMixin):
-
-    def __init__(self, network, gpu_preprocessor):
-        self._network = network
-        self._gpu_preprocessor = gpu_preprocessor
-
-    @property
-    def network(self):
-        return self._network
-
-    @property
-    def gpu_preprocessor(self):
-        return self._gpu_preprocessor

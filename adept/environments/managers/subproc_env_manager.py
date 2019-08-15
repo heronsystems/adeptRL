@@ -115,7 +115,7 @@ class SubProcEnvManager(EnvManager):
         obs = listd_to_dlist(obs)
         shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
         obs = {**obs, **shared_mems}
-        return obs, rews, dones, infos
+        return obs, torch.tensor(rews), torch.tensor(dones), infos
 
     def reset(self):
         for socket in self._zmq_sockets:

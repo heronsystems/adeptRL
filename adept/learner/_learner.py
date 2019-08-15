@@ -20,33 +20,18 @@ import abc
 from adept.utils.requires_args import RequiresArgsMixin
 
 
-class LearnerMixin:
-    """
-    This mixin interface is used for Agents.
-    """
-
-    @abc.abstractmethod
-    def compute_loss(self, experiences, next_obs):
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def network(self):
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def gpu_preprocessor(self):
-        raise NotImplementedError
-
-
-class LearnerModule(LearnerMixin, RequiresArgsMixin, metaclass=abc.ABCMeta):
+class LearnerModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
     This one of the modules to use for custom Actor-Learner code.
     """
     def __init__(self, network, gpu_preprocessor):
         self._network = network
         self._gpu_preprocessor = gpu_preprocessor
+
+    @classmethod
+    @abc.abstractmethod
+    def from_args(self, args, network, gpu_preprocessor):
+        raise NotImplementedError
 
     @property
     def network(self):
@@ -55,3 +40,7 @@ class LearnerModule(LearnerMixin, RequiresArgsMixin, metaclass=abc.ABCMeta):
     @property
     def gpu_preprocessor(self):
         return self._gpu_preprocessor
+
+    @abc.abstractmethod
+    def compute_loss(self, experiences, next_obs, internals):
+        raise NotImplementedError
