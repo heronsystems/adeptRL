@@ -12,4 +12,4 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from .util import listd_to_dlist
+from .util import listd_to_dlist, dlist_to_listd, dtensor_to_dev

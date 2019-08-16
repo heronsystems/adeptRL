@@ -29,7 +29,8 @@ class DistribHost(
 
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        summary_writer, summary_frequency, saver, global_rank, world_size
+        summary_writer, summary_frequency, saver, global_rank, world_size,
+        device
     ):
         super().__init__()
         self._agent = agent
@@ -43,6 +44,7 @@ class DistribHost(
         self._summary_frequency = summary_frequency
         self._global_rank = global_rank
         self._world_size = world_size
+        self.device = device
 
     @property
     def agent(self):
@@ -90,6 +92,7 @@ class DistribHost(
         global_step_count = initial_count
 
         next_obs = self.environment.reset()
+        next_obs = {k: v.to(self.device) for k, v in next_obs.items()}
         self.start_time = time.time()
         while global_step_count < max_steps:
             obs = next_obs
@@ -151,7 +154,7 @@ class DistribHost(
 class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        global_rank, world_size
+        global_rank, world_size, device
     ):
         super().__init__()
         self._agent = agent
@@ -162,6 +165,7 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
         self._logger = logger
         self._global_rank = global_rank
         self._world_size = world_size
+        self.device = device
 
     @property
     def agent(self):

@@ -15,7 +15,7 @@
 import torch
 from time import time
 
-from adept.utils import listd_to_dlist
+from adept.utils import listd_to_dlist, dtensor_to_dev
 from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, LogsAndSummarizesRewards
 
 
@@ -87,8 +87,7 @@ class Local(
         self.set_local_step_count(initial_count)
         self.set_next_save(initial_count)
 
-        next_obs = self.environment.reset()
-        next_obs = {k: v.to(self.device) for k, v in next_obs.items()}
+        next_obs = dtensor_to_dev(self.environment.reset(), self.device)
         self.start_time = time()
         internals = listd_to_dlist([
             self.agent.network.new_internals(self.device) for _ in range(self.nb_env)
@@ -98,7 +97,7 @@ class Local(
             # Build rollout
             actions, internals = self.agent.act(obs, internals)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
-            next_obs = {k: v.to(self.device) for k, v in next_obs.items()}
+            next_obs = dtensor_to_dev(next_obs, self.device)
 
             self.agent.observe(
                 obs,

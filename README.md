@@ -1,8 +1,5 @@
 ![banner](images/banner.png)
 
-[![Build Status](http://ci.heronsystems.com:12345/buildStatus/icon?job=adeptRL/master)](http://ci.heronsystems.com:12345/job/adeptRL/job/master/)
-[![Gitter chat](https://badges.gitter.im/adeptRL.png)](https://gitter.im/adeptRL/Lobby)
-
 adept is a reinforcement learning framework designed to accelerate research 
 by providing:
 * a modular interface for using custom networks, agents, and environments

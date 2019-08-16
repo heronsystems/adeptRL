@@ -58,6 +58,17 @@ def dlist_to_listd(dict_of_lists):
     return new_list
 
 
+def dtensor_to_dev(d_tensor, device):
+    """
+    Move a dictionary of tensors to a device.
+
+    :param d_tensor: Dict[str, Tensor]
+    :param device: torch.device
+    :return: Dict[str, Tensor] on desired device.
+    """
+    return {k: v.to(device) for k, v in d_tensor.items()}
+
+
 def json_to_dict(file_path):
     """Read JSON config."""
     json_object = json.load(open(file_path, 'r'))
