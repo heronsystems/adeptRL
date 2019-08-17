@@ -16,13 +16,17 @@ import torch
 from time import time
 
 from adept.utils import listd_to_dlist, dtensor_to_dev
-from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, LogsAndSummarizesRewards
+from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, \
+    LogsAndSummarizesRewards
 
 
 class Local(
     HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
     SavesModels
 ):
+    """
+    A Local container trains an agent on a single GPU.
+    """
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
         summary_writer, summary_frequency, saver, device
@@ -88,10 +92,11 @@ class Local(
         self.set_next_save(initial_count)
 
         next_obs = dtensor_to_dev(self.environment.reset(), self.device)
-        self.start_time = time()
         internals = listd_to_dlist([
-            self.agent.network.new_internals(self.device) for _ in range(self.nb_env)
+            self.agent.network.new_internals(self.device) for _ in
+            range(self.nb_env)
         ])
+        self.start_time = time()
         while self.local_step_count < max_steps:
             obs = next_obs
             # Build rollout

@@ -13,6 +13,7 @@ import time
 
 import torch
 import torch.distributed as dist
+from adept.utils import dtensor_to_dev, listd_to_dlist
 
 from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, \
     LogsAndSummarizesRewards, LogsRewards
@@ -91,15 +92,29 @@ class DistribHost(
         self.set_next_save(initial_count)
         global_step_count = initial_count
 
-        next_obs = self.environment.reset()
-        next_obs = {k: v.to(self.device) for k, v in next_obs.items()}
+        next_obs = dtensor_to_dev(self.environment.reset(), self.device)
+        internals = listd_to_dlist([
+            self.agent.network.new_internals(self.device) for _ in
+            range(self.nb_env)
+        ])
         self.start_time = time.time()
         while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
             actions = self.agent.act(obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
-            self.agent.observe(obs, rewards, terminals, infos)
+            next_obs = dtensor_to_dev(next_obs, self.device)
+
+            self.agent.observe(
+                obs,
+                rewards.to(self.device),
+                terminals.to(self.device),
+                infos
+            )
+            for i, terminal in enumerate(terminals):
+                if terminal:
+                    for k, v in self.network.new_internals(self.device).items():
+                        internals[k][i] = v
 
             # Perform state updates
             terminal_rewards, terminal_infos = self.update_buffers(
@@ -118,40 +133,42 @@ class DistribHost(
             self.save_model_if_epoch(global_step_count)
 
             # Learn
-            if self.exp_cache.is_ready():
-                self.learn(next_obs)
+            if self.agent.is_ready():
+                loss_dict, metric_dict = self.agent.compute_loss(
+                    next_obs, internals
+                )
+                total_loss = torch.sum(
+                    torch.stack(tuple(loss for loss in loss_dict.values()))
+                )
 
-    def learn(self, next_obs):
-        loss_dict, metric_dict = self.agent.compute_loss(
-            self.exp_cache.read(), next_obs
-        )
-        total_loss = torch.sum(
-            torch.stack(tuple(loss for loss in loss_dict.values()))
-        )
+                self.optimizer.zero_grad()
+                total_loss.backward()
+                dist.barrier()
+                handles = []
+                for param in self.network.parameters():
+                    handles.append(
+                        dist.all_reduce_multigpu([param.grad], async_op=True))
+                for handle in handles:
+                    handle.wait()
+                for param in self.network.parameters():
+                    param.grad.mul_(1. / self._world_size)
+                self.optimizer.step()
 
-        self.optimizer.zero_grad()
-        total_loss.backward()
-        dist.barrier()
-        handles = []
-        for param in self.network.parameters():
-            handles.append(
-                dist.all_reduce_multigpu([param.grad], async_op=True))
-        for handle in handles:
-            handle.wait()
-        for param in self.network.parameters():
-            param.grad.mul_(1. / self._world_size)
-        self.optimizer.step()
+                self.agent.clear()
+                for k, vs in internals.items():
+                    internals[k] = [v.detach() for v in vs]
 
-        self.exp_cache.clear()
-        self.agent.detach_internals()
-
-        # write summaries
-        self.write_summaries(
-            total_loss, loss_dict, metric_dict, self.local_step_count
-        )
+                # write summaries
+                self.write_summaries(
+                    total_loss, loss_dict, metric_dict, self.local_step_count
+                )
 
 
 class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
+    """
+    DistribWorker does all the same computation as a host process but does not
+    save models or write tensorboard summaries.
+    """
     def __init__(
         self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
         global_rank, world_size, device
@@ -195,14 +212,29 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
         self.set_local_step_count(initial_count)
         global_step_count = initial_count
 
-        next_obs = self.environment.reset()
+        next_obs = dtensor_to_dev(self.environment.reset(), self.device)
+        internals = listd_to_dlist([
+            self.agent.network.new_internals(self.device) for _ in
+            range(self.nb_env)
+        ])
         self.start_time = time.time()
         while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
             actions = self.agent.act(obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
-            self.agent.observe(obs, rewards, terminals, infos)
+            next_obs = dtensor_to_dev(next_obs, self.device)
+
+            self.agent.observe(
+                obs,
+                rewards.to(self.device),
+                terminals.to(self.device),
+                infos
+            )
+            for i, terminal in enumerate(terminals):
+                if terminal:
+                    for k, v in self.network.new_internals(self.device).items():
+                        internals[k][i] = v
 
             # Perform state updates
             terminal_rewards, terminal_infos = self.update_buffers(
@@ -219,29 +251,27 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
             )
 
             # Learn
-            if self.exp_cache.is_ready():
-                self.learn(next_obs)
+            if self.agent.is_ready():
+                loss_dict, metric_dict = self.agent.compute_loss(
+                    next_obs, internals
+                )
+                total_loss = torch.sum(
+                    torch.stack(tuple(loss for loss in loss_dict.values()))
+                )
 
-    def learn(self, next_obs):
-        loss_dict, metric_dict = self.agent.compute_loss(
-            self.exp_cache.read(), next_obs
-        )
-        total_loss = torch.sum(
-            torch.stack(tuple(loss for loss in loss_dict.values()))
-        )
+                self.optimizer.zero_grad()
+                total_loss.backward()
+                dist.barrier()
+                handles = []
+                for param in self.network.parameters():
+                    handles.append(
+                        dist.all_reduce_multigpu([param.grad], async_op=True))
+                for handle in handles:
+                    handle.wait()
+                for param in self.network.parameters():
+                    param.grad.mul_(1. / self._world_size)
+                self.optimizer.step()
 
-        self.optimizer.zero_grad()
-        total_loss.backward()
-        dist.barrier()
-        handles = []
-        for param in self.network.parameters():
-            handles.append(
-                dist.all_reduce_multigpu([param.grad], async_op=True))
-        for handle in handles:
-            handle.wait()
-        for param in self.network.parameters():
-            param.grad.mul_(1. / self._world_size)
-        self.optimizer.step()
-
-        self.exp_cache.clear()
-        self.agent.detach_internals()
+                self.agent.clear()
+                for k, vs in internals.items():
+                    internals[k] = [v.detach() for v in vs]

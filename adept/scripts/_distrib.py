@@ -182,12 +182,12 @@ def main(
         container = DistribHost(
             agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
             summary_writer, args.summary_freq, SimpleModelSaver(log_id_dir),
-            GLOBAL_RANK, WORLD_SIZE
+            GLOBAL_RANK, WORLD_SIZE, device
         )
     else:
         container = DistribWorker(
             agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
-            GLOBAL_RANK, WORLD_SIZE
+            GLOBAL_RANK, WORLD_SIZE, device
         )
 
     container.run(args.nb_step, initial_count=initial_step_count)

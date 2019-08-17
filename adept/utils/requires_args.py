@@ -17,7 +17,15 @@ import abc
 
 
 class RequiresArgsMixin(metaclass=abc.ABCMeta):
-    args = None
+    """
+    This mixin makes it so that subclasses must implement an args class
+    attribute. These arguments are parsed at runtime and the user is offered a
+    chance to change any desired args. Classes the use this mixin must
+    implement the from_args() class method. from_args() is essentially a
+    secondary constructor.
+    """
+
+    args = None  # Dict[str, Any]
 
     @classmethod
     def check_args_implemented(cls):
@@ -63,6 +71,7 @@ class RequiresArgsMixin(metaclass=abc.ABCMeta):
         updates = json.loads(user_input)
         return {**args, **updates}
 
+    @classmethod
     @abc.abstractmethod
-    def from_args(self, *argss, **kwargs):
+    def from_args(cls, *argss, **kwargs):
         raise NotImplementedError
