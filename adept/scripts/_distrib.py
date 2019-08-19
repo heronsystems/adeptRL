@@ -157,7 +157,6 @@ def main(
     device = torch.device("cuda:{}".format(LOCAL_RANK))
     agent = agent_registry.lookup_agent(args.agent).from_args(
         args,
-        device,
         env_registry.lookup_reward_normalizer(args.env),
         env.action_space
     )
