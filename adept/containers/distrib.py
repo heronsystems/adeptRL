@@ -92,7 +92,7 @@ class DistribHost(
 
         next_obs = dtensor_to_dev(self.environment.reset(), self.device)
         internals = listd_to_dlist([
-            self.agent.network.new_internals(self.device) for _ in
+            self.network.new_internals(self.device) for _ in
             range(self.nb_env)
         ])
         self.start_time = time.time()
@@ -211,7 +211,7 @@ class DistribWorker(LogsRewards):
 
         next_obs = dtensor_to_dev(self.environment.reset(), self.device)
         internals = listd_to_dlist([
-            self.agent.network.new_internals(self.device) for _ in
+            self.network.new_internals(self.device) for _ in
             range(self.nb_env)
         ])
         self.start_time = time.time()
