@@ -24,7 +24,7 @@ import torch
 import torch.distributed as dist
 from tensorboardX import SummaryWriter
 
-from adept.agents.agent_registry import AgentRegistry
+from adept.registry.agent_registry import AgentRegistry
 from adept.containers.distrib import DistribHost, DistribWorker
 from adept.environments.env_registry import EnvRegistry
 from adept.environments.managers.subproc_env_manager import SubProcEnvManager

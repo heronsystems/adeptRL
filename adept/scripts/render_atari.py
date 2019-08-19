@@ -41,7 +41,7 @@ import json
 
 import torch
 
-from adept.agents.agent_registry import AgentRegistry
+from adept.registry.agent_registry import AgentRegistry
 from adept.containers import AtariRenderer
 from adept.environments import SimpleEnvManager
 from adept.environments.env_registry import EnvRegistry

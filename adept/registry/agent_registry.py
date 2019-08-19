@@ -27,6 +27,10 @@ class AgentRegistry:
         self.register_agent(self._load_actor_critic_vtrace())
 
     @staticmethod
+    def _load_agents():
+        from adept.agents import AGENT_REG
+
+    @staticmethod
     def _load_actor_critic():
         from adept.agents.actor_critic import ActorCritic
         return ActorCritic

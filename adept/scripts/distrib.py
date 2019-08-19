@@ -78,7 +78,7 @@ import sys
 from datetime import datetime
 from adept.utils.util import DotDict
 from adept.utils.script_helpers import parse_path, parse_none, LogDirHelper
-from adept.agents.agent_registry import AgentRegistry
+from adept.registry.agent_registry import AgentRegistry
 from adept.environments.env_registry import EnvRegistry
 from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (

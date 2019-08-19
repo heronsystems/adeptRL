@@ -8,7 +8,7 @@ class ACActorHelperMixin(metaclass=abc.ABCMeta):
     A helper class for actor critic actors.
     """
     @staticmethod
-    def flatten_to_2d(logit):
+    def flatten_logits(logit):
         """
         :param logits: Tensor of arbitrary dim
         :return: logits flattened to (N, X)

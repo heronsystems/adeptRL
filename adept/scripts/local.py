@@ -71,7 +71,7 @@ import torch
 from absl import flags
 from tensorboardX import SummaryWriter
 
-from adept.agents.agent_registry import AgentRegistry
+from adept.registry.agent_registry import AgentRegistry
 from adept.containers import Local, EvaluationThread
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvRegistry

@@ -86,7 +86,7 @@ import subprocess
 import sys
 from datetime import datetime
 
-from adept.agents.agent_registry import AgentRegistry
+from adept.registry.agent_registry import AgentRegistry
 from adept.environments.env_registry import EnvRegistry
 from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (

@@ -44,7 +44,7 @@ import numpy as np
 import torch
 from absl import flags
 
-from adept.agents.agent_registry import AgentRegistry
+from adept.registry.agent_registry import AgentRegistry
 from adept.containers import Evaluation
 from adept.environments import SubProcEnvManager
 from adept.environments.env_registry import EnvRegistry

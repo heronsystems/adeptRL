@@ -44,7 +44,7 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
         entropies = []
 
         for key in self.action_keys:
-            logit = self.flatten_to_2d(preds[key])
+            logit = self.flatten_logits(preds[key])
 
             log_softmax, softmax = self.log_softmax(logit), self.softmax(logit)
             entropy = self.entropy(log_softmax, softmax)
@@ -62,3 +62,33 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
             'entropies': entropies,
             'values': values
         }
+
+
+class ACRolloutActorEval(ActorModule, ACActorHelperMixin):
+    args = {}
+
+    @classmethod
+    def from_args(cls, *argss, **kwargs):
+        return cls(*argss, **kwargs)
+
+    @property
+    def is_train(self):
+        return False
+
+    @staticmethod
+    def output_space(action_space):
+        head_dict = {'critic': (1,), **action_space}
+        return head_dict
+
+    def process_predictions(self, preds, available_actions):
+        actions = OrderedDict()
+
+        with torch.no_grad():
+            for key in self.action_keys:
+                logit = self.flatten_logits(preds[key])
+
+                softmax = self.softmax(logit)
+                action = self.select_action(softmax)
+
+                actions[key] = action.cpu()
+        return actions, {}
