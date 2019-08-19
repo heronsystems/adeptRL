@@ -17,7 +17,6 @@ An Agent interacts with the environment and accumulates experience.
 """
 import abc
 
-from adept.utils import listd_to_dlist
 from adept.utils.requires_args import RequiresArgsMixin
 
 
@@ -32,23 +31,16 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     def __init__(
         self,
-        network,
         reward_normalizer,
-        gpu_preprocessor,
         action_space
     ):
-        self._network = network
         self._reward_normalizer = reward_normalizer
-        self._gpu_preprocessor = gpu_preprocessor
         self._action_space = action_space
-
-        # agent only ever trains, never eval
-        self.network.train()
 
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, args, network, reward_normalizer, gpu_preprocessor,
+        cls, args, reward_normalizer, gpu_preprocessor,
         action_space, **kwargs
     ):
         raise NotImplementedError
@@ -58,16 +50,6 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def exp_cache(self):
         """Get experience cache"""
         raise NotImplementedError
-
-    @property
-    def network(self):
-        """Get network"""
-        return self._network
-
-    @property
-    def gpu_preprocessor(self):
-        """Get network"""
-        return self._gpu_preprocessor
 
     @property
     def action_space(self):
@@ -87,7 +69,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_loss(self, next_obs, internals):
+    def compute_loss(self, network, next_obs, internals):
         raise NotImplementedError
 
     def is_ready(self):
@@ -96,18 +78,16 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def clear(self):
         self.exp_cache.clear()
 
-    def act(self, obs, prev_internals):
+    def act(self, network, obs, prev_internals):
         """
+        :param network: NetworkModule
         :param obs: Dict[str, Tensor]
         :param prev_internals: previous interal states. Dict[str, Tensor]
         :return:
             actions: Dict[ActionKey, LongTensor (B)]
             internal_states: Dict[str, Tensor]
         """
-        predictions, internal_states = self.network(
-            self.gpu_preprocessor(obs),
-            prev_internals
-        )
+        predictions, internal_states = network(obs, prev_internals)
 
         if 'available_actions' in obs:
             av_actions = obs['available_actions']

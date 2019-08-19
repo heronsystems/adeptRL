@@ -23,23 +23,8 @@ from adept.utils.requires_args import RequiresArgsMixin
 
 class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
-    def __init__(self, network, gpu_preprocessor, action_space):
-        self._network = network
-        self._gpu_preprocessor = gpu_preprocessor
+    def __init__(self, action_space):
         self._action_space = action_space
-
-    @property
-    @abc.abstractmethod
-    def is_train(self):
-        raise NotImplementedError
-
-    @property
-    def network(self):
-        return self._network
-
-    @property
-    def gpu_preprocessor(self):
-        return self._gpu_preprocessor
 
     @property
     def action_space(self):
@@ -55,7 +40,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def from_args(self, args, network, gpu_preprocessor, action_space):
+    def from_args(self, args, action_space):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -70,7 +55,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    def act(self, obs, prev_internals):
+    def act(self, network, obs, prev_internals):
         """
         :param obs: Dict[str, Tensor]
         :param prev_internals: previous interal states. Dict[str, Tensor]
@@ -79,15 +64,8 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             experience: Dict[str, Tensor (B, X)]
             internal_states: Dict[str, Tensor]
         """
-        if self.is_train:
-            self.network.train()
-        else:
-            self.network.eval()
 
-        predictions, internal_states = self.network(
-            self.gpu_preprocessor(obs),
-            prev_internals
-        )
+        predictions, internal_states = network(obs, prev_internals)
 
         if 'available_actions' in obs:
             av_actions = obs['available_actions']
@@ -96,6 +74,3 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
         actions, exp = self.process_predictions(predictions, av_actions)
         return actions, exp, internal_states
-
-    def to(self, device):
-        self._network = self._network.to(device)

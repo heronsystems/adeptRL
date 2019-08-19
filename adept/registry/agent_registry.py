@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from adept.actor import ActorModule
 from adept.agents.agent_module import AgentModule
 
 
@@ -22,23 +23,21 @@ class AgentRegistry:
 
     def __init__(self):
         self._agent_class_by_id = {}
+        self._actor_class_by_id = {}
+        self._register_agents()
+        self._register_actors()
+        # self.register_agent(self._load_actor_critic())
+        # self.register_agent(self._load_actor_critic_vtrace())
 
-        self.register_agent(self._load_actor_critic())
-        self.register_agent(self._load_actor_critic_vtrace())
-
-    @staticmethod
-    def _load_agents():
+    def _register_agents(self):
         from adept.agents import AGENT_REG
+        for agent in AGENT_REG:
+            self.register_agent(agent)
 
-    @staticmethod
-    def _load_actor_critic():
-        from adept.agents.actor_critic import ActorCritic
-        return ActorCritic
-
-    @staticmethod
-    def _load_actor_critic_vtrace():
-        from adept.agents.impala.actor_critic_vtrace import ActorCriticVtrace
-        return ActorCriticVtrace
+    def _register_actors(self):
+        from adept.actor import ACTOR_REG
+        for actor in ACTOR_REG:
+            self.register_actor(actor)
 
     def register_agent(self, agent_class):
         """
@@ -50,6 +49,34 @@ class AgentRegistry:
         assert issubclass(agent_class, AgentModule)
         agent_class.check_args_implemented()
         self._agent_class_by_id[agent_class.__name__] = agent_class
+
+    def register_actor(self, actor_class):
+        """
+        Add your own actor class.
+
+        :param actor_class: adept.actor.ActorModule. Your custom class.
+        :return:
+        """
+        assert issubclass(actor_class, ActorModule)
+        actor_class.check_args_implemented()
+        self._actor_class_by_id[actor_class.__name__] = actor_class
+
+    def eval_actor(self, train_name):
+        """
+        Get the eval actor by training agent or actor name.
+
+        :param train_name: Name of agent or actor class used for training
+        :return: ActorModule
+        """
+        from adept.actor import ACTOR_EVAL_LOOKUP
+        from adept.agents import agent_eval_lookup
+        agent_lookup = agent_eval_lookup()
+        if train_name in agent_lookup:
+            return self._actor_class_by_id[agent_lookup[train_name]]
+        elif train_name in ACTOR_EVAL_LOOKUP:
+            return self._actor_class_by_id[ACTOR_EVAL_LOOKUP[train_name]]
+        else:
+            raise IndexError(f'Unknown training agent or actor: {train_name}')
 
     def lookup_agent(self, agent_id):
         """

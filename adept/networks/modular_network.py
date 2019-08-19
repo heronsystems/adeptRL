@@ -33,15 +33,18 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         source_nets,
         body_submodule,
         head_submodules,
-        output_space
+        output_space,
+        gpu_preprocessor
     ):
         """
         :param source_nets: Dict[ObsKey, SubModule]
         :param body_submodule: SubModule
         :param head_submodules: List[SubModule]
         :param output_space: Dict[OutputKey, Shape]
+        :param gpu_preprocessor: ObsPreprocessor
         """
         super().__init__()
+        self.gpu_preprocessor = gpu_preprocessor
 
         # Source Nets
         self.source_nets = torch.nn.ModuleDict(
@@ -160,6 +163,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         args,
         observation_space,
         output_space,
+        gpu_preprocessor,
         net_reg
     ):
         """
@@ -168,6 +172,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         :param args: Dict[ArgName, Any]
         :param observation_space: Dict[ObsKey, Shape]
         :param output_space: Dict[OutputKey, Shape]
+        :param gpu_preprocessor: ObsPreprocessor
         :param net_reg: NetworkRegistry
         :return: ModularNetwork
         """
@@ -248,7 +253,8 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                 raise ValueError('Invalid dim: {}'.format(dim))
             head_submodules.append(submod)
         return cls(
-            obs_key_to_submod, body_submod, head_submodules, output_space
+            obs_key_to_submod, body_submod, head_submodules, output_space,
+            gpu_preprocessor
         )
 
     def forward(self, obs_key_to_obs, internals):
@@ -261,6 +267,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             Dict[str, torch.Tensor (ND)]
         ]
         """
+        obs_key_to_obs = self.gpu_preprocessor(obs_key_to_obs)
         # Process input networks
         nxt_internals = []
         processed_inputs = []

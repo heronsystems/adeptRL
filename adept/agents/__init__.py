@@ -5,13 +5,9 @@ AGENT_REG = [
     ActorCritic
 ]
 
-AGENT_EVAL_LOOKUP = [
-
-]
-
 
 def agent_eval_lookup():
     from adept.actor import ACRolloutActorEval
     return {
-        ActorCritic.__name__: ACRolloutActorEval
+        ActorCritic.__name__: ACRolloutActorEval.__name__
     }

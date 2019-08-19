@@ -25,6 +25,7 @@ class BaseNetwork(torch.nn.Module):
         args,
         observation_space,
         output_space,
+        gpu_preprocessor,
         net_reg
     ):
         raise NotImplementedError

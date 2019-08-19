@@ -130,6 +130,7 @@ def main(
             args,
             env.observation_space,
             output_space,
+            env.gpu_preprocessor,
             net_registry
         )
     else:
@@ -137,6 +138,7 @@ def main(
             args,
             env.observation_space,
             output_space,
+            env.gpu_preprocessor,
             net_registry
         )
     if args.load_network:
@@ -155,10 +157,8 @@ def main(
     device = torch.device("cuda:{}".format(LOCAL_RANK))
     agent = agent_registry.lookup_agent(args.agent).from_args(
         args,
-        network,
         device,
         env_registry.lookup_reward_normalizer(args.env),
-        env.gpu_preprocessor,
         env.action_space
     )
 
@@ -180,13 +180,13 @@ def main(
             os.path.join(log_id_dir, 'rank{}'.format(GLOBAL_RANK))
         )
         container = DistribHost(
-            agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
+            agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
             summary_writer, args.summary_freq, SimpleModelSaver(log_id_dir),
             GLOBAL_RANK, WORLD_SIZE, device
         )
     else:
         container = DistribWorker(
-            agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
+            agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
             GLOBAL_RANK, WORLD_SIZE, device
         )
 

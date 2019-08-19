@@ -24,23 +24,12 @@ class LearnerModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
     This one of the modules to use for custom Actor-Learner code.
     """
-    def __init__(self, network, gpu_preprocessor):
-        self._network = network
-        self._gpu_preprocessor = gpu_preprocessor
 
     @classmethod
     @abc.abstractmethod
-    def from_args(self, args, network, gpu_preprocessor):
+    def from_args(self, args):
         raise NotImplementedError
 
-    @property
-    def network(self):
-        return self._network
-
-    @property
-    def gpu_preprocessor(self):
-        return self._gpu_preprocessor
-
     @abc.abstractmethod
-    def compute_loss(self, experiences, next_obs, internals):
+    def compute_loss(self, network, experiences, next_obs, internals):
         raise NotImplementedError

@@ -27,10 +27,6 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
     def from_args(cls, *argss, **kwargs):
         return cls(*argss, **kwargs)
 
-    @property
-    def is_train(self):
-        return True
-
     @staticmethod
     def output_space(action_space):
         head_dict = {'critic': (1,), **action_space}
@@ -70,10 +66,6 @@ class ACRolloutActorEval(ActorModule, ACActorHelperMixin):
     @classmethod
     def from_args(cls, *argss, **kwargs):
         return cls(*argss, **kwargs)
-
-    @property
-    def is_train(self):
-        return False
 
     @staticmethod
     def output_space(action_space):

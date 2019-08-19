@@ -16,24 +16,25 @@ import torch
 from time import time
 
 from adept.utils import listd_to_dlist, dtensor_to_dev
-from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, \
-    LogsAndSummarizesRewards
+from ._base import WritesSummaries, SavesModels, LogsAndSummarizesRewards
 
 
 class Local(
-    HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
-    SavesModels
+    WritesSummaries, LogsAndSummarizesRewards, SavesModels
 ):
     """
     A Local container trains an agent on a single GPU.
     """
     def __init__(
-        self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        summary_writer, summary_frequency, saver, device
+        self, agent, environment, network, make_optimizer, epoch_len, nb_env,
+        logger, summary_writer, summary_frequency, saver, device
     ):
         super().__init__()
-        self._agent = agent
-        self._environment = environment
+        self.agent = agent
+        self.environment = environment
+        self.device = device
+
+        self._network = network.to(device)
         self._optimizer = make_optimizer(self.network.parameters())
         self._epoch_len = epoch_len
         self._nb_env = nb_env
@@ -41,15 +42,10 @@ class Local(
         self._summary_writer = summary_writer
         self._saver = saver
         self._summary_frequency = summary_frequency
-        self._device = device
 
     @property
-    def agent(self):
-        return self._agent
-
-    @property
-    def environment(self):
-        return self._environment
+    def network(self):
+        return self._network
 
     @property
     def optimizer(self):
@@ -80,27 +76,24 @@ class Local(
         return self._saver
 
     @property
-    def device(self):
-        return self._device
-
-    @property
     def world_size(self):
         return 1
 
     def run(self, max_steps=float('inf'), initial_count=0):
         self.set_local_step_count(initial_count)
         self.set_next_save(initial_count)
+        self.network.train()
 
         next_obs = dtensor_to_dev(self.environment.reset(), self.device)
         internals = listd_to_dlist([
-            self.agent.network.new_internals(self.device) for _ in
+            self.network.new_internals(self.device) for _ in
             range(self.nb_env)
         ])
         self.start_time = time()
         while self.local_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions, internals = self.agent.act(obs, internals)
+            actions, internals = self.agent.act(self.network, obs, internals)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
 
@@ -128,7 +121,7 @@ class Local(
             # Learn
             if self.agent.is_ready():
                 loss_dict, metric_dict = self.agent.compute_loss(
-                    next_obs, internals
+                    self.network, next_obs, internals
                 )
                 total_loss = torch.sum(
                     torch.stack(tuple(loss for loss in loss_dict.values()))

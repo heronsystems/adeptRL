@@ -12,13 +12,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from ._base import HasAgent, LogsAndSummarizesRewards
+from ._base import LogsAndSummarizesRewards
 import numpy as np
 from threading import Thread
 from time import time, sleep
 
 
-class EvaluationThread(HasAgent, LogsAndSummarizesRewards):
+class EvaluationThread(LogsAndSummarizesRewards):
     def __init__(
         self,
         training_network,

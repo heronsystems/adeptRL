@@ -17,10 +17,10 @@ import time
 
 import numpy as np
 
-from ._base import HasAgent, CountsRewards
+from ._base import CountsRewards
 
 
-class EvalBase(HasAgent, metaclass=abc.ABCMeta):
+class EvalBase(metaclass=abc.ABCMeta):
     def __init__(self, agent, device, environment):
         self._agent = agent
         self._device = device

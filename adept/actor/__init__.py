@@ -1,10 +1,10 @@
 from ._actor import ActorModule
 from .ac_rollout import ACRolloutActorTrain, ACRolloutActorEval
 
-ACTOR_TRAIN_REG = [
+ACTOR_REG = [
     ACRolloutActorTrain
 ]
 
 ACTOR_EVAL_LOOKUP = {
-    ACRolloutActorTrain.__name__: ACRolloutActorEval
+    ACRolloutActorTrain.__name__: ACRolloutActorEval.__name__
 }

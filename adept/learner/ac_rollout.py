@@ -19,34 +19,21 @@ class ACRolloutLearner(LearnerModule, metaclass=abc.ABCMeta):
 
     def __init__(
             self,
-            network,
-            gpu_preprocessor,
             discount,
             gae,
             tau,
             normalize_advantage,
             entropy_weight
     ):
-        super(ACRolloutLearner, self).__init__(network, gpu_preprocessor)
         self.discount = discount
         self.gae = gae
         self.tau = tau
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
 
-    @property
-    def network(self):
-        return self._network
-
-    @property
-    def gpu_preprocessor(self):
-        return self._gpu_preprocessor
-
     @classmethod
-    def from_args(cls, args, network, gpu_preprocessor):
+    def from_args(cls, args):
         return cls(
-            network,
-            gpu_preprocessor,
             args.discount,
             args.gae,
             args.tau,
@@ -54,11 +41,10 @@ class ACRolloutLearner(LearnerModule, metaclass=abc.ABCMeta):
             args.entropy_weight
         )
 
-    def compute_loss(self, experiences, next_obs, internals):
+    def compute_loss(self, network, experiences, next_obs, internals):
         # estimate value of next state
         with torch.no_grad():
-            next_obs_on_device = self.gpu_preprocessor(next_obs)
-            results, _ = self.network(next_obs_on_device, internals)
+            results, _ = network(next_obs, internals)
             last_values = results['critic'].squeeze(1).data
 
         # compute nstep return and advantage over batch

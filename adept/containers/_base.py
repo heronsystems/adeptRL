@@ -248,38 +248,9 @@ class SavesModels(abc.ABC):
                 self.next_save += self.epoch_len
 
 
-class HasAgent(abc.ABC):
-    @property
-    @abc.abstractmethod
-    def agent(self):
-        raise NotImplementedError
-
-    @property
-    def network(self):
-        return self.agent.network
-
-
-class HasEnvironment(abc.ABC):
-    @property
-    @abc.abstractmethod
-    def environment(self):
-        raise NotImplementedError
-
-
 class MPIProc:
     def receive(self):
         raise NotImplementedError
 
     def submit(self, experience):
-        raise NotImplementedError
-
-
-class AppliesGrads(abc.ABC):
-    @property
-    @abc.abstractmethod
-    def optimizer(self):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def apply_gradients(self, gradients):
         raise NotImplementedError

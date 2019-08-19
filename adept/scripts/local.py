@@ -194,6 +194,7 @@ def main(
             args,
             env.observation_space,
             output_space,
+            env.gpu_preprocessor,
             net_registry
         )
     else:
@@ -201,6 +202,7 @@ def main(
             args,
             env.observation_space,
             output_space,
+            env.gpu_preprocessor,
             net_registry
         )
 
@@ -218,15 +220,12 @@ def main(
         if (torch.cuda.is_available() and args.gpu_id >= 0)
         else "cpu"
     )
-    network = network.to(device)
     torch.backends.cudnn.benchmark = True
 
     # construct agent
     agent = agent_registry.lookup_agent(args.agent).from_args(
         args,
-        network,
         env_registry.lookup_reward_normalizer(args.env),
-        env.gpu_preprocessor,
         env.action_space
     )
 
@@ -247,59 +246,9 @@ def main(
 
     logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
     container = Local(
-        agent, env, make_optimizer, args.epoch_len, args.nb_env, logger,
+        agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
         summary_writer, args.summary_freq, saver, device
     )
-
-    # if running an eval thread create eval env, agent, & logger
-    if args.nb_eval_env > 0:
-
-        # env and agent
-        eval_env = SubProcEnvManager.from_args(
-            args,
-            seed=args.seed + args.nb_env,
-            nb_env=args.nb_eval_env,
-            registry=env_registry
-        )
-        eval_net = \
-            net_registry.lookup_custom_net(args.custom_network).from_args(
-                args,
-                eval_env.observation_space,
-                output_space,
-                net_registry
-            ) if args.custom_network \
-            else ModularNetwork.from_args(
-                args,
-                eval_env.observation_space,
-                output_space,
-                net_registry
-            )
-        eval_agent = agent_registry.lookup_agent(args.agent).from_args(
-            args,
-            eval_net,
-            device,
-            eval_env.gpu_preprocessor,
-            env_registry.lookup_policy(eval_env.engine)(eval_env.action_space)
-        )
-        eval_net.load_state_dict(network.state_dict())
-
-        # logger
-        eval_logger = make_logger(
-            'LocalEval', os.path.join(log_id_dir, 'eval_log.txt')
-        )
-
-        evaluation_container = EvaluationThread(
-            network,
-            eval_agent,
-            eval_env,
-            args.nb_eval_env,
-            eval_logger,
-            summary_writer,
-            args.eval_step_rate,
-            # wire local containers step count into eval
-            override_step_count_fn=lambda: container.local_step_count
-        )
-        evaluation_container.start()
 
     # Run the container
     if args.profile:
@@ -315,10 +264,6 @@ def main(
     else:
         container.run(args.nb_step, initial_count=initial_step_count)
     env.close()
-
-    if args.nb_eval_env > 0:
-        evaluation_container.stop()
-        eval_env.close()
 
     if args.eval:
         import subprocess

@@ -15,13 +15,12 @@ import torch
 import torch.distributed as dist
 from adept.utils import dtensor_to_dev, listd_to_dlist
 
-from ._base import HasAgent, HasEnvironment, WritesSummaries, SavesModels, \
-    LogsAndSummarizesRewards, LogsRewards
+from ._base import WritesSummaries, SavesModels, LogsAndSummarizesRewards, \
+    LogsRewards
 
 
 class DistribHost(
-    HasAgent, HasEnvironment, WritesSummaries, LogsAndSummarizesRewards,
-    SavesModels
+    WritesSummaries, LogsAndSummarizesRewards, SavesModels
 ):
     """
     DistribHost saves models and writes summaries. This is the only difference
@@ -29,13 +28,16 @@ class DistribHost(
     """
 
     def __init__(
-        self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        summary_writer, summary_frequency, saver, global_rank, world_size,
-        device
+        self, agent, environment, network, make_optimizer, epoch_len, nb_env,
+        logger, summary_writer, summary_frequency, saver, global_rank,
+        world_size, device
     ):
         super().__init__()
-        self._agent = agent
-        self._environment = environment
+        self.agent = agent
+        self.environment = environment
+        self.device = device
+
+        self._network = network.to(device)
         self._optimizer = make_optimizer(self.network.parameters())
         self._epoch_len = epoch_len
         self._nb_env = nb_env
@@ -45,15 +47,10 @@ class DistribHost(
         self._summary_frequency = summary_frequency
         self._global_rank = global_rank
         self._world_size = world_size
-        self.device = device
 
     @property
-    def agent(self):
-        return self._agent
-
-    @property
-    def environment(self):
-        return self._environment
+    def network(self):
+        return self._network
 
     @property
     def optimizer(self):
@@ -91,6 +88,7 @@ class DistribHost(
         self.set_local_step_count(initial_count)
         self.set_next_save(initial_count)
         global_step_count = initial_count
+        self.network.train()
 
         next_obs = dtensor_to_dev(self.environment.reset(), self.device)
         internals = listd_to_dlist([
@@ -101,7 +99,7 @@ class DistribHost(
         while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions = self.agent.act(obs)
+            actions = self.agent.act(self.network, obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
 
@@ -135,7 +133,7 @@ class DistribHost(
             # Learn
             if self.agent.is_ready():
                 loss_dict, metric_dict = self.agent.compute_loss(
-                    next_obs, internals
+                    self.network, next_obs, internals
                 )
                 total_loss = torch.sum(
                     torch.stack(tuple(loss for loss in loss_dict.values()))
@@ -164,33 +162,31 @@ class DistribHost(
                 )
 
 
-class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
+class DistribWorker(LogsRewards):
     """
     DistribWorker does all the same computation as a host process but does not
     save models or write tensorboard summaries.
     """
     def __init__(
-        self, agent, environment, make_optimizer, epoch_len, nb_env, logger,
-        global_rank, world_size, device
+        self, agent, environment, network, make_optimizer, epoch_len, nb_env,
+        logger, global_rank, world_size, device
     ):
         super().__init__()
-        self._agent = agent
-        self._environment = environment
+        self.agent = agent
+        self.environment = environment
+        self.device = device
+
+        self._network = network.to(device)
         self._optimizer = make_optimizer(self.network.parameters())
         self._epoch_len = epoch_len
         self._nb_env = nb_env
         self._logger = logger
         self._global_rank = global_rank
         self._world_size = world_size
-        self.device = device
 
     @property
-    def agent(self):
-        return self._agent
-
-    @property
-    def environment(self):
-        return self._environment
+    def network(self):
+        return self._network
 
     @property
     def optimizer(self):
@@ -211,6 +207,7 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
     def run(self, max_steps=float('inf'), initial_count=0):
         self.set_local_step_count(initial_count)
         global_step_count = initial_count
+        self.network.train()
 
         next_obs = dtensor_to_dev(self.environment.reset(), self.device)
         internals = listd_to_dlist([
@@ -221,7 +218,7 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
         while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions = self.agent.act(obs)
+            actions = self.agent.act(self.network, obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
 
@@ -253,7 +250,7 @@ class DistribWorker(HasAgent, HasEnvironment, LogsRewards):
             # Learn
             if self.agent.is_ready():
                 loss_dict, metric_dict = self.agent.compute_loss(
-                    next_obs, internals
+                    self.network, next_obs, internals
                 )
                 total_loss = torch.sum(
                     torch.stack(tuple(loss for loss in loss_dict.values()))
