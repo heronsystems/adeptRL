@@ -99,7 +99,7 @@ class DistribHost(
         while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions = self.agent.act(self.network, obs)
+            actions, internals = self.agent.act(self.network, obs, internals)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
 
@@ -218,7 +218,7 @@ class DistribWorker(LogsRewards):
         while global_step_count < max_steps:
             obs = next_obs
             # Build rollout
-            actions = self.agent.act(self.network, obs)
+            actions, internals = self.agent.act(self.network, obs, internals)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
 
