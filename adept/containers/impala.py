@@ -15,13 +15,13 @@
 import time
 import numpy as np
 import torch
-from ._base import MPIProc, HasAgent, HasEnvironment, LogsAndSummarizesRewards, WritesSummaries
+from ._base import MPIProc, LogsAndSummarizesRewards, WritesSummaries
 from .mpi import MPIHelper, MpiMessages, ArrayFlattener
 from adept.utils import listd_to_dlist
 from collections import OrderedDict
 
 
-class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
+class ImpalaHost(WritesSummaries, MPIProc):
     def __init__(
         self,
         agent,
@@ -360,7 +360,7 @@ class ImpalaHost(HasAgent, WritesSummaries, MPIProc):
         return params
 
 
-class ImpalaWorker(HasAgent, HasEnvironment, LogsAndSummarizesRewards, MPIProc):
+class ImpalaWorker(LogsAndSummarizesRewards, MPIProc):
     def __init__(
         self,
         agent,
