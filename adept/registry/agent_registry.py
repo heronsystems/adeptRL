@@ -61,7 +61,7 @@ class AgentRegistry:
         actor_class.check_args_implemented()
         self._actor_class_by_id[actor_class.__name__] = actor_class
 
-    def eval_actor(self, train_name):
+    def lookup_eval_actor(self, train_name):
         """
         Get the eval actor by training agent or actor name.
 
@@ -95,4 +95,9 @@ class AgentRegistry:
         :param action_space:
         :return:
         """
-        return self._agent_class_by_id[agent_id].output_space(action_space)
+        if agent_id in self._agent_class_by_id:
+            return self._agent_class_by_id[agent_id].output_space(action_space)
+        elif agent_id in self._actor_class_by_id:
+            return self._actor_class_by_id[agent_id].output_space(action_space)
+        else:
+            raise IndexError(f'Actor or Agent not found: {agent_id}')

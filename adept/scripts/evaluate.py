@@ -99,14 +99,6 @@ def main(
     )
     log_args(logger, args)
 
-    epoch_ids = sorted(
-        [
-            int(dir) for dir in os.listdir(args.log_id_dir)
-            if os.path.isdir(os.path.join(args.log_id_dir, dir)) and
-            ('rank' not in dir)
-        ]
-    )
-
     with open(os.path.join(args.log_id_dir, 'args.json'), 'r') as args_file:
         train_args = DotDict(json.load(args_file))
 

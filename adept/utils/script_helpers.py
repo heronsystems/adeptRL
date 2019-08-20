@@ -12,7 +12,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import json
 import os
+
+from adept.utils.util import DotDict
 
 
 def count_parameters(model):
@@ -98,11 +101,21 @@ class LogDirHelper:
 
     def network_path_at_epoch(self, epoch):
         epoch_path = self.epoch_path_at_epoch(epoch)
-        network_file = [
+        network_files = [
             f for f in os.listdir(epoch_path)
             if ('model' in f)
-        ][0]
+        ]
+        assert len(network_files), "More than one network file, " \
+                                   "maybe you want network_paths_at_epoch()"
+        network_file = network_files[0]
         return os.path.join(epoch_path, network_file)
+
+    def network_paths_at_epoch(self, epoch):
+        epoch_path = self.epoch_path_at_epoch(epoch)
+        return [
+            os.path.join(epoch_path, f) for f in os.listdir(epoch_path)
+            if ('model' in f)
+        ]
 
     def optim_path_at_epoch(self, epoch):
         epoch_path = self.epoch_path_at_epoch(epoch)
@@ -119,3 +132,7 @@ class LogDirHelper:
 
     def args_file_path(self):
         return os.path.join(self._log_id_path, 'args.json')
+
+    def load_args(self):
+        with open(self.args_file_path()) as args_file:
+            return DotDict(json.load(args_file))
