@@ -8,7 +8,7 @@ for env in ATARI_ENVS:
             'python',
             '-m',
             'adept.scripts.distrib',
-            f'--env {env}'
+            f'--env {env}',
             '--nb-env 128',
             '--nb-step 50e6',
             '--eval',
