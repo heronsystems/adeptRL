@@ -13,15 +13,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
+import os
 import time
 
 import numpy as np
+import torch
 
 from adept.environments import SubProcEnvManager
 from adept.networks.modular_network import ModularNetwork
 from adept.utils.script_helpers import LogDirHelper
+from adept.utils.util import listd_to_dlist, dtensor_to_dev
 from ._base import CountsRewards
-import torch
 
 
 class EvalContainer:
@@ -55,18 +57,13 @@ class EvalContainer:
             registry=env_registry
         )
 
-        if 'agent' in train_args:
-            name = train_args.agent
-        else:
-            name = train_args.train_actor
-
         output_space = agent_registry.lookup_output_space(
-            name, env_mgr.action_space
+            train_args.agent, env_mgr.action_space
         )
-        eval_actor_cls = agent_registry.lookup_eval_actor(name)
+        eval_actor_cls = agent_registry.lookup_eval_actor(train_args.agent)
         self.actor = eval_actor_cls.from_args(
-            env_mgr.action_space,
-            eval_actor_cls.prompt()
+            eval_actor_cls.prompt(),
+            env_mgr.action_space
         )
 
         self.network = self._init_network(
@@ -76,7 +73,6 @@ class EvalContainer:
             output_space,
             net_registry
         ).to(device)
-        self.network.eval()
 
     @staticmethod
     def _device_from_gpu_id(gpu_id):
@@ -95,62 +91,84 @@ class EvalContainer:
             net_reg
     ):
         if train_args.custom_network:
-            return net_reg.lookup_custom_net(
-                train_args.custom_network
-            ).from_args(
-                train_args,
-                obs_space,
-                output_space,
-                net_reg
-            )
+            net_cls = net_reg.lookup_custom_net(train_args.custom_network)
         else:
-            return ModularNetwork.from_args(
-                train_args,
-                obs_space,
-                output_space,
-                gpu_preprocessor,
-                net_reg
-            )
+            net_cls = ModularNetwork
+
+        return net_cls.from_args(
+            train_args,
+            obs_space,
+            output_space,
+            gpu_preprocessor,
+            net_reg
+        )
 
     def run(self):
-        results = []
-        selected_models = []
+        nb_env = self.env_mgr.nb_env
+        best_epoch_id = None
+        overall_mean = -float('inf')
         for epoch_id in self.log_dir_helper.epochs():
-            for net_paths in self.log_dir_helper.network_paths_at_epoch(epoch_id):
-
-                best_mean = -float('inf')
-                best_std_dev = 0.
-                selected_model = None
-                episode_reward_buffer = torch.zeros(self.env_mgr.nb_env)
-                for net_path in net_paths:
-                    self.network.load_state_dict(
-                        torch.load(
-                            net_path,
-                            map_location=lambda storage, loc: storage
-                        )
+            best_mean = -float('inf')
+            best_std = None
+            selected_model = None
+            reward_buf = torch.zeros(nb_env)
+            for net_path in self.log_dir_helper.network_paths_at_epoch(epoch_id):
+                self.network.load_state_dict(
+                    torch.load(
+                        net_path,
+                        map_location=lambda storage, loc: storage
                     )
-                    episode_complete_statuses = [
-                        False for _ in range(self.env_mgr.nb_env)
-                    ]
+                )
+                self.network.eval()
 
-                    next_obs = self.env_mgr.reset()
-                    while not all(episode_complete_statuses):
-                        obs = next_obs
-                        actions = self.actor.act(obs)
-                        next_obs, rewards, terminals, infos = \
-                            self.env_mgr.step(actions)
+                internals = listd_to_dlist([
+                    self.network.new_internals(self.device) for _ in
+                    range(nb_env)
+                ])
+                episode_completes = [False for _ in range(nb_env)]
+                next_obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
 
-                        for i, terminal in enumerate(terminals):
-                            if terminal:
-                                for k, v in self.network.new_internals(self.device).items():
-                                    internals[k][i] = v
+                while not all(episode_completes):
+                    obs = next_obs
+                    with torch.no_grad():
+                        actions, _, internals = self.actor.act(self.network, obs, internals)
+                    next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
+                    next_obs = dtensor_to_dev(next_obs, self.device)
 
-                        for i in range(self.env_mgr.nb_env):
-                            if terminals[i] and infos[i]:
-                                episode_complete_statuses[i] = True
-                        self.update_buffers(rewards, terminals, infos)
+                    for i in range(self.env_mgr.nb_env):
+                        if episode_completes[i]:
+                            continue
+                        elif terminals[i] and infos[i]:
+                            reward_buf[i] += rewards[i]
+                            episode_completes[i] = True
+                        else:
+                            reward_buf[i] += rewards[i]
 
-                    reward_buffer = self.episode_reward_buffer.numpy()
+                mean = reward_buf.mean().item()
+                std = reward_buf.std().item()
+
+                if mean >= best_mean:
+                    best_mean = mean
+                    best_std = std
+                    selected_model = os.path.split(net_path)[-1]
+
+            print(f'EPOCH_ID: {epoch_id} '
+                  f'MEAN_REWARD: {best_mean} '
+                  f'STD_DEV: {best_std} '
+                  f'SELECTED_MODEL: {selected_model}')
+            with open(self.log_dir_helper.eval_path(), 'a') as eval_f:
+                eval_f.write(f'{epoch_id},'
+                             f'{best_mean},'
+                             f'{best_std},'
+                             f'{selected_model}\n')
+
+            if best_mean >= overall_mean:
+                best_epoch_id = epoch_id
+                overall_mean = best_mean
+        print(f'*** EPOCH_ID: {best_epoch_id} MEAN_REWARD: {overall_mean} ***')
+
+    def close(self):
+        self.env_mgr.close()
 
 
 class EvalBase(metaclass=abc.ABCMeta):

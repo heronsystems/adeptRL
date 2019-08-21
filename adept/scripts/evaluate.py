@@ -21,38 +21,36 @@
 \__,_/\__,_/\___/ .___/\__/
                /_/
 Evaluate
+
 Evaluates an agent after training. Computes N-episode average reward by
 loading a saved model from each epoch. N-episode averages are computed by
 running N environments in parallel.
+
 Usage:
     evaluate (--log-id-dir <path>) [options]
     evaluate (-h | --help)
+
 Required:
     --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
+
 Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-episode <int>      Number of episodes to average [default: 30]
     --seed <int>            Seed for random variables [default: 512]
     --custom-network <str>  Name of custom network class
 """
-import json
 import os
 from collections import namedtuple
-from glob import glob
 
-import numpy as np
-import torch
 from absl import flags
 
-from adept.registry.agent_registry import AgentRegistry
-from adept.containers import Evaluation
-from adept.environments import SubProcEnvManager
+from adept.containers import EvalContainer
 from adept.environments.env_registry import EnvRegistry
-from adept.networks.modular_network import ModularNetwork
 from adept.networks.network_registry import NetworkRegistry
+from adept.registry.agent_registry import AgentRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
-from adept.utils.util import DotDict
 from adept.utils.script_helpers import parse_path
+from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -99,103 +97,19 @@ def main(
     )
     log_args(logger, args)
 
-    with open(os.path.join(args.log_id_dir, 'args.json'), 'r') as args_file:
-        train_args = DotDict(json.load(args_file))
-
-    # construct env
-    env = SubProcEnvManager.from_args(
-        train_args,
-        seed=args.seed,
-        nb_env=args.nb_episode,
-        registry=env_registry
+    eval_container = EvalContainer(
+        args.log_id_dir,
+        args.gpu_id,
+        args.nb_episode,
+        args.seed,
+        agent_registry,
+        env_registry,
+        net_registry
     )
-    device = torch.device(
-        "cuda:{}".format(args.gpu_id)
-        if (torch.cuda.is_available() and args.gpu_id >= 0)
-        else "cpu"
-    )
-    output_space = agent_registry.lookup_output_space(
-        train_args.agent, env.action_space
-    )
-    if args.custom_network:
-        network = net_registry.lookup_custom_net(
-            train_args.custom_network
-        ).from_args(
-            train_args,
-            env.observation_space,
-            output_space,
-            net_registry
-        )
-    else:
-        network = ModularNetwork.from_args(
-            train_args,
-            env.observation_space,
-            output_space,
-            net_registry
-        )
-
-    results = []
-    selected_models = []
-    for epoch_id in epoch_ids:
-        network_path = os.path.join(
-            args.log_id_dir, str(epoch_id), 'model*.pth'
-        )
-        network_files = glob(network_path)
-
-        best_mean = -float('inf')
-        best_std_dev = 0.
-        selected_model = None
-        for network_file in network_files:
-            # load new network
-            network.load_state_dict(
-                torch.load(
-                    network_file,
-                    map_location=lambda storage, loc: storage
-                )
-            )
-
-            # construct agent
-            agent = agent_registry.lookup_agent(train_args.agent).from_args(
-                train_args,
-                network,
-                device,
-                env_registry.lookup_reward_normalizer(train_args.env),
-                env.gpu_preprocessor,
-                env_registry.lookup_policy(env.engine)(env.action_space),
-                nb_env=args.nb_episode
-            )
-            # container
-            container = Evaluation(agent, device, env)
-
-            # Run the container
-            mean_reward, std_dev = container.run()
-
-            if mean_reward >= best_mean:
-                best_mean = mean_reward
-                best_std_dev = std_dev
-                selected_model = os.path.split(network_file)[-1]
-
-        result = Result(epoch_id, best_mean, best_std_dev)
-        selected_model = SelectedModel(epoch_id, selected_model)
-        logger.info(str(result) + ' ' + str(selected_model))
-        results.append(np.asarray(result))
-        selected_models.append(selected_model)
-
-    # save results
-    results = np.stack(results)
-    np.savetxt(
-        os.path.join(args.log_id_dir, 'eval.csv'),
-        results,
-        delimiter=',',
-        fmt=['%d', '%.3f', '%.3f']
-    )
-
-    # save selected models
-    with open(os.path.join(args.log_id_dir, 'selected_models.txt'), 'w') as f:
-        for sm in selected_models:
-            f.write(str(sm) + '\n')
-
-    env.close()
+    try:
+        eval_container.run()
+    finally:
+        eval_container.close()
 
 
 if __name__ == '__main__':

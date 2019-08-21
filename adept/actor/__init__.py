@@ -2,7 +2,8 @@ from ._actor import ActorModule
 from .ac_rollout import ACRolloutActorTrain, ACRolloutActorEval
 
 ACTOR_REG = [
-    ACRolloutActorTrain
+    ACRolloutActorTrain,
+    ACRolloutActorEval
 ]
 
 ACTOR_EVAL_LOOKUP = {

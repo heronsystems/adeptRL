@@ -24,8 +24,8 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
     args = {}
 
     @classmethod
-    def from_args(cls, *argss, **kwargs):
-        return cls(*argss, **kwargs)
+    def from_args(cls, args, action_space):
+        return cls(action_space)
 
     @staticmethod
     def output_space(action_space):
@@ -64,8 +64,8 @@ class ACRolloutActorEval(ActorModule, ACActorHelperMixin):
     args = {}
 
     @classmethod
-    def from_args(cls, *argss, **kwargs):
-        return cls(*argss, **kwargs)
+    def from_args(cls, args, action_space):
+        return cls(action_space)
 
     @staticmethod
     def output_space(action_space):

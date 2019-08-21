@@ -73,7 +73,7 @@ class LogDirHelper:
                 # check if numeric
                 if item.lower() == item.upper():
                     epochs.append(int(item))
-        return epochs
+        return list(sorted(epochs))
 
     def latest_epoch(self):
         epochs = self.epochs()
@@ -136,3 +136,6 @@ class LogDirHelper:
     def load_args(self):
         with open(self.args_file_path()) as args_file:
             return DotDict(json.load(args_file))
+
+    def eval_path(self):
+        return os.path.join(self._log_id_path, 'eval.csv')
