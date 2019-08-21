@@ -49,7 +49,9 @@ class ScaleAtari(Normalizer):
         self.scale = scale
 
     def __call__(self, item):
-        item = item.numpy()
-        item = np.copysign(1, item) * (np.sqrt(np.abs(item) + 1) - 1) \
+        return copy_sign(item) * (torch.sqrt(torch.abs(item) + 1) - 1) \
             + self.scale * item
-        return torch.from_numpy(item)
+
+
+def copy_sign(x):
+    return x / torch.abs(x)
