@@ -6,7 +6,8 @@ for env in ATARI_ENVS:
     call([
         'python',
         '-m',
-        'adept.app distrib',
+        'adept.app',
+        'distrib',
         f'--env {env}',
         '--nb-env 128',
         '--nb-step 50e6',
