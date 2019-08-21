@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import abc
 import torch
+import numpy as np
 
 
 class Normalizer(abc.ABC):
@@ -41,3 +42,14 @@ class Scale(Normalizer):
 
     def __call__(self, reward):
         return self.coefficient * reward
+
+
+class ScaleAtari(Normalizer):
+    def __init__(self, scale=10 ** -3):
+        self.scale = scale
+
+    def __call__(self, item):
+        item = item.numpy()
+        item = np.copysign(1, item) * (np.sqrt(np.abs(item) + 1) - 1) \
+            + self.scale * item
+        return torch.from_numpy(item)

@@ -16,14 +16,12 @@ import abc
 import os
 import time
 
-import numpy as np
 import torch
 
 from adept.environments import SubProcEnvManager
 from adept.networks.modular_network import ModularNetwork
 from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import listd_to_dlist, dtensor_to_dev
-from ._base import CountsRewards
 
 
 class EvalContainer:
@@ -218,56 +216,3 @@ class AtariRenderer(EvalBase):
             actions = self.agent.act_eval(obs)
             next_obs, rewards, terminals, infos = self.environment.step(actions)
             self.agent.reset_internals(terminals)
-
-
-class Evaluation(EvalBase, CountsRewards):
-    def __init__(self, agent, device, environment):
-        super().__init__(agent, device, environment)
-        self._episode_count = 0
-        self.episode_complete_statuses = [False for _ in range(self.nb_env)]
-
-    @property
-    def nb_env(self):
-        return self._environment.nb_env
-
-    def run(self):
-        """
-        Run the evaluation. Terminates once each environment has returned a
-        score. Averages scores to produce final eval score.
-
-        :return: Tuple[int, int] (mean score, standard deviation)
-        """
-        next_obs = self.environment.reset()
-        while not all(self.episode_complete_statuses):
-            obs = next_obs
-            actions = self.agent.act_eval(obs)
-            next_obs, rewards, terminals, infos = self.environment.step(actions)
-
-            self.agent.reset_internals(terminals)
-            self.update_buffers(rewards, terminals, infos)
-
-        reward_buffer = self.episode_reward_buffer.numpy()
-        return (
-            np.mean(reward_buffer),
-            np.std(reward_buffer)
-        )
-
-    def update_buffers(self, rewards, terminals, infos):
-        """
-        Override the reward buffer update rule. Each environment instance will
-        only contribute one reward towards the averaged eval score.
-
-        :param rewards: List[float]
-        :param terminals: List[bool]
-        :param infos: List[Dict[str, Any]]
-        :return: None
-        """
-        for i in range(len(rewards)):
-            if self.episode_complete_statuses[i]:
-                continue
-            elif terminals[i] and infos[i]:
-                self.episode_reward_buffer[i] += rewards[i]
-                self.episode_complete_statuses[i] = True
-            else:
-                self.episode_reward_buffer[i] += rewards[i]
-        return

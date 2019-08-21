@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from adept.environments.env_module import EnvModule
-from adept.utils.normalizers import Clip, Scale
+from adept.utils.normalizers import Clip, Scale, ScaleAtari
 from collections import defaultdict
 
 
@@ -103,7 +103,7 @@ class EnvRegistry:
         self._engine_ids_by_env_id_set = {}
         self._module_class_by_engine_id = {}
         self._policy_class_by_engine_id = defaultdict(lambda: Policy)
-        self._reward_norm_by_env_id = defaultdict(lambda: Clip())
+        self._reward_norm_by_env_id = defaultdict(lambda: ScaleAtari())
 
         from adept.environments.openai_gym import AdeptGymEnv
         self.register_env(AdeptGymEnv, ATARI_ENVS)

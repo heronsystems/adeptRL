@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from .local import Local
 from .evaluation_thread import EvaluationThread
-from .evaluation import ReplayGenerator, AtariRenderer, Evaluation, EvalContainer
+from .evaluation import ReplayGenerator, AtariRenderer, EvalContainer
 
 # test if mpi exists https://stackoverflow.com/a/14050282/3403018
 import importlib

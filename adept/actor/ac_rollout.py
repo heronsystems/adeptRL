@@ -75,12 +75,11 @@ class ACRolloutActorEval(ActorModule, ACActorHelperMixin):
     def process_predictions(self, preds, available_actions):
         actions = OrderedDict()
 
-        with torch.no_grad():
-            for key in self.action_keys:
-                logit = self.flatten_logits(preds[key])
+        for key in self.action_keys:
+            logit = self.flatten_logits(preds[key])
 
-                softmax = self.softmax(logit)
-                action = self.select_action(softmax)
+            softmax = self.softmax(logit)
+            action = self.select_action(softmax)
 
-                actions[key] = action.cpu()
+            actions[key] = action.cpu()
         return actions, {}

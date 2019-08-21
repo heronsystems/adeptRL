@@ -76,7 +76,7 @@ class AdeptGymEnv(EnvModule):
             if 'FIRE' in env.unwrapped.get_action_meanings():
                 env = FireResetEnv(env)
             env = NoopResetEnv(env, noop_max=args.noop_max)
-            env = EpisodicLifeEnv(env)
+            # env = EpisodicLifeEnv(env)
         if 'NoFrameskip' in args.env:
             env._max_episode_steps = args.max_episode_length * \
                                      args.skip_rate
