@@ -20,7 +20,9 @@
 / /_/ / /_/ /  __/ /_/ / /_
 \__,_/\__,_/\___/ .___/\__/
                /_/
+
 Distributed Mode
+
 Train an agent with multiple GPUs locally or on a cluster.
 More info:
 * https://pytorch.org/docs/stable/distributed.html
@@ -37,8 +39,10 @@ Distributed Options:
     --nb-proc <int>         Number of processes per node [default: 2]
     --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
     --master-port <int>     Master node (rank 0's) comm port [default: 29500]
+
 Agent Options:
     --agent <str>           Name of agent class [default: ActorCritic]
+
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
 Script Options:
@@ -50,6 +54,7 @@ Script Options:
     --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
     --eval                  Run an evaluation after training
     -y, --use-defaults      Skip prompts, use defaults
+
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
     --net2d <str>           Network to use for 2d input [default: Identity2D]
@@ -61,14 +66,17 @@ Network Options:
     --head3d <str>          Network to use for 3d output [default: Identity3D]
     --head4d <str>          Network to use for 4d output [default: Identity4D]
     --custom-network <str>  Name of custom network class
+
 Optimizer Options:
     --lr <float>            Learning rate [default: 0.0007]
+
 Logging Options:
     --tag <str>             Name your run [default: None]
     --logdir <path>         Path to logging directory [default: /tmp/adept_logs/]
     --epoch-len <int>       Save a model every <int> frames [default: 1e6]
     --nb-eval-env <int>     Evaluate agent in a separate thread [default: 0]
     --summary-freq <int>    Tensorboard summary frequency [default: 10]
+
 Troubleshooting Options:
     --profile               Profile this script
 """
