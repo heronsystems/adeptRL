@@ -54,4 +54,5 @@ class ScaleAtari(Normalizer):
 
 
 def copy_sign(x):
-    return x / torch.abs(x)
+    eps = 1e-15
+    return (x + eps) / torch.abs(x + eps)
