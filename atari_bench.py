@@ -1,4 +1,4 @@
-from adept.environments.env_registry import ATARI_ENVS
+from adept.env.env_registry import ATARI_ENVS
 from subprocess import call
 import os
 

@@ -16,8 +16,8 @@ from collections import OrderedDict
 
 import torch
 
-from adept.actor._ac_helper import ACActorHelperMixin
-from adept.actor._actor import ActorModule
+from adept.actor.base.ac_helper import ACActorHelperMixin
+from adept.actor.base.actor_module import ActorModule
 
 
 class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):

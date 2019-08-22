@@ -24,7 +24,7 @@ Evaluate
 
 Evaluates an agent after training. Computes N-episode average reward by
 loading a saved model from each epoch. N-episode averages are computed by
-running N environments in parallel.
+running N env in parallel.
 
 Usage:
     evaluate (--log-id-dir <path>) [options]
@@ -44,9 +44,9 @@ from collections import namedtuple
 
 from absl import flags
 
-from adept.containers import EvalContainer
-from adept.environments.env_registry import EnvRegistry
-from adept.networks.network_registry import NetworkRegistry
+from adept.container import EvalContainer
+from adept.env.env_registry import EnvRegistry
+from adept.network.network_registry import NetworkRegistry
 from adept.registry.agent_registry import AgentRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
 from adept.utils.script_helpers import parse_path

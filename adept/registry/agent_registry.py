@@ -13,24 +13,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from adept.actor import ActorModule
-from adept.agents.agent_module import AgentModule
+from adept.agent import AgentModule
+from adept.exp import ExpModule
 
 
 class AgentRegistry:
     """
-    Keeps track of supported agents.
+    Keeps track of supported agent.
     """
 
     def __init__(self):
         self._agent_class_by_id = {}
         self._actor_class_by_id = {}
+        self._exp_class_by_id = {}
         self._register_agents()
         self._register_actors()
-        # self.register_agent(self._load_actor_critic())
-        # self.register_agent(self._load_actor_critic_vtrace())
 
     def _register_agents(self):
-        from adept.agents import AGENT_REG
+        from adept.agent import AGENT_REG
         for agent in AGENT_REG:
             self.register_agent(agent)
 
@@ -43,7 +43,7 @@ class AgentRegistry:
         """
         Add your own agent class.
 
-        :param agent_class: adept.agents.AgentModule. Your custom class.
+        :param agent_class: adept.agent.AgentModule. Your custom class.
         :return:
         """
         assert issubclass(agent_class, AgentModule)
@@ -61,6 +61,11 @@ class AgentRegistry:
         actor_class.check_args_implemented()
         self._actor_class_by_id[actor_class.__name__] = actor_class
 
+    def exp_module(self, exp_class):
+        assert issubclass(exp_class, ExpModule)
+        exp_class.check_args_implemented()
+        self._exp_class_by_id[exp_class.__name__] = exp_class
+
     def lookup_eval_actor(self, train_name):
         """
         Get the eval actor by training agent or actor name.
@@ -69,7 +74,7 @@ class AgentRegistry:
         :return: ActorModule
         """
         from adept.actor import ACTOR_EVAL_LOOKUP
-        from adept.agents import agent_eval_lookup
+        from adept.registry import agent_eval_lookup
         agent_lookup = agent_eval_lookup()
         if train_name in agent_lookup:
             return self._actor_class_by_id[agent_lookup[train_name]]
@@ -83,7 +88,7 @@ class AgentRegistry:
         Get an agent class by id.
 
         :param agent_id: str
-        :return: adept.agents.AgentModule
+        :return: adept.agent.AgentModule
         """
         return self._agent_class_by_id[agent_id]
 

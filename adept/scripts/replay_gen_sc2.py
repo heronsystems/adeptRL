@@ -44,15 +44,15 @@ import torch
 from absl import flags
 
 from adept.registry.agent_registry import AgentRegistry
-from adept.containers import ReplayGenerator
-from adept.environments import SubProcEnvManager
-from adept.environments.env_registry import EnvRegistry
+from adept.container import ReplayGenerator
+from adept.manager import SubProcEnvManager
+from adept.env.env_registry import EnvRegistry
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import (
     LogDirHelper
 )
-from adept.networks.modular_network import ModularNetwork
-from adept.networks.network_registry import NetworkRegistry
+from adept.network.modular_network import ModularNetwork
+from adept.network.network_registry import NetworkRegistry
 from adept.utils.util import DotDict
 
 # hack to use argparse for SC2

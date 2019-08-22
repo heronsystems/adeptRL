@@ -1,7 +1,7 @@
 """
 Use a custom environment.
 """
-from adept.environments import EnvModule, EnvRegistry
+from adept.env import EnvModule, EnvRegistry
 from adept.scripts.local import parse_args, main
 
 

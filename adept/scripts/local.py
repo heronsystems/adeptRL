@@ -34,7 +34,7 @@ Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
 Script Options:
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
-    --nb-env <int>          Number of parallel environments [default: 64]
+    --nb-env <int>          Number of parallel env [default: 64]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
@@ -72,11 +72,11 @@ from absl import flags
 from tensorboardX import SummaryWriter
 
 from adept.registry.agent_registry import AgentRegistry
-from adept.containers import Local, EvaluationThread
-from adept.environments import SubProcEnvManager
-from adept.environments.env_registry import EnvRegistry
-from adept.networks.modular_network import ModularNetwork
-from adept.networks.network_registry import NetworkRegistry
+from adept.container import Local
+from adept.manager import SubProcEnvManager
+from adept.env.env_registry import EnvRegistry
+from adept.network import ModularNetwork
+from adept.network.network_registry import NetworkRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
     SimpleModelSaver

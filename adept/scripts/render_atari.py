@@ -42,11 +42,10 @@ import json
 import torch
 
 from adept.registry.agent_registry import AgentRegistry
-from adept.containers import AtariRenderer
-from adept.environments import SimpleEnvManager
-from adept.environments.env_registry import EnvRegistry
-from adept.networks import NetworkRegistry
-from adept.networks.modular_network import ModularNetwork
+from adept.manager import SimpleEnvManager
+from adept.env.env_registry import EnvRegistry
+from adept.network import NetworkRegistry
+from adept.network.modular_network import ModularNetwork
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import DotDict

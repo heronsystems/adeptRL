@@ -13,9 +13,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""
-Distributed worker script. Called from launcher (distrib.py).
-"""
 import argparse
 import json
 import os
@@ -25,23 +22,24 @@ import torch.distributed as dist
 from tensorboardX import SummaryWriter
 
 from adept.registry.agent_registry import AgentRegistry
-from adept.container.distrib import DistribHost, DistribWorker
+from adept.containers.impala import ImpalaHost, ImpalaWorker
 from adept.env.env_registry import EnvRegistry
 from adept.manager.subproc_env_manager import SubProcEnvManager
-from adept.network.modular_network import ModularNetwork
-from adept.network.network_registry import NetworkRegistry
-from adept.utils.logging import make_logger, SimpleModelSaver
+from adept.networks.modular_network import ModularNetwork
+from adept.networks.network_registry import NetworkRegistry
+from adept.utils.logging import make_logger
 from adept.utils.script_helpers import (
     count_parameters, LogDirHelper
 )
 from adept.utils.util import DotDict
 
-MODE = 'Distrib'
+MODE = 'Impala'
 WORLD_SIZE = int(os.environ['WORLD_SIZE'])
 GLOBAL_RANK = int(os.environ['RANK'])
 LOCAL_RANK = int(os.environ['LOCAL_RANK'])
+NB_NODE = int(os.environ['NB_NODE'])
 
-# hack to use bypass pysc2 flags
+# hack to use argparse for SC2
 from absl import flags
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
@@ -65,7 +63,6 @@ def parse_args():
     parser.add_argument('--load-network', default=None)
     parser.add_argument('--load-optim', default=None)
     parser.add_argument('--initial-step-count', type=int, default=0)
-    parser.add_argument('--custom-network', default=None)
     args = parser.parse_args()
     return args
 
@@ -77,7 +74,7 @@ def main(
     net_registry=NetworkRegistry()
 ):
     """
-    Run distributed training.
+    Run local training.
 
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
@@ -85,6 +82,7 @@ def main(
     :param net_registry: NetworkRegistry
     :return:
     """
+    # host needs to broadcast timestamp so all procs create the same log dir
     log_id_dir = local_args.log_id_dir
     initial_step_count = local_args.initial_step_count
 
@@ -103,8 +101,7 @@ def main(
     torch.backends.cudnn.benchmark = True
 
     dist.init_process_group(
-        backend='nccl',
-        init_method='file:///tmp/adept_init',
+        backend='gloo',
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )
@@ -130,7 +127,6 @@ def main(
             args,
             env.observation_space,
             output_space,
-            env.gpu_preprocessor,
             net_registry
         )
     else:
@@ -138,7 +134,6 @@ def main(
             args,
             env.observation_space,
             output_space,
-            env.gpu_preprocessor,
             net_registry
         )
     if args.load_network:
@@ -155,11 +150,17 @@ def main(
         )
 
     device = torch.device("cuda:{}".format(LOCAL_RANK))
-    agent = agent_registry.lookup_agent(args.agent).from_args(
-        args,
-        env_registry.lookup_reward_normalizer(args.env),
-        env.action_space
-    )
+    if LOCAL_RANK == 0:
+        agent = agent_registry.lookup_agent(args.agent).from_args(
+            args,
+            network,
+            device,
+            env_registry.lookup_reward_normalizer(args.env),
+            env.gpu_preprocessor,
+            env_registry.lookup_policy(env.engine)(env.action_space)
+        )
+    else:
+        agent = ImpalaWorkerAgent()
 
     def make_optimizer(params):
         opt = torch.optim.RMSprop(
@@ -174,23 +175,35 @@ def main(
             )
             logger.info("Reloaded optimizer from {}".format(args.load_optim))
         return opt
+
     if LOCAL_RANK == 0:
         summary_writer = SummaryWriter(
             os.path.join(log_id_dir, 'rank{}'.format(GLOBAL_RANK))
         )
-        container = DistribHost(
-            agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
-            summary_writer, args.summary_freq, SimpleModelSaver(log_id_dir),
-            GLOBAL_RANK, WORLD_SIZE, device
+        container = ImpalaHost(
+            # TODO
         )
     else:
-        container = DistribWorker(
-            agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
-            GLOBAL_RANK, WORLD_SIZE, device
+        container = ImpalaWorker(
+            # TODO
         )
 
     container.run(args.nb_step, initial_count=initial_step_count)
     env.close()
+
+    if args.eval and GLOBAL_RANK == 0:
+        import subprocess
+        exit(subprocess.call([
+            'python',
+            '-m',
+            'adept.scripts.evaluate',
+            '--log-id-dir',
+            log_id_dir,
+            '--gpu-id',
+            str(0),
+            '--nb-episode',
+            str(30)
+        ], env=os.environ))
 
 
 if __name__ == '__main__':

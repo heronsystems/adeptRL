@@ -1,11 +1,9 @@
-import abc
-
 import torch
 
-from adept.learner._learner import LearnerModule
+from adept.learner.base.learner_module import LearnerModule
 
 
-class ACRolloutLearner(LearnerModule, metaclass=abc.ABCMeta):
+class ACRolloutLearner(LearnerModule):
     """
     Actor Critic Rollout Learner
     """

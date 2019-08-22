@@ -21,17 +21,13 @@
 \__,_/\__,_/\___/ .___/\__/
                /_/
 
-Distributed Mode
+ALA Mode
 
-Train an agent with multiple GPUs locally or on a cluster.
-More info:
-* https://pytorch.org/docs/stable/distributed.html
-* https://pytorch.org/tutorials/intermediate/dist_tuto.html
+Train an agent with multiple GPUs. https://arxiv.org/abs/1802.01561.
 
 Usage:
-    distrib [options]
-    distrib --resume <path>
-    distrib (-h | --help)
+    ala [options]
+    ala (-h | --help)
 
 Distributed Options:
     --nb-node <int>         Number of distributed nodes [default: 1]
@@ -40,20 +36,20 @@ Distributed Options:
     --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
     --master-port <int>     Master node (rank 0's) comm port [default: 29500]
 
-Agent Options:
-    --agent <str>           Name of agent class [default: ActorCritic]
+Topology Options:
+    --topology <str>          Name of topology [default: Impala]
 
 Environment Options:
-    --env <str>             Environment name [default: PongNoFrameskip-v4]
+    --env <str>               Environment name [default: PongNoFrameskip-v4]
+
 Script Options:
-    --nb-env <int>          Number of parallel env [default: 32]
-    --seed <int>            Seed for random variables [default: 0]
-    --nb-step <int>         Number of steps to train for [default: 10e6]
-    --load-network <path>   Path to network file
-    --load-optim <path>     Path to optimizer file
-    --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
-    --eval                  Run an evaluation after training
-    -y, --use-defaults      Skip prompts, use defaults
+    --gpu-ids <ids>            Comma-separated CUDA IDs [default: 0,1]
+    --nb-env <int>             Number of env per Tower [default: 32]
+    --seed <int>               Seed for random variables [default: 0]
+    --nb-step <int>            Number of steps to train for [default: 10e6]
+    --load-network <path>      Path to network file
+    --load-optim <path>        Path to optimizer file
+    -y, --use-defaults         Skip prompts, use defaults
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
@@ -65,37 +61,38 @@ Network Options:
     --head2d <str>          Network to use for 2d output [default: Identity2D]
     --head3d <str>          Network to use for 3d output [default: Identity3D]
     --head4d <str>          Network to use for 4d output [default: Identity4D]
-    --custom-network <str>  Name of custom network class
+    --custom-network        Name of custom network class
 
 Optimizer Options:
-    --lr <float>            Learning rate [default: 0.0007]
+    --lr <float>               Learning rate [default: 0.0007]
 
 Logging Options:
-    --tag <str>             Name your run [default: None]
-    --logdir <path>         Path to logging directory [default: /tmp/adept_logs/]
-    --epoch-len <int>       Save a model every <int> frames [default: 1e6]
-    --nb-eval-env <int>     Evaluate agent in a separate thread [default: 0]
-    --summary-freq <int>    Tensorboard summary frequency [default: 10]
+    --tag <str>                Name your run [default: None]
+    --logdir <path>            Path to logging directory [default: /tmp/adept_logs/]
+    --epoch-len <int>          Save a model every <int> frames [default: 1e6]
+    --summary-freq <int>       Tensorboard summary frequency [default: 10]
 
 Troubleshooting Options:
-    --profile               Profile this script
+    --profile                 Profile this script
 """
 import os
 import subprocess
 import sys
 from datetime import datetime
-from adept.utils.util import DotDict
-from adept.utils.script_helpers import parse_path, parse_none, LogDirHelper
+
 from adept.registry.agent_registry import AgentRegistry
 from adept.env.env_registry import EnvRegistry
-from adept.network.network_registry import NetworkRegistry
+from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo,
     log_args, write_args_file
 )
+from adept.utils.script_helpers import (
+    parse_list_str, parse_path, parse_none, LogDirHelper
+)
+from adept.utils.util import DotDict
 
-
-MODE = 'Distrib'
+MODE = 'Impala'
 
 
 def parse_args():
@@ -104,7 +101,6 @@ def parse_args():
     args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
     del args['h']
     del args['help']
-
     args = DotDict(args)
 
     args.nb_node = int(args.nb_node)
@@ -112,18 +108,20 @@ def parse_args():
     args.nb_proc = int(args.nb_proc)
     args.master_port = int(args.master_port)
 
-    if args.resume:
-        return args
-
+    # Container Options
     args.logdir = parse_path(args.logdir)
+    args.gpu_ids = parse_list_str(args.gpu_ids, int)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
     args.nb_step = int(float(args.nb_step))
+
+    # Logging Options
     args.tag = parse_none(args.tag)
-    args.nb_eval_env = int(args.nb_eval_env)
     args.summary_freq = int(args.summary_freq)
     args.lr = float(args.lr)
     args.epoch_len = int(float(args.epoch_len))
+
+    # Troubleshooting Options
     args.profile = bool(args.profile)
     return args
 
@@ -135,7 +133,8 @@ def main(
     net_registry=NetworkRegistry()
 ):
     """
-    Run distributed training.
+    Run impala training.
+
     :param args: Dict[str, Any]
     :param agent_registry: AgentRegistry
     :param env_registry: EnvRegistry
@@ -150,6 +149,7 @@ def main(
     current_env["MASTER_ADDR"] = args.master_addr
     current_env["MASTER_PORT"] = str(args.master_port)
     current_env["WORLD_SIZE"] = str(dist_world_size)
+    current_env["NB_NODE"] = str(args.nb_node)
     initial_step_count = 0
     if args.resume:
         log_id_dir = args.resume
@@ -162,16 +162,14 @@ def main(
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(
-                    args.custom_network).args
+                net_args = net_registry.lookup_custom_net(args.net).args
             else:
                 net_args = net_registry.lookup_modular_args(args)
         else:
             agent_args = agent_registry.lookup_agent(args.agent).prompt()
             env_args = env_registry.lookup_env_class(args.env).prompt()
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(
-                    args.custom_network).prompt()
+                net_args = net_registry.lookup_custom_net(args.net).prompt()
             else:
                 net_args = net_registry.prompt_modular_args(args)
         args = DotDict({**args, **agent_args, **env_args, **net_args})
@@ -202,7 +200,7 @@ def main(
                 sys.executable,
                 "-u",
                 "-m",
-                "adept.scripts._distrib",
+                "adept.scripts._impala",
                 "--log-id-dir={}".format(log_id_dir)
             ]
         else:
@@ -210,17 +208,12 @@ def main(
                 sys.executable,
                 "-u",
                 "-m",
-                "adept.scripts._distrib",
+                "adept.scripts._impala",
                 "--log-id-dir={}".format(log_id_dir),
                 "--resume={}".format(True),
                 "--load-network={}".format(args.load_network),
                 "--load-optim={}".format(args.load_optim),
                 "--initial-step-count={}".format(initial_step_count)
-            ]
-        if args.custom_network:
-            cmd += [
-                '--custom-network',
-                args.custom_network
             ]
 
         process = subprocess.Popen(cmd, env=current_env)
@@ -228,17 +221,6 @@ def main(
 
     for process in processes:
         process.wait()
-
-    if args.eval:
-        from adept.scripts.evaluate import main
-        eval_args = {
-            'log_id_dir': log_id_dir,
-            'gpu_id': 0,
-            'nb_episode': 32,
-        }
-        if args.custom_network:
-            eval_args['custom_network'] = args.custom_network
-        main(eval_args, agent_registry, env_registry, net_registry)
 
 
 if __name__ == '__main__':
