@@ -12,10 +12,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.containers._base import HasAgent, HasEnvironment, LogsRewards
+from adept.containers._base import LogsRewards
 
 
-class ImpalaWorker(HasAgent, HasEnvironment, LogsRewards):
+class ImpalaWorker(LogsRewards):
     def __init__(
         self,
         agent,
@@ -24,7 +24,7 @@ class ImpalaWorker(HasAgent, HasEnvironment, LogsRewards):
         logger,
         global_rank,
         world_size,
-        host_comm_group
+        device
     ):
         self._agent = agent
         self._environment = environment
