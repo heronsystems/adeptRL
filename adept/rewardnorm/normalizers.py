@@ -12,47 +12,50 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import abc
 import torch
-import numpy as np
+from .base import RewardNormModule
 
 
-class Normalizer(abc.ABC):
-    @abc.abstractmethod
-    def __call__(self, reward):
-        """
-        :param reward: FloatTensor
-        :return:
-        """
-        raise NotImplementedError
+class Clip(RewardNormModule):
+    args = {
+        'floor': -1,
+        'ceil': 1
+    }
 
-
-class Clip(Normalizer):
-    def __init__(self, floor=-1, ceil=1):
+    def __init__(self, floor, ceil):
         self.floor = floor
         self.ceil = ceil
+
+    @classmethod
+    def from_args(cls, args):
+        return cls(args.floor, args.ceil)
 
     def __call__(self, reward):
         return torch.clamp(reward, self.floor, self.ceil)
 
 
-class Scale(Normalizer):
+class Scale(RewardNormModule):
+    args = {
+        'coefficient': 0.1
+    }
+
     def __init__(self, coefficient):
         self.coefficient = coefficient
+
+    @classmethod
+    def from_args(cls, args):
+        return cls(args.coefficient)
 
     def __call__(self, reward):
         return self.coefficient * reward
 
 
-class ScaleAtari(Normalizer):
-    def __init__(self, scale=10 ** -3):
-        self.scale = scale
+class Identity(RewardNormModule):
+    args = {}
+
+    @classmethod
+    def from_args(cls, args):
+        return cls()
 
     def __call__(self, item):
-        return copy_sign(item) * (torch.sqrt(torch.abs(item) + 1) - 1) \
-            + self.scale * item
-
-
-def copy_sign(x):
-    eps = 1e-15
-    return (x + eps) / torch.abs(x + eps)
+        return item

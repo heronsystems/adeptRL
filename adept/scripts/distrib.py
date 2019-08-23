@@ -45,6 +45,8 @@ Agent Options:
 
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
+    --
+
 Script Options:
     --nb-env <int>          Number of parallel env [default: 32]
     --seed <int>            Seed for random variables [default: 0]
@@ -84,16 +86,14 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from adept.utils.util import DotDict
-from adept.utils.script_helpers import parse_path, parse_none, LogDirHelper
-from adept.registry.agent_registry import AgentRegistry
-from adept.env.env_registry import EnvRegistry
-from adept.network.network_registry import NetworkRegistry
+
+from adept import REGISTRY
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo,
     log_args, write_args_file
 )
-
+from adept.utils.script_helpers import parse_path, parse_none, LogDirHelper
+from adept.utils.util import DotDict
 
 MODE = 'Distrib'
 
@@ -128,18 +128,10 @@ def parse_args():
     return args
 
 
-def main(
-    args,
-    agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry(),
-    net_registry=NetworkRegistry()
-):
+def main(args):
     """
     Run distributed training.
     :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
     :return:
     """
     args = DotDict(args)
@@ -159,22 +151,27 @@ def main(
         initial_step_count = helper.latest_epoch()
     else:
         if args.use_defaults:
-            agent_args = agent_registry.lookup_agent(args.agent).args
-            env_args = env_registry.lookup_env_class(args.env).args
+            agent_args = REGISTRY.lookup_agent(args.agent).args
+            env_args = REGISTRY.lookup_env_class(args.env).args
+            rwdnorm_args = REGISTRY.lookup_reward_normalizer(args.rwd_norm).args
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(
+                net_args = REGISTRY.lookup_custom_net(
                     args.custom_network).args
             else:
-                net_args = net_registry.lookup_modular_args(args)
+                net_args = REGISTRY.lookup_modular_args(args)
         else:
-            agent_args = agent_registry.lookup_agent(args.agent).prompt()
-            env_args = env_registry.lookup_env_class(args.env).prompt()
+            agent_args = REGISTRY.lookup_agent(args.agent).prompt()
+            env_args = REGISTRY.lookup_env_class(args.env).prompt()
+            rwdnorm_args = REGISTRY.lookup_reward_normalizer(
+                args.rwd_norm).prompt()
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(
+                net_args = REGISTRY.lookup_custom_net(
                     args.custom_network).prompt()
             else:
-                net_args = net_registry.prompt_modular_args(args)
-        args = DotDict({**args, **agent_args, **env_args, **net_args})
+                net_args = REGISTRY.prompt_modular_args(args)
+        args = DotDict({
+            **args, **agent_args, **env_args, **rwdnorm_args, **net_args
+        })
         log_id = make_log_id(
             args.tag, MODE, args.agent,
             args.net3d + args.netbody,
@@ -238,7 +235,7 @@ def main(
         }
         if args.custom_network:
             eval_args['custom_network'] = args.custom_network
-        main(eval_args, agent_registry, env_registry, net_registry)
+        main(eval_args)
 
 
 if __name__ == '__main__':

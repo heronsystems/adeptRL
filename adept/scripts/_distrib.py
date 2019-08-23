@@ -24,12 +24,10 @@ import torch
 import torch.distributed as dist
 from tensorboardX import SummaryWriter
 
-from adept.registry.agent_registry import AgentRegistry
+from adept.registry import REGISTRY
 from adept.container.distrib import DistribHost, DistribWorker
-from adept.env.env_registry import EnvRegistry
 from adept.manager.subproc_env_manager import SubProcEnvManager
 from adept.network.modular_network import ModularNetwork
-from adept.network.network_registry import NetworkRegistry
 from adept.utils.logging import make_logger, SimpleModelSaver
 from adept.utils.script_helpers import (
     count_parameters, LogDirHelper
@@ -70,19 +68,11 @@ def parse_args():
     return args
 
 
-def main(
-    local_args,
-    agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry(),
-    net_registry=NetworkRegistry()
-):
+def main(local_args):
     """
     Run distributed training.
 
-    :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
+    :param local_args: Dict[str, Any]
     :return:
     """
     log_id_dir = local_args.log_id_dir
@@ -117,21 +107,21 @@ def main(
     env = SubProcEnvManager.from_args(
         args,
         seed=seed,
-        registry=env_registry
+        registry=REGISTRY
     )
 
     # Construct network
     torch.manual_seed(args.seed)
-    output_space = agent_registry.lookup_output_space(
+    output_space = REGISTRY.lookup_output_space(
         args.agent, env.action_space
     )
     if args.custom_network:
-        network = net_registry.lookup_custom_net(args.custom_network).from_args(
+        network = REGISTRY.lookup_custom_net(args.custom_network).from_args(
             args,
             env.observation_space,
             output_space,
             env.gpu_preprocessor,
-            net_registry
+            REGISTRY
         )
     else:
         network = ModularNetwork.from_args(
@@ -139,7 +129,7 @@ def main(
             env.observation_space,
             output_space,
             env.gpu_preprocessor,
-            net_registry
+            REGISTRY
         )
     if args.load_network:
         network.load_state_dict(
@@ -155,9 +145,9 @@ def main(
         )
 
     device = torch.device("cuda:{}".format(LOCAL_RANK))
-    agent = agent_registry.lookup_agent(args.agent).from_args(
+    agent = REGISTRY.lookup_agent(args.agent).from_args(
         args,
-        env_registry.lookup_reward_normalizer(args.env),
+        REGISTRY.lookup_reward_normalizer(args.env),
         env.action_space
     )
 

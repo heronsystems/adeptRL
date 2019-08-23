@@ -21,12 +21,8 @@ import torch
 import torch.distributed as dist
 from tensorboardX import SummaryWriter
 
-from adept.registry.agent_registry import AgentRegistry
-from adept.containers.impala import ImpalaHost, ImpalaWorker
-from adept.env.env_registry import EnvRegistry
 from adept.manager.subproc_env_manager import SubProcEnvManager
-from adept.networks.modular_network import ModularNetwork
-from adept.networks.network_registry import NetworkRegistry
+from adept.network.modular_network import ModularNetwork
 from adept.utils.logging import make_logger
 from adept.utils.script_helpers import (
     count_parameters, LogDirHelper
@@ -67,19 +63,11 @@ def parse_args():
     return args
 
 
-def main(
-    local_args,
-    agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry(),
-    net_registry=NetworkRegistry()
-):
+def main(local_args,):
     """
     Run local training.
 
     :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
     :return:
     """
     # host needs to broadcast timestamp so all procs create the same log dir
@@ -123,7 +111,7 @@ def main(
         args.agent, env.action_space
     )
     if args.custom_network:
-        network = net_registry.lookup_custom_net(args.custom_network).from_args(
+        network = net_registry.lookup_network(args.custom_network).from_args(
             args,
             env.observation_space,
             output_space,

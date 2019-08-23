@@ -1,13 +1,10 @@
 from .base.actor_module import ActorModule
-from .ac_rollout import ACRolloutActorTrain, ACRolloutActorEval
+from .ac_rollout import ACRolloutActorTrain
+from adept.actor.ac_eval import ACActorEval
 from .impala import ImpalaActor
 
 ACTOR_REG = [
     ACRolloutActorTrain,
-    ACRolloutActorEval,
+    ACActorEval,
     # ImpalaActor
 ]
-
-ACTOR_EVAL_LOOKUP = {
-    ACRolloutActorTrain.__name__: ACRolloutActorEval.__name__
-}

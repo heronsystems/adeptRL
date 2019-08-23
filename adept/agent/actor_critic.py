@@ -31,16 +31,15 @@ class ActorCritic(AgentModule):
         action_space,
         rollout_len,
         discount,
-        gae,
-        tau,
         normalize_advantage,
-        entropy_weight
+        entropy_weight,
+        return_scale
     ):
         super(ActorCritic, self).__init__(
             reward_normalizer,
             action_space
         )
-        self.discount, self.gae, self.tau = discount, gae, tau
+        self.discount = discount
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
 
@@ -48,10 +47,9 @@ class ActorCritic(AgentModule):
         self._actor = ACRolloutActorTrain(action_space)
         self._learner = ACRolloutLearner(
             discount,
-            gae,
-            tau,
             normalize_advantage,
-            entropy_weight
+            entropy_weight,
+            return_scale
         )
 
     @classmethod
@@ -63,10 +61,9 @@ class ActorCritic(AgentModule):
             reward_normalizer, action_space,
             rollout_len=args.rollout_len,
             discount=args.discount,
-            gae=args.gae,
-            tau=args.tau,
             normalize_advantage=args.normalize_advantage,
             entropy_weight=args.entropy_weight,
+            return_scale=args.return_scale
         )
 
     @property

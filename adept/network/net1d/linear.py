@@ -15,7 +15,7 @@
 from __future__ import division
 
 from torch import nn
-from torch.nn import functional as F, BatchNorm1d
+from torch.nn import functional as F
 
 from adept.modules import Identity
 
@@ -55,7 +55,8 @@ class Linear(SubModule1D):
     @classmethod
     def from_args(cls, args, input_shape, id):
         return cls(
-            input_shape, id, args.linear_nb_hidden, args.linear_nb_hidden, args.nb_layer
+            input_shape, id, args.linear_nb_hidden, args.linear_nb_hidden,
+            args.nb_layer
         )
 
     def _forward(self, xs, internals, **kwargs):

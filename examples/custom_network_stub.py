@@ -61,7 +61,7 @@ class MyCustomNetwork(NetworkModule):
 if __name__ == '__main__':
     args = parse_args()
     network_reg = NetworkRegistry()
-    network_reg.register_custom_net(MyCustomNetwork)
+    network_reg.register_network(MyCustomNetwork)
 
     main(args, net_registry=network_reg)
 

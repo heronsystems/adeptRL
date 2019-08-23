@@ -3,9 +3,10 @@ from collections import namedtuple
 
 
 class ImpalaRollout(dict, ExpModule):
-    def __init__(self, nb_rollout, reward_normalizer):
+    args = {}
+
+    def __init__(self, reward_normalizer):
         super(ImpalaRollout, self).__init__()
-        assert type(nb_rollout == int)
         self['states'] = []
         self['rewards'] = []
         self['terminals'] = []
@@ -14,8 +15,11 @@ class ImpalaRollout(dict, ExpModule):
         self['log_probs'] = []
         self['entropies'] = []
         self['next_obs'] = []
-        self.nb_rollout = nb_rollout
         self.reward_normalizer = reward_normalizer
+
+    @classmethod
+    def from_args(cls, args, reward_normalizer):
+        return cls(reward_normalizer)
 
     def write_actor(self, experience):
         for k, v in experience.items():
@@ -39,7 +43,7 @@ class ImpalaRollout(dict, ExpModule):
             self[k] = []
 
     def is_ready(self):
-        return len(self) == self.nb_rollout
+        return True  # TODO
 
     def __len__(self):
         return len(self['rewards'])

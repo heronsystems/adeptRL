@@ -1,6 +1,6 @@
 import unittest
-from adept.agents.agent_module import AgentModule
-from adept.registry.agent_registry import AgentRegistry
+from adept.agent import AgentModule
+from adept.registry import Registry
 
 
 class NotSubclass:
@@ -11,14 +11,14 @@ class ArgsNotImplemented(AgentModule):
     pass
 
 
-class TestAgentRegistry(unittest.TestCase):
+class TestRegistry(unittest.TestCase):
     def test_register_invalid_class(self):
-        registry = AgentRegistry()
+        registry = Registry()
         with self.assertRaises(AssertionError):
             registry.register_agent(NotSubclass)
 
     def test_register_args_not_implemented(self):
-        registry = AgentRegistry()
+        registry = Registry()
         with self.assertRaises(NotImplementedError):
             registry.register_agent(ArgsNotImplemented)
 

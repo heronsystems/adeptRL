@@ -43,16 +43,12 @@ import json
 import torch
 from absl import flags
 
-from adept.registry.agent_registry import AgentRegistry
-from adept.container import ReplayGenerator
 from adept.manager import SubProcEnvManager
-from adept.env.env_registry import EnvRegistry
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import (
     LogDirHelper
 )
 from adept.network.modular_network import ModularNetwork
-from adept.network.network_registry import NetworkRegistry
 from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
@@ -73,19 +69,11 @@ def parse_args():
     return args
 
 
-def main(
-    args,
-    agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry(),
-    net_registry=NetworkRegistry()
-):
+def main(args):
     """
     Generate SC2 replays.
 
     :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
     :return:
     """
 

@@ -18,6 +18,7 @@ import time
 
 import torch
 
+from adept.registry import REGISTRY
 from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
 from adept.utils.script_helpers import LogDirHelper
@@ -30,19 +31,13 @@ class EvalContainer:
             log_id_dir,
             gpu_id,
             nb_episode,
-            seed,
-            agent_registry,
-            env_registry,
-            net_registry
+            seed
     ):
         """
         :param log_id_dir:
         :param gpu_id:
         :param nb_episode:
         :param seed:
-        :param agent_registry:
-        :param env_registry:
-        :param net_registry:
         """
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
@@ -52,13 +47,13 @@ class EvalContainer:
             self.train_args,
             seed=seed,
             nb_env=nb_episode,
-            registry=env_registry
+            registry=REGISTRY
         )
 
-        output_space = agent_registry.lookup_output_space(
+        output_space = REGISTRY.lookup_output_space(
             train_args.agent, env_mgr.action_space
         )
-        eval_actor_cls = agent_registry.lookup_eval_actor(train_args.agent)
+        eval_actor_cls = REGISTRY.lookup_eval_actor(train_args.agent)
         self.actor = eval_actor_cls.from_args(
             eval_actor_cls.prompt(),
             env_mgr.action_space
@@ -69,7 +64,7 @@ class EvalContainer:
             env_mgr.observation_space,
             env_mgr.gpu_preprocessor,
             output_space,
-            net_registry
+            REGISTRY
         ).to(device)
 
     @staticmethod
@@ -89,7 +84,7 @@ class EvalContainer:
             net_reg
     ):
         if train_args.custom_network:
-            net_cls = net_reg.lookup_custom_net(train_args.custom_network)
+            net_cls = net_reg.lookup_network(train_args.custom_network)
         else:
             net_cls = ModularNetwork
 

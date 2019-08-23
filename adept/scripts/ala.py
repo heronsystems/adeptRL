@@ -80,9 +80,6 @@ import subprocess
 import sys
 from datetime import datetime
 
-from adept.registry.agent_registry import AgentRegistry
-from adept.env.env_registry import EnvRegistry
-from adept.networks.network_registry import NetworkRegistry
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo,
     log_args, write_args_file
@@ -162,14 +159,14 @@ def main(
             agent_args = agent_registry.lookup_agent(args.agent).args
             env_args = env_registry.lookup_env_class(args.env).args
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(args.net).args
+                net_args = net_registry.lookup_network(args.net).args
             else:
                 net_args = net_registry.lookup_modular_args(args)
         else:
             agent_args = agent_registry.lookup_agent(args.agent).prompt()
             env_args = env_registry.lookup_env_class(args.env).prompt()
             if args.custom_network:
-                net_args = net_registry.lookup_custom_net(args.net).prompt()
+                net_args = net_registry.lookup_network(args.net).prompt()
             else:
                 net_args = net_registry.prompt_modular_args(args)
         args = DotDict({**args, **agent_args, **env_args, **net_args})

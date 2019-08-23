@@ -45,9 +45,6 @@ from collections import namedtuple
 from absl import flags
 
 from adept.container import EvalContainer
-from adept.env.env_registry import EnvRegistry
-from adept.network.network_registry import NetworkRegistry
-from adept.registry.agent_registry import AgentRegistry
 from adept.utils.logging import make_logger, print_ascii_logo, log_args
 from adept.utils.script_helpers import parse_path
 from adept.utils.util import DotDict
@@ -75,12 +72,7 @@ Result = namedtuple('Result', ['epoch', 'mean', 'std_dev'])
 SelectedModel = namedtuple('SelectedModel', ['epoch', 'model_id'])
 
 
-def main(
-    args,
-    agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry(),
-    net_registry=NetworkRegistry()
-):
+def main(args):
     """
     Run an evaluation.
     :param args: Dict[str, Any]
@@ -101,10 +93,7 @@ def main(
         args.log_id_dir,
         args.gpu_id,
         args.nb_episode,
-        args.seed,
-        agent_registry,
-        env_registry,
-        net_registry
+        args.seed
     )
     try:
         eval_container.run()

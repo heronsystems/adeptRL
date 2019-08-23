@@ -58,28 +58,3 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
             'entropies': entropies,
             'values': values
         }
-
-
-class ACRolloutActorEval(ActorModule, ACActorHelperMixin):
-    args = {}
-
-    @classmethod
-    def from_args(cls, args, action_space):
-        return cls(action_space)
-
-    @staticmethod
-    def output_space(action_space):
-        head_dict = {'critic': (1,), **action_space}
-        return head_dict
-
-    def process_predictions(self, preds, available_actions):
-        actions = OrderedDict()
-
-        for key in self.action_keys:
-            logit = self.flatten_logits(preds[key])
-
-            softmax = self.softmax(logit)
-            action = self.select_action(softmax)
-
-            actions[key] = action.cpu()
-        return actions, {}

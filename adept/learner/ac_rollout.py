@@ -1,6 +1,7 @@
 import torch
 
-from adept.learner.base.learner_module import LearnerModule
+from .base.learner_module import LearnerModule
+from .base.dm_return_scale import DeepMindReturnScaler
 
 
 class ACRolloutLearner(LearnerModule):
@@ -9,34 +10,32 @@ class ACRolloutLearner(LearnerModule):
     """
     args = {
         'discount': 0.99,
-        'gae': True,
-        'tau': 1.,
         'normalize_advantage': False,
-        'entropy_weight': 0.01
+        'entropy_weight': 0.01,
+        'return_scale': False
     }
 
     def __init__(
             self,
             discount,
-            gae,
-            tau,
             normalize_advantage,
-            entropy_weight
+            entropy_weight,
+            return_scale
     ):
         self.discount = discount
-        self.gae = gae
-        self.tau = tau
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
+        self.return_scale = return_scale
+        if return_scale:
+            self.dm_scaler = DeepMindReturnScaler(10. ** -3)
 
     @classmethod
     def from_args(cls, args):
         return cls(
             args.discount,
-            args.gae,
-            args.tau,
             args.normalize_advantage,
-            args.entropy_weight
+            args.entropy_weight,
+            args.return_scale
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):
@@ -92,11 +91,6 @@ class ACRolloutLearner(LearnerModule):
     def _compute_returns_advantages(
             self, values, estimated_value, rewards, terminals
     ):
-        if self.gae:
-            gae = 0.
-            gae_advantages = []
-
-        next_value = estimated_value
         # First step of nstep reward target is estimated value of t+1
         target_return = estimated_value
         nstep_target_returns = []
@@ -104,29 +98,23 @@ class ACRolloutLearner(LearnerModule):
             reward = rewards[i]
             terminal_mask = 1. - terminals[i].float()
 
-            # Nstep return is always calculated for the critic's target
-            # using the GAE target for the critic results in the
-            # same or worse performance
-            target_return = reward + self.discount * target_return * terminal_mask
+            if self.return_scale:
+                target_return = self.dm_scaler.calc_scale(
+                    reward +
+                    self.discount *
+                    self.dm_scaler.calc_inverse_scale(target_return) *
+                    terminal_mask
+                )
+            else:
+                target_return = reward + (
+                        self.discount * target_return * terminal_mask
+                )
             nstep_target_returns.append(target_return)
-
-            # Generalized Advantage Estimation
-            if self.gae:
-                delta_t = reward \
-                          + self.discount * next_value * terminal_mask \
-                          - values[i].data
-                gae = gae * self.discount * self.tau * terminal_mask + delta_t
-                gae_advantages.append(gae)
-                next_value = values[i].data
 
         # reverse lists
         nstep_target_returns = torch.stack(
             list(reversed(nstep_target_returns))
         ).data
-
-        if self.gae:
-            advantages = torch.stack(list(reversed(gae_advantages))).data
-        else:
-            advantages = nstep_target_returns - values.data
+        advantages = nstep_target_returns - values.data
 
         return nstep_target_returns, advantages

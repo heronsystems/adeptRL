@@ -1,6 +1,5 @@
 from .base.network_module import NetworkModule
 from .modular_network import ModularNetwork
-from .network_registry import NetworkRegistry
 from .net1d.submodule_1d import SubModule1D
 from .net2d.submodule_2d import SubModule2D
 from .net3d.submodule_3d import SubModule3D

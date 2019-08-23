@@ -41,10 +41,7 @@ import json
 
 import torch
 
-from adept.registry.agent_registry import AgentRegistry
 from adept.manager import SimpleEnvManager
-from adept.env.env_registry import EnvRegistry
-from adept.network import NetworkRegistry
 from adept.network.modular_network import ModularNetwork
 from adept.utils.logging import print_ascii_logo
 from adept.utils.script_helpers import LogDirHelper
@@ -64,19 +61,11 @@ def parse_args():
     return args
 
 
-def main(
-    args,
-    agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry(),
-    net_registry=NetworkRegistry()
-):
+def main(args):
     """
     Run an evaluation training.
 
     :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
     :return:
     """
     # construct logging objects
