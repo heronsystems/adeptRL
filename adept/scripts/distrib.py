@@ -152,7 +152,7 @@ def main(args):
     else:
         if args.use_defaults:
             agent_args = REGISTRY.lookup_agent(args.agent).args
-            env_args = REGISTRY.lookup_env_class(args.env).args
+            env_args = REGISTRY.lookup_env(args.env).args
             rwdnorm_args = REGISTRY.lookup_reward_normalizer(args.rwd_norm).args
             if args.custom_network:
                 net_args = REGISTRY.lookup_network(
@@ -161,7 +161,7 @@ def main(args):
                 net_args = REGISTRY.lookup_modular_args(args)
         else:
             agent_args = REGISTRY.lookup_agent(args.agent).prompt()
-            env_args = REGISTRY.lookup_env_class(args.env).prompt()
+            env_args = REGISTRY.lookup_env(args.env).prompt()
             rwdnorm_args = REGISTRY.lookup_reward_normalizer(
                 args.rwd_norm).prompt()
             if args.custom_network:
