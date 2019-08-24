@@ -1,4 +1,5 @@
 from collections import namedtuple
+from itertools import chain
 
 from adept.actor import ActorModule, ACActorEval
 from adept.agent import AgentModule
@@ -48,7 +49,7 @@ class Registry:
         self._learner_class_by_id = {}
 
         self._engine_ids_by_env_id_set = {}
-        self._module_class_by_engine_id = {}
+        self._env_class_by_engine_id = {}
         self._reward_norm_class_by_id = {}
 
         self._net_class_by_id = {}
@@ -64,6 +65,17 @@ class Registry:
 
         self._register_networks()
         self._register_submodules()
+
+        self._internal_modules = set(chain(
+            [v.__name__ for v in self._agent_class_by_id.values()],
+            [v.__name__ for v in self._actor_class_by_id.values()],
+            [v.__name__ for v in self._exp_class_by_id.values()],
+            [v.__name__ for v in self._learner_class_by_id.values()],
+            [v.__name__ for v in self._env_class_by_engine_id.values()],
+            [v.__name__ for v in self._reward_norm_class_by_id.values()],
+            [v.__name__ for v in self._net_class_by_id.values()],
+            [v.__name__ for v in self._submod_class_by_id.values()]
+        ))
 
     # AGENT METHODS
     def register_agent(self, agent_class):
@@ -178,12 +190,12 @@ class Registry:
         assert issubclass(env_module_class, EnvModule)
         env_module_class.check_args_implemented()
         self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
-        self._module_class_by_engine_id[engine_id] = env_module_class
+        self._env_class_by_engine_id[engine_id] = env_module_class
         return self
 
     def lookup_env(self, env_id):
         engine = self.lookup_engine(env_id)
-        return self._module_class_by_engine_id[engine]
+        return self._env_class_by_engine_id[engine]
 
     def lookup_engine(self, env_id):
         eng = None

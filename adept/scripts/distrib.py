@@ -45,7 +45,7 @@ Agent Options:
 
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
-    --
+    --rwd-norm <str>        Reward normalizer name [default: Clip]
 
 Script Options:
     --nb-env <int>          Number of parallel env [default: 32]
@@ -155,7 +155,7 @@ def main(args):
             env_args = REGISTRY.lookup_env_class(args.env).args
             rwdnorm_args = REGISTRY.lookup_reward_normalizer(args.rwd_norm).args
             if args.custom_network:
-                net_args = REGISTRY.lookup_custom_net(
+                net_args = REGISTRY.lookup_network(
                     args.custom_network).args
             else:
                 net_args = REGISTRY.lookup_modular_args(args)
@@ -165,7 +165,7 @@ def main(args):
             rwdnorm_args = REGISTRY.lookup_reward_normalizer(
                 args.rwd_norm).prompt()
             if args.custom_network:
-                net_args = REGISTRY.lookup_custom_net(
+                net_args = REGISTRY.lookup_network(
                     args.custom_network).prompt()
             else:
                 net_args = REGISTRY.prompt_modular_args(args)

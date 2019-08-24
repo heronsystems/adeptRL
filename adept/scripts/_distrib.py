@@ -116,7 +116,7 @@ def main(local_args):
         args.agent, env.action_space
     )
     if args.custom_network:
-        network = REGISTRY.lookup_custom_net(args.custom_network).from_args(
+        network = REGISTRY.lookup_network(args.custom_network).from_args(
             args,
             env.observation_space,
             output_space,
@@ -147,7 +147,7 @@ def main(local_args):
     device = torch.device("cuda:{}".format(LOCAL_RANK))
     agent = REGISTRY.lookup_agent(args.agent).from_args(
         args,
-        REGISTRY.lookup_reward_normalizer(args.env),
+        REGISTRY.lookup_reward_normalizer(args.rwd_norm).from_args(args),
         env.action_space
     )
 
