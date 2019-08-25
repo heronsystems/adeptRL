@@ -38,7 +38,8 @@ class EnvManager(EnvBase, metaclass=abc.ABCMeta):
     def from_args(
         cls,
         args,
-        registry,
+        engine,
+        env_cls,
         seed=None,
         nb_env=None,
         **kwargs
@@ -48,10 +49,7 @@ class EnvManager(EnvBase, metaclass=abc.ABCMeta):
         if nb_env is None:
             nb_env = args.nb_env
 
-        engine = registry.lookup_engine(args.env)
-        env_class = registry.lookup_env(args.env)
-
         env_fns = []
         for i in range(nb_env):
-            env_fns.append(env_class.from_args_curry(args, seed + i, **kwargs))
+            env_fns.append(env_cls.from_args_curry(args, seed + i, **kwargs))
         return cls(env_fns, engine)

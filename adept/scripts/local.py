@@ -40,7 +40,7 @@ Script Options:
     --nb-env <int>          Number of parallel env [default: 64]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
-    --load-network <path>   Path to network file
+    --load-network <path>   Path to network file (for pretrained weights)
     --load-optim <path>     Path to optimizer file
     --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
     --eval                  Run an evaluation after training
@@ -71,23 +71,14 @@ Logging Options:
 Troubleshooting Options:
     --profile               Profile this script
 """
-import json
 import os
 
-import torch
 from absl import flags
-from tensorboardX import SummaryWriter
 
-from adept.registry import REGISTRY
 from adept.container import Local
-from adept.manager import SubProcEnvManager
-from adept.network import ModularNetwork
-from adept.utils.logging import (
-    make_log_id, make_logger, print_ascii_logo, log_args, write_args_file,
-    SimpleModelSaver
-)
+from adept.container.local_rewrite import Local
 from adept.utils.script_helpers import (
-    count_parameters, parse_none, LogDirHelper, parse_path
+    parse_none, parse_path
 )
 from adept.utils.util import DotDict
 
@@ -106,6 +97,7 @@ def parse_args():
 
     # Ignore other args if resuming
     if args.resume:
+        args.resume = parse_path(args.resume)
         return args
 
     args.logdir = parse_path(args.logdir)
@@ -128,144 +120,27 @@ def main(args):
     :param args: Dict[str, Any]
     :return:
     """
-    args = DotDict(args)
-    initial_step_count = 0
     if args.resume:
-        log_dir_helper = LogDirHelper(args.resume)
-
-        with open(log_dir_helper.args_file_path(), 'r') as args_file:
-            args = DotDict(json.load(args_file))
-
-        args.load_network = log_dir_helper.latest_network_path()
-        args.load_optim = log_dir_helper.latest_optim_path()
-        initial_step_count = log_dir_helper.latest_epoch()
-
-        log_id = make_log_id(
-            args.tag, 'Local', args.agent, args.net3d + args.netbody,
-            timestamp=log_dir_helper.timestamp()
-        )
+        container = Local.from_resume(args.resume)
     else:
-        if args.use_defaults:
-            agent_args = REGISTRY.lookup_agent(args.agent).args
-            env_args = REGISTRY.lookup_env_class(args.env).args
-            rwdnorm_args = REGISTRY.lookup_reward_normalizer(args.rwd_norm).args
-            if args.custom_network:
-                net_args = REGISTRY.lookup_network(
-                    args.custom_network).args
-            else:
-                net_args = REGISTRY.lookup_modular_args(args)
-        else:
-            agent_args = REGISTRY.lookup_agent(args.agent).prompt()
-            env_args = REGISTRY.lookup_env(args.env).prompt()
-            rwdnorm_args = REGISTRY.lookup_reward_normalizer(
-                args.rwd_norm).prompt()
-            if args.custom_network:
-                net_args = REGISTRY.lookup_network(
-                    args.custom_network).prompt()
-            else:
-                net_args = REGISTRY.prompt_modular_args(args)
-        args = DotDict({
-            **args, **agent_args, **env_args, **rwdnorm_args, **net_args
-        })
+        container = Local.from_args(args)
 
-        # construct logging objects
-        log_id = make_log_id(
-            args.tag, 'Local', args.agent, args.net3d + args.netbody
-        )
-
-    log_id_dir = os.path.join(args.logdir, args.env, log_id)
-
-    os.makedirs(log_id_dir, exist_ok=True)
-    logger = make_logger('Local', os.path.join(log_id_dir, 'train_log.txt'))
-    summary_writer = SummaryWriter(log_id_dir)
-    saver = SimpleModelSaver(log_id_dir)
-    print_ascii_logo()
-    log_args(logger, args)
-    write_args_file(log_id_dir, args)
-
-    # construct env
-    env = SubProcEnvManager.from_args(args, registry=REGISTRY)
-
-    # construct network
-    torch.manual_seed(args.seed)
-    output_space = REGISTRY.lookup_output_space(
-        args.agent, env.action_space
-    )
-    if args.custom_network:
-        network = REGISTRY.lookup_network(args.custom_network).from_args(
-            args,
-            env.observation_space,
-            output_space,
-            env.gpu_preprocessor,
-            REGISTRY
-        )
-    else:
-        network = ModularNetwork.from_args(
-            args,
-            env.observation_space,
-            output_space,
-            env.gpu_preprocessor,
-            REGISTRY
-        )
-
-    # possibly load network
-    if args.load_network:
-        network.load_state_dict(
-            torch.load(
-                args.load_network, map_location=lambda storage, loc: storage
-            )
-        )
-        logger.info('Reloaded network from {}'.format(args.load_network))
-
-    device = torch.device(
-        "cuda:{}".format(args.gpu_id)
-        if (torch.cuda.is_available() and args.gpu_id >= 0)
-        else "cpu"
-    )
-    torch.backends.cudnn.benchmark = True
-
-    # construct agent
-    agent = REGISTRY.lookup_agent(args.agent).from_args(
-        args,
-        REGISTRY.lookup_reward_normalizer(args.rwd_norm).from_args(args),
-        env.action_space
-    )
-
-    # Construct the Container
-    def make_optimizer(params):
-        opt = torch.optim.RMSprop(
-            params, lr=args.lr, eps=1e-5, alpha=0.99
-        )
-        if args.load_optim:
-            opt.load_state_dict(
-                torch.load(
-                    args.load_optim,
-                    map_location=lambda storage, loc: storage
-                )
-            )
-            logger.info("Reloaded optimizer from {}".format(args.load_optim))
-        return opt
-
-    logger.info('Network Parameter Count: {}'.format(count_parameters(network)))
-    container = Local(
-        agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
-        summary_writer, args.summary_freq, saver, device
-    )
-
-    # Run the container
     if args.profile:
         try:
             from pyinstrument import Profiler
         except:
             raise ImportError('You must install pyinstrument to use profiling.')
+        container.nb_step = 10e3
         profiler = Profiler()
         profiler.start()
-        container.run(10e3)
-        profiler.stop()
-        print(profiler.output_text(unicode=True, color=True))
-    else:
-        container.run(args.nb_step, initial_count=initial_step_count)
-    env.close()
+
+    try:
+        container.run()
+    finally:
+        if args.profile:
+            profiler.stop()
+            print(profiler.output_text(unicode=True, color=True))
+        container.close()
 
     if args.eval:
         import subprocess
@@ -274,7 +149,7 @@ def main(args):
             '-m',
             'adept.scripts.evaluate',
             '--log-id-dir',
-            log_id_dir,
+            container.log_id_dir,
             '--gpu-id',
             str(args.gpu_id),
             '--nb-episode',

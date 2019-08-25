@@ -184,7 +184,7 @@ class WritesSummaries(abc.ABC):
 
             writer = self.summary_writer
             writer.add_scalar(
-                'macro_loss/total_loss', total_loss.item(), step_count
+                'loss/total_loss', total_loss.item(), step_count
             )
             for l_name, loss in loss_dict.items():
                 writer.add_scalar('loss/' + l_name, loss.item(), step_count)
