@@ -28,6 +28,7 @@ from adept.utils.script_helpers import (
     LogDirHelper
 )
 from adept.utils.util import DotDict
+import time
 
 MODE = 'Distrib'
 WORLD_SIZE = int(os.environ['WORLD_SIZE'])
@@ -70,6 +71,10 @@ def main(local_args):
     :param local_args: Dict[str, Any]
     :return:
     """
+    if os.path.exists('/tmp/adept_init'):
+        os.remove('/tmp/adept_init')
+        time.sleep(5)
+
     log_id_dir = local_args.log_id_dir
     initial_step_count = local_args.initial_step_count
 
