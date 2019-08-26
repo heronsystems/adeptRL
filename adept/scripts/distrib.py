@@ -145,6 +145,8 @@ def main(args):
     else:
         args, log_id_dir, initial_step = Init.from_prompt(MODE, args)
 
+    print('args.resume', args.resume)
+
     Init.print_ascii_logo()
     Init.make_log_dirs(log_id_dir)
     Init.write_args_file(log_id_dir, args)
