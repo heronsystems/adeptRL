@@ -29,9 +29,11 @@ class Init:
         :param args: Dict[str, Any], static args
         :return: args, log_id, initial_step_count
         """
+        resume = args.resume
         log_dir_helper = LogDirHelper(args.resume)
         with open(log_dir_helper.args_file_path(), 'r') as args_file:
             args = DotDict(json.load(args_file))
+            args.resume = resume
 
         args.load_network = log_dir_helper.latest_network_path()
         args.load_optim = log_dir_helper.latest_optim_path()
