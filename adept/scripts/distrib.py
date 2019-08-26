@@ -197,7 +197,7 @@ def main(args):
         eval_args = {
             'log_id_dir': log_id_dir,
             'gpu_id': 0,
-            'nb_episode': 32,
+            'nb_episode': 30,
         }
         if args.custom_network:
             eval_args['custom_network'] = args.custom_network
