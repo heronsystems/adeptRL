@@ -76,7 +76,6 @@ import os
 from absl import flags
 
 from adept.container import Local
-from adept.container.local import Local
 from adept.utils.script_helpers import (
     parse_none, parse_path
 )

@@ -87,7 +87,7 @@ import subprocess
 import sys
 from datetime import datetime
 
-from adept import REGISTRY
+from adept.registry import REGISTRY
 from adept.utils.logging import (
     make_log_id, make_logger, print_ascii_logo,
     log_args, write_args_file
@@ -113,6 +113,7 @@ def parse_args():
     args.master_port = int(args.master_port)
 
     if args.resume:
+        args.resume = parse_path(args.resume)
         return args
 
     args.logdir = parse_path(args.logdir)
@@ -172,11 +173,7 @@ def main(args):
         args = DotDict({
             **args, **agent_args, **env_args, **rwdnorm_args, **net_args
         })
-        log_id = make_log_id(
-            args.tag, MODE, args.agent,
-            args.net3d + args.netbody,
-            timestamp=datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        )
+        log_id = make_log_id(args.tag, MODE, args.agent, args.netbody)
         log_id_dir = os.path.join(args.logdir, args.env, log_id)
         os.makedirs(log_id_dir)
         write_args_file(log_id_dir, args)
