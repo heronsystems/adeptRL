@@ -151,8 +151,6 @@ def main(args):
     logger = Init.setup_logger(MODE, log_id_dir)
     Init.log_args(logger, args)
 
-    print('args.resume', args.resume)
-
     processes = []
 
     for local_rank in range(0, args.nb_proc):

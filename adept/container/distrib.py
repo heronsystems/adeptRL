@@ -145,7 +145,7 @@ class DistribHost(Container):
 
             # Perform state updates
             local_step_count += self.nb_env
-            global_step_count = local_step_count * self.world_size
+            global_step_count += self.nb_env * self.world_size
             ep_rewards += rewards.float()
 
             term_rewards = []
@@ -334,7 +334,7 @@ class DistribWorker(Container):
 
             # Perform state updates
             local_step_count += self.nb_env
-            global_step_count = local_step_count * self.world_size
+            global_step_count += self.nb_env * self.world_size
             ep_rewards += rewards.float()
 
             term_rewards = []
