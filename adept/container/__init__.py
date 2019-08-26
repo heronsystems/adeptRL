@@ -16,3 +16,4 @@ from .local import Local
 from .distrib import DistribHost, DistribWorker
 from .evaluation_thread import EvaluationThread
 from .evaluation import EvalContainer
+from .init import Init

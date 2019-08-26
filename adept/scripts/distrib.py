@@ -85,14 +85,9 @@ Troubleshooting Options:
 import os
 import subprocess
 import sys
-from datetime import datetime
 
-from adept.registry import REGISTRY
-from adept.utils.logging import (
-    make_log_id, make_logger, print_ascii_logo,
-    log_args, write_args_file
-)
-from adept.utils.script_helpers import parse_path, parse_none, LogDirHelper
+from adept.container import Init
+from adept.utils.script_helpers import parse_path, parse_none
 from adept.utils.util import DotDict
 
 MODE = 'Distrib'
@@ -143,44 +138,18 @@ def main(args):
     current_env["MASTER_ADDR"] = args.master_addr
     current_env["MASTER_PORT"] = str(args.master_port)
     current_env["WORLD_SIZE"] = str(dist_world_size)
-    initial_step_count = 0
     if args.resume:
-        log_id_dir = args.resume
-        helper = LogDirHelper(log_id_dir)
-        args.load_network = helper.latest_network_path()
-        args.load_optim = helper.latest_optim_path()
-        initial_step_count = helper.latest_epoch()
+        args, log_id_dir, initial_step = Init.from_resume(MODE, args)
+    elif args.use_defaults:
+        args, log_id_dir, initial_step = Init.from_defaults(MODE, args)
     else:
-        if args.use_defaults:
-            agent_args = REGISTRY.lookup_agent(args.agent).args
-            env_args = REGISTRY.lookup_env(args.env).args
-            rwdnorm_args = REGISTRY.lookup_reward_normalizer(args.rwd_norm).args
-            if args.custom_network:
-                net_args = REGISTRY.lookup_network(
-                    args.custom_network).args
-            else:
-                net_args = REGISTRY.lookup_modular_args(args)
-        else:
-            agent_args = REGISTRY.lookup_agent(args.agent).prompt()
-            env_args = REGISTRY.lookup_env(args.env).prompt()
-            rwdnorm_args = REGISTRY.lookup_reward_normalizer(
-                args.rwd_norm).prompt()
-            if args.custom_network:
-                net_args = REGISTRY.lookup_network(
-                    args.custom_network).prompt()
-            else:
-                net_args = REGISTRY.prompt_modular_args(args)
-        args = DotDict({
-            **args, **agent_args, **env_args, **rwdnorm_args, **net_args
-        })
-        log_id = make_log_id(args.tag, MODE, args.agent, args.netbody)
-        log_id_dir = os.path.join(args.logdir, args.env, log_id)
-        os.makedirs(log_id_dir)
-        write_args_file(log_id_dir, args)
+        args, log_id_dir, initial_step = Init.from_prompt(MODE, args)
 
-    print_ascii_logo()
-    logger = make_logger(MODE, os.path.join(log_id_dir, 'train_log.txt'))
-    log_args(logger, args)
+    Init.print_ascii_logo()
+    Init.make_log_dirs(log_id_dir)
+    Init.write_args_file(log_id_dir, args)
+    logger = Init.setup_logger(MODE, log_id_dir)
+    Init.log_args(logger, args)
 
     processes = []
 
@@ -209,7 +178,7 @@ def main(args):
                 "--resume={}".format(True),
                 "--load-network={}".format(args.load_network),
                 "--load-optim={}".format(args.load_optim),
-                "--initial-step-count={}".format(initial_step_count)
+                "--initial-step-count={}".format(initial_step)
             ]
         if args.custom_network:
             cmd += [

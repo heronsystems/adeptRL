@@ -20,17 +20,12 @@ import argparse
 import json
 import os
 
-import torch
 import torch.distributed as dist
-from tensorboardX import SummaryWriter
 
-from adept.registry import REGISTRY
 from adept.container.distrib import DistribHost, DistribWorker
-from adept.manager.subproc_env_manager import SubProcEnvManager
-from adept.network.modular_network import ModularNetwork
-from adept.utils.logging import make_logger, SimpleModelSaver
+from adept.utils.logging import make_logger
 from adept.utils.script_helpers import (
-    count_parameters, LogDirHelper
+    LogDirHelper
 )
 from adept.utils.util import DotDict
 
@@ -90,97 +85,29 @@ def main(local_args):
     if local_args.resume:
         args = DotDict({**args, **vars(local_args)})
 
-    torch.backends.cudnn.benchmark = True
-
     dist.init_process_group(
         backend='nccl',
         init_method='file:///tmp/adept_init',
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )
-
     logger.info('Rank {} initialized.'.format(GLOBAL_RANK))
-    seed = args.seed \
-        if GLOBAL_RANK == 0 \
-        else args.seed + args.nb_env * GLOBAL_RANK
-    logger.info('Using {} for rank {} seed.'.format(seed, GLOBAL_RANK))
-    env = SubProcEnvManager.from_args(
-        args,
-        seed=seed,
-        registry=REGISTRY
-    )
 
-    # Construct network
-    torch.manual_seed(args.seed)
-    output_space = REGISTRY.lookup_output_space(
-        args.agent, env.action_space
-    )
-    if args.custom_network:
-        network = REGISTRY.lookup_network(args.custom_network).from_args(
-            args,
-            env.observation_space,
-            output_space,
-            env.gpu_preprocessor,
-            REGISTRY
-        )
-    else:
-        network = ModularNetwork.from_args(
-            args,
-            env.observation_space,
-            output_space,
-            env.gpu_preprocessor,
-            REGISTRY
-        )
-    if args.load_network:
-        network.load_state_dict(
-            torch.load(
-                args.load_network, map_location=lambda storage, loc: storage
-            )
-        )
-        # get step count from network file
-        print('Reloaded network from {}'.format(args.load_network))
     if LOCAL_RANK == 0:
-        logger.info('Network Parameter Count: {}'.format(
-            count_parameters(network))
-        )
-
-    device = torch.device("cuda:{}".format(LOCAL_RANK))
-    agent = REGISTRY.lookup_agent(args.agent).from_args(
-        args,
-        REGISTRY.lookup_reward_normalizer(args.rwd_norm).from_args(args),
-        env.action_space
-    )
-
-    def make_optimizer(params):
-        opt = torch.optim.RMSprop(
-            params, lr=args.lr, eps=1e-5, alpha=0.99
-        )
-        if args.load_optim:
-            opt.load_state_dict(
-                torch.load(
-                    args.load_optim,
-                    map_location=lambda storage, loc: storage
-                )
-            )
-            logger.info("Reloaded optimizer from {}".format(args.load_optim))
-        return opt
-    if LOCAL_RANK == 0:
-        summary_writer = SummaryWriter(
-            os.path.join(log_id_dir, 'rank{}'.format(GLOBAL_RANK))
-        )
         container = DistribHost(
-            agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
-            summary_writer, args.summary_freq, SimpleModelSaver(log_id_dir),
-            GLOBAL_RANK, WORLD_SIZE, device
+            args, logger, log_id_dir, initial_step_count,
+            LOCAL_RANK, GLOBAL_RANK, WORLD_SIZE
         )
     else:
         container = DistribWorker(
-            agent, env, network, make_optimizer, args.epoch_len, args.nb_env, logger,
-            GLOBAL_RANK, WORLD_SIZE, device
+            args, logger, log_id_dir, initial_step_count,
+            LOCAL_RANK, GLOBAL_RANK, WORLD_SIZE
         )
 
-    container.run(args.nb_step, initial_count=initial_step_count)
-    env.close()
+    try:
+        container.run()
+    finally:
+        container.close()
 
 
 if __name__ == '__main__':

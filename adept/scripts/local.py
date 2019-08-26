@@ -75,7 +75,7 @@ import os
 
 from absl import flags
 
-from adept.container import Local
+from adept.container import Init, Local
 from adept.utils.script_helpers import (
     parse_none, parse_path
 )
@@ -84,6 +84,8 @@ from adept.utils.util import DotDict
 # hack to use bypass pysc2 flags
 FLAGS = flags.FLAGS
 FLAGS(['local.py'])
+
+MODE = 'Local'
 
 
 def parse_args():
@@ -120,9 +122,19 @@ def main(args):
     :return:
     """
     if args.resume:
-        container = Local.from_resume(args.resume)
+        args, log_id_dir, initial_step = Init.from_resume(MODE, args)
+    elif args.use_defaults:
+        args, log_id_dir, initial_step = Init.from_defaults(MODE, args)
     else:
-        container = Local.from_args(args)
+        args, log_id_dir, initial_step = Init.from_prompt(MODE, args)
+
+    Init.print_ascii_logo()
+    Init.make_log_dirs(log_id_dir)
+    Init.write_args_file(log_id_dir, args)
+    logger = Init.setup_logger(MODE, log_id_dir)
+    Init.log_args(logger, args)
+
+    container = Local(args, logger, log_id_dir, initial_step)
 
     if args.profile:
         try:
