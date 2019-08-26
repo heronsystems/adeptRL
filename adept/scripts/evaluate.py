@@ -39,15 +39,12 @@ Options:
     --seed <int>            Seed for random variables [default: 512]
     --custom-network <str>  Name of custom network class
 """
-import os
-from collections import namedtuple
-
 from absl import flags
 
 from adept.container import EvalContainer
-from adept.utils.logging import make_logger, print_ascii_logo, log_args
 from adept.utils.script_helpers import parse_path
 from adept.utils.util import DotDict
+from adept.container import Init
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -68,8 +65,7 @@ def parse_args():
     return args
 
 
-Result = namedtuple('Result', ['epoch', 'mean', 'std_dev'])
-SelectedModel = namedtuple('SelectedModel', ['epoch', 'model_id'])
+MODE = 'Eval'
 
 
 def main(args):
@@ -83,13 +79,12 @@ def main(args):
     """
     args = DotDict(args)
 
-    print_ascii_logo()
-    logger = make_logger(
-        'Eval', os.path.join(args.log_id_dir, 'evaluation_log.txt')
-    )
-    log_args(logger, args)
+    Init.print_ascii_logo()
+    logger = Init.setup_logger(MODE, args.log_id_dir, 'eval')
+    Init.log_args(logger, args)
 
     eval_container = EvalContainer(
+        logger,
         args.log_id_dir,
         args.gpu_id,
         args.nb_episode,

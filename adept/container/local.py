@@ -36,21 +36,16 @@ class Local(Container):
         output_space = REGISTRY.lookup_output_space(
             args.agent, env_mgr.action_space)
         if args.custom_network:
-            net = REGISTRY.lookup_network(args.custom_network).from_args(
-                args,
-                env_mgr.action_space,
-                output_space,
-                env_mgr.gpu_preprocessor,
-                REGISTRY
-            )
+            net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
-            net = ModularNetwork.from_args(
-                args,
-                env_mgr.observation_space,
-                output_space,
-                env_mgr.gpu_preprocessor,
-                REGISTRY
-            )
+            net_cls = ModularNetwork
+        net = net_cls.from_args(
+            args,
+            env_mgr.observation_space,
+            output_space,
+            env_mgr.gpu_preprocessor,
+            REGISTRY
+        )
 
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)

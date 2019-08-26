@@ -105,7 +105,7 @@ class Init:
         return os.makedirs(log_id_dir, exist_ok=True)
 
     @staticmethod
-    def setup_logger(mode, log_id_dir):
+    def setup_logger(mode, log_id_dir, log_name='train'):
         logger = logging.getLogger(mode)
         logger.setLevel(logging.INFO)
         logger.propagate = False
@@ -115,7 +115,7 @@ class Init:
         fmt = logging.Formatter('%(message)s')
         sh.setFormatter(fmt)
 
-        log_path = os.path.join(log_id_dir, 'train_log.txt')
+        log_path = os.path.join(log_id_dir, f'{log_name}_log.txt')
         fh = logging.FileHandler(log_path, mode='a')
         fh.setLevel(logging.DEBUG)
         fmt = logging.Formatter('%(asctime)s  [%(levelname)s] %(message)s')

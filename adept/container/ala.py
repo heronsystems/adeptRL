@@ -12,14 +12,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.container.base.mixin import LogsRewards
-
 
 class ALAHost:
     pass
 
 
-class ALAWorker(LogsRewards):
+class ALAWorker:
     """
     Actor Learner Architecture worker.
     """

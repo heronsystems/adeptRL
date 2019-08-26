@@ -17,7 +17,6 @@ import torch
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
-from adept.container.base.mixin import LogsRewards
 from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY

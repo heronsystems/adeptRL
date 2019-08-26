@@ -28,6 +28,7 @@ from adept.utils.util import listd_to_dlist, dtensor_to_dev
 class EvalContainer:
     def __init__(
             self,
+            logger,
             log_id_dir,
             gpu_id,
             nb_episode,
@@ -42,12 +43,16 @@ class EvalContainer:
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
         self.device = device = self._device_from_gpu_id(gpu_id)
+        self.logger = logger
 
+        engine = REGISTRY.lookup_engine(train_args.env)
+        env_cls = REGISTRY.lookup_env(train_args.env)
         self.env_mgr = env_mgr = SubProcEnvManager.from_args(
             self.train_args,
+            engine,
+            env_cls,
             seed=seed,
-            nb_env=nb_episode,
-            registry=REGISTRY
+            nb_env=nb_episode
         )
 
         output_space = REGISTRY.lookup_output_space(
@@ -131,7 +136,7 @@ class EvalContainer:
                     for i in range(self.env_mgr.nb_env):
                         if episode_completes[i]:
                             continue
-                        elif terminals[i] and infos[i]:
+                        elif terminals[i]:
                             reward_buf[i] += rewards[i]
                             episode_completes[i] = True
                         else:
@@ -145,10 +150,12 @@ class EvalContainer:
                     best_std = std
                     selected_model = os.path.split(net_path)[-1]
 
-            print(f'EPOCH_ID: {epoch_id} '
-                  f'MEAN_REWARD: {best_mean} '
-                  f'STD_DEV: {best_std} '
-                  f'SELECTED_MODEL: {selected_model}')
+            self.logger.info(
+                f'EPOCH_ID: {epoch_id} '
+                f'MEAN_REWARD: {best_mean} '
+                f'STD_DEV: {best_std} '
+                f'SELECTED_MODEL: {selected_model}'
+            )
             with open(self.log_dir_helper.eval_path(), 'a') as eval_f:
                 eval_f.write(f'{epoch_id},'
                              f'{best_mean},'
