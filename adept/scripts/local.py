@@ -164,7 +164,7 @@ def main(args):
             '--gpu-id',
             str(args.gpu_id),
             '--nb-episode',
-            str(args.nb_env)
+            str(30)
         ]
         if args.custom_network:
             command += [
