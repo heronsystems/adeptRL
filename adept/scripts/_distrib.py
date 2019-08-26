@@ -59,6 +59,7 @@ def parse_args():
     parser.add_argument('--load-network', default=None)
     parser.add_argument('--load-optim', default=None)
     parser.add_argument('--initial-step-count', type=int, default=0)
+    parser.add_argument('--init-method', default=None)
     parser.add_argument('--custom-network', default=None)
     args = parser.parse_args()
     return args
@@ -71,10 +72,6 @@ def main(local_args):
     :param local_args: Dict[str, Any]
     :return:
     """
-    if os.path.exists('/tmp/adept_init'):
-        os.remove('/tmp/adept_init')
-        time.sleep(5)
-
     log_id_dir = local_args.log_id_dir
     initial_step_count = local_args.initial_step_count
 
@@ -92,7 +89,7 @@ def main(local_args):
 
     dist.init_process_group(
         backend='nccl',
-        init_method='file:///tmp/adept_init',
+        init_method=args.init_method,
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )

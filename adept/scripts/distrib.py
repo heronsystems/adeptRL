@@ -39,6 +39,7 @@ Distributed Options:
     --nb-proc <int>         Number of processes per node [default: 2]
     --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
     --master-port <int>     Master node (rank 0's) comm port [default: 29500]
+    --init-method <str>     torch.distrib init [default: file:///tmp/adept_init]
 
 Agent Options:
     --agent <str>           Name of agent class [default: ActorCritic]
@@ -178,7 +179,8 @@ def main(args):
                 "--resume={}".format(True),
                 "--load-network={}".format(args.load_network),
                 "--load-optim={}".format(args.load_optim),
-                "--initial-step-count={}".format(initial_step)
+                "--initial-step-count={}".format(initial_step),
+                "--init-method={}".format(args.init_method)
             ]
         if args.custom_network:
             cmd += [
