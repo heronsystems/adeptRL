@@ -46,6 +46,7 @@ class Local(Container):
             env_mgr.gpu_preprocessor,
             REGISTRY
         )
+        logger.info('Network parameters: ' + self.count_parameters(net))
 
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
