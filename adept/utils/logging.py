@@ -12,76 +12,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import json
-import logging
 import os
 from collections import namedtuple
-from datetime import datetime
 from time import time
 
 import torch
 
-from adept.globals import VERSION
 from adept.utils.util import HeapQueue
-
-
-def print_ascii_logo():
-    version_len = len(VERSION)
-    print(
-        """
-                     __           __
-          ____ _____/ /__  ____  / /_
-         / __ `/ __  / _ \/ __ \/ __/
-        / /_/ / /_/ /  __/ /_/ / /_
-        \__,_/\__,_/\___/ .___/\__/
-                       /_/           """ + '\n' +
-        '                                     ' [:-(version_len + 2)] +
-        'v{} '.format(VERSION)
-    )
-
-
-def make_log_id(tag, mode_name, agent_name, network_name, timestamp=None):
-    if timestamp is None:
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-
-    if tag:
-        log_id = '_'.join([tag, mode_name, agent_name, network_name, timestamp])
-    else:
-        log_id = '_'.join([mode_name, agent_name, network_name, timestamp])
-    return log_id
-
-
-def make_logger(logger_name, log_file):
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    sh = logging.StreamHandler()
-    sh.setLevel(logging.INFO)
-    fmt = logging.Formatter('%(message)s')
-    sh.setFormatter(fmt)
-
-    fh = logging.FileHandler(log_file, mode='a')
-    fh.setLevel(logging.DEBUG)
-    fmt = logging.Formatter('%(asctime)s  [%(levelname)s] %(message)s')
-    fh.setFormatter(fmt)
-
-    logger.addHandler(sh)
-    logger.addHandler(fh)
-
-    return logger
-
-
-def log_args(logger, args):
-    args = args if isinstance(args, dict) else vars(args)
-    for k in sorted(args):
-        logger.info('{}: {}'.format(k, args[k]))
-
-
-def write_args_file(log_id_dir, args):
-    args = args if isinstance(args, dict) else vars(args)
-    with open(os.path.join(log_id_dir, 'args.json'), 'w') as args_file:
-        json.dump(args, args_file, indent=4, sort_keys=True)
 
 
 class ModelSaver:
