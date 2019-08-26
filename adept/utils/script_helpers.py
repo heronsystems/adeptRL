@@ -18,10 +18,6 @@ import os
 from adept.utils.util import DotDict
 
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
 def parse_bool_str(bool_str):
     """
     Convert string to boolean.
