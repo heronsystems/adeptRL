@@ -1,3 +1,4 @@
+import os
 from collections import namedtuple
 from itertools import chain
 
@@ -10,6 +11,8 @@ from adept.network import NetworkModule
 from adept.network.base.submodule import SubModule
 from adept.rewardnorm import RewardNormModule
 from adept.utils.requires_args import RequiresArgsMixin
+import pickle
+from glob import glob
 
 Topology = namedtuple('Topology', ['actor', 'learner', 'exp'])
 
@@ -66,16 +69,88 @@ class Registry:
         self._register_networks()
         self._register_submodules()
 
-        self._internal_modules = set(chain(
-            [v.__name__ for v in self._agent_class_by_id.values()],
-            [v.__name__ for v in self._actor_class_by_id.values()],
-            [v.__name__ for v in self._exp_class_by_id.values()],
-            [v.__name__ for v in self._learner_class_by_id.values()],
-            [v.__name__ for v in self._env_class_by_engine_id.values()],
-            [v.__name__ for v in self._reward_norm_class_by_id.values()],
-            [v.__name__ for v in self._net_class_by_id.values()],
-            [v.__name__ for v in self._submod_class_by_id.values()]
-        ))
+        self._internal_modules = set([k for k, v in self._iter_all_classes()])
+
+    def _iter_all_classes(self):
+        return chain(
+            self._agent_class_by_id.items(),
+            self._actor_class_by_id.items(),
+            self._exp_class_by_id.items(),
+            self._learner_class_by_id.items(),
+            self._env_class_by_engine_id.items(),
+            self._reward_norm_class_by_id.items(),
+            self._net_class_by_id.items(),
+            self._submod_class_by_id.items()
+        )
+
+    def save_extern_classes(self, log_id_dir):
+        """
+        Saves external classes to log id dir. This needs to be done for
+        distributed topologies if using external classes.
+        :return:
+        """
+        for k, v in self._iter_all_classes():
+            if k not in self._internal_modules:
+                if k in self._agent_class_by_id:
+                    self._write_cls(v, log_id_dir, 'agent')
+                elif k in self._actor_class_by_id:
+                    self._write_cls(v, log_id_dir, 'actor')
+                elif k in self._exp_class_by_id:
+                    self._write_cls(v, log_id_dir, 'exp')
+                elif k in self._learner_class_by_id:
+                    self._write_cls(v, log_id_dir, 'learner')
+                elif k in self._env_class_by_engine_id:
+                    self._write_cls(v, log_id_dir, 'env')
+                elif k in self._reward_norm_class_by_id:
+                    self._write_cls(v, log_id_dir, 'reward_norm')
+                elif k in self._net_class_by_id:
+                    self._write_cls(v, log_id_dir, 'net')
+                elif k in self._submod_class_by_id:
+                    self._write_cls(v, log_id_dir, 'submod')
+                else:
+                    raise Exception('Unreachable.')
+
+    def load_extern_classes(self, log_id_dir):
+        def join(d):
+            return os.path.join(log_id_dir, d)
+        cls_dirs = [join('agent'), join('actor'), join('exp'), join('learner'),
+                    join('env'), join('reward_norm'), join('net'),
+                    join('submod')]
+        for cls_dir in cls_dirs:
+            if os.path.exists(cls_dir):
+                dirname = os.path.split(cls_dir)[-1]
+                for cls_path in glob(os.path.join(cls_dir, '*.cls')):
+                    cls = self._load_cls(cls_path)
+                    if 'agent' in dirname:
+                        self.register_agent(cls)
+                    elif 'actor' in dirname:
+                        self.register_actor(cls)
+                    elif 'exp' in dirname:
+                        self.register_exp(cls)
+                    elif 'learner' in dirname:
+                        self.register_learner(cls)
+                    elif 'env' in dirname:
+                        self.register_env(cls)
+                    elif 'reward_norm' in dirname:
+                        self.register_reward_normalizer(cls)
+                    elif 'net' in dirname:
+                        self.register_network(cls)
+                    elif 'submod' in dirname:
+                        self.register_submodule(cls)
+                    else:
+                        raise Exception('Unreachable.')
+
+    @staticmethod
+    def _write_cls(cls, log_id_dir, dirname):
+        os.makedirs(os.path.join(log_id_dir, dirname), exist_ok=True)
+        filepath = os.path.join(log_id_dir, dirname, cls.__name__ + '.cls')
+        with open(filepath, 'wb') as f:
+            pickle.dump(cls, f)
+
+    @staticmethod
+    def _load_cls(cls_path):
+        with open(cls_path, 'rb') as f:
+            return pickle.load(f)
 
     # AGENT METHODS
     def register_agent(self, agent_class):
@@ -174,7 +249,7 @@ class Registry:
         return self._learner_class_by_id[learner_id]
 
     # ENV METHODS
-    def register_env(self, env_module_class, env_id_set):
+    def register_env(self, env_module_class):
         """
         Register an environment class.
 
@@ -189,7 +264,8 @@ class Registry:
         # TODO assert no duplicate env_ids
         assert issubclass(env_module_class, EnvModule)
         env_module_class.check_args_implemented()
-        self._engine_ids_by_env_id_set[frozenset(env_id_set)] = engine_id
+        env_module_class.check_ids_implemented()
+        self._engine_ids_by_env_id_set[frozenset(env_module_class.ids)] = engine_id
         self._env_class_by_engine_id[engine_id] = env_module_class
         return self
 
@@ -309,8 +385,8 @@ class Registry:
 
     def _register_envs(self):
         from adept.env import ENV_REG
-        for env, id_list in ENV_REG:
-            self.register_env(env, id_list)
+        for env in ENV_REG:
+            self.register_env(env)
 
     def _register_reward_norms(self):
         from adept.rewardnorm import REWARD_NORM_REG

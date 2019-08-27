@@ -22,8 +22,8 @@ import os
 
 import torch.distributed as dist
 
-from adept.container.distrib import DistribHost, DistribWorker
-from adept.utils.logging import make_logger
+from adept.registry import REGISTRY as R
+from adept.container import Init, DistribHost, DistribWorker
 from adept.utils.script_helpers import (
     LogDirHelper
 )
@@ -75,9 +75,11 @@ def main(local_args):
     log_id_dir = local_args.log_id_dir
     initial_step_count = local_args.initial_step_count
 
-    logger = make_logger(
+    R.load_extern_classes(log_id_dir)
+    logger = Init.setup_logger(
         MODE + str(LOCAL_RANK),
-        os.path.join(log_id_dir, 'train_log{}.txt'.format(GLOBAL_RANK))
+        log_id_dir,
+        'train{}'.format(GLOBAL_RANK)
     )
 
     helper = LogDirHelper(log_id_dir)

@@ -19,6 +19,8 @@ from adept.env.base._env import EnvBase
 
 
 class EnvModule(EnvBase, RequiresArgsMixin, metaclass=abc.ABCMeta):
+    ids = None
+
     """
     Implement this class to add your custom environment. Don't forget to
     implement args.
@@ -69,3 +71,10 @@ class EnvModule(EnvBase, RequiresArgsMixin, metaclass=abc.ABCMeta):
     @property
     def gpu_preprocessor(self):
         return self._gpu_preprocessor
+
+    @classmethod
+    def check_ids_implemented(cls):
+        if cls.ids is None:
+            raise NotImplementedError(
+                'Subclass must define class attribute "ids"'
+            )

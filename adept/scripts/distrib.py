@@ -90,6 +90,7 @@ import sys
 from adept.container import Init
 from adept.utils.script_helpers import parse_path, parse_none
 from adept.utils.util import DotDict
+from adept.registry import REGISTRY as R
 
 MODE = 'Distrib'
 
@@ -151,6 +152,7 @@ def main(args):
     Init.write_args_file(log_id_dir, args)
     logger = Init.setup_logger(MODE, log_id_dir)
     Init.log_args(logger, args)
+    R.save_extern_classes(log_id_dir)
 
     processes = []
 
