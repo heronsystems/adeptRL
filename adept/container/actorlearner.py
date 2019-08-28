@@ -36,31 +36,26 @@ class ActorLearnerHost(Container):
             else args.seed + args.nb_env * global_rank
         logger.info('Using {} for rank {} seed.'.format(seed, global_rank))
         # ENV
-        engine = REGISTRY.lookup_engine(args.env)
         env_cls = REGISTRY.lookup_env(args.env)
-        env_mgr = SubProcEnvManager.from_args(args, engine, env_cls, seed=seed)
+        env = env_cls.from_args(args.env, 0)
+        env.close()
 
         # NETWORK
         torch.manual_seed(args.seed)
         device = torch.device("cuda:{}".format(local_rank))
         output_space = REGISTRY.lookup_output_space(
-            args.agent, env_mgr.action_space)
+            args.agent, env.action_space)
         if args.custom_network:
-            net = REGISTRY.lookup_network(args.custom_network).from_args(
-                args,
-                env_mgr.action_space,
-                output_space,
-                env_mgr.gpu_preprocessor,
-                REGISTRY
-            )
+            net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
-            net = ModularNetwork.from_args(
-                args,
-                env_mgr.observation_space,
-                output_space,
-                env_mgr.gpu_preprocessor,
-                REGISTRY
-            )
+            net_cls = ModularNetwork
+        net = net_cls.from_args(
+            args,
+            env.observation_space,
+            output_space,
+            env.gpu_preprocessor,
+            REGISTRY
+        )
         logger.info('Network parameters: ' + str(self.count_parameters(net)))
 
         def optim_fn(x):
@@ -70,6 +65,7 @@ class ActorLearnerHost(Container):
         rwd_norm = REGISTRY.lookup_reward_normalizer(
             args.rwd_norm).from_args(args)
         learner_cls = REGISTRY.lookup_learner(args.learner)
+
 
 
 class ActorLearnerWorker(Container):
