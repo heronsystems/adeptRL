@@ -20,7 +20,9 @@
 / /_/ / /_/ /  __/ /_/ / /_
 \__,_/\__,_/\___/ .___/\__/
                /_/
+
 Local Mode
+
 Train an agent with a single GPU.
 
 Usage:

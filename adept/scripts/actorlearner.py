@@ -21,13 +21,13 @@
 \__,_/\__,_/\___/ .___/\__/
                /_/
 
-ALA Mode
+Actor Learner Mode
 
 Train an agent with multiple GPUs. https://arxiv.org/abs/1802.01561.
 
 Usage:
-    ala [options]
-    ala (-h | --help)
+    actorlearner [options]
+    actorlearner (-h | --help)
 
 Distributed Options:
     --nb-node <int>         Number of distributed nodes [default: 1]
@@ -35,9 +35,12 @@ Distributed Options:
     --nb-proc <int>         Number of processes per node [default: 2]
     --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
     --master-port <int>     Master node (rank 0's) comm port [default: 29500]
+    --init-method <str>     torch.distrib init [default: file:///tmp/adept_init]
 
 Topology Options:
-    --topology <str>          Name of topology [default: Impala]
+    --actor <str>             Name of actor [default: ImpalaActor]
+    --learner <str>           Name of learner [default: ImpalaLearner]
+    --exp <str>               Name of experience cache [default: ImpalaRollout]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
@@ -78,18 +81,15 @@ Troubleshooting Options:
 import os
 import subprocess
 import sys
-from datetime import datetime
 
-from adept.utils.logging import (
-    make_log_id, make_logger, print_ascii_logo,
-    log_args, write_args_file
-)
+from adept.container import Init
 from adept.utils.script_helpers import (
     parse_list_str, parse_path, parse_none, LogDirHelper
 )
 from adept.utils.util import DotDict
+from adept.registry import REGISTRY as R
 
-MODE = 'Impala'
+MODE = 'ActorLearner'
 
 
 def parse_args():
@@ -123,19 +123,11 @@ def parse_args():
     return args
 
 
-def main(
-    args,
-    agent_registry=AgentRegistry(),
-    env_registry=EnvRegistry(),
-    net_registry=NetworkRegistry()
-):
+def main(args):
     """
     Run impala training.
 
     :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
     :return:
     """
     args = DotDict(args)
@@ -147,41 +139,19 @@ def main(
     current_env["MASTER_PORT"] = str(args.master_port)
     current_env["WORLD_SIZE"] = str(dist_world_size)
     current_env["NB_NODE"] = str(args.nb_node)
-    initial_step_count = 0
     if args.resume:
-        log_id_dir = args.resume
-        helper = LogDirHelper(log_id_dir)
-        args.load_network = helper.latest_network_path()
-        args.load_optim = helper.latest_optim_path()
-        initial_step_count = helper.latest_epoch()
+        args, log_id_dir, initial_step = Init.from_resume(MODE, args)
+    elif args.use_defaults:
+        args, log_id_dir, initial_step = Init.from_defaults(MODE, args)
     else:
-        if args.use_defaults:
-            agent_args = agent_registry.lookup_agent(args.agent).args
-            env_args = env_registry.lookup_env_class(args.env).args
-            if args.custom_network:
-                net_args = net_registry.lookup_network(args.net).args
-            else:
-                net_args = net_registry.lookup_modular_args(args)
-        else:
-            agent_args = agent_registry.lookup_agent(args.agent).prompt()
-            env_args = env_registry.lookup_env_class(args.env).prompt()
-            if args.custom_network:
-                net_args = net_registry.lookup_network(args.net).prompt()
-            else:
-                net_args = net_registry.prompt_modular_args(args)
-        args = DotDict({**args, **agent_args, **env_args, **net_args})
-        log_id = make_log_id(
-            args.tag, MODE, args.agent,
-            args.net3d + args.netbody,
-            timestamp=datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        )
-        log_id_dir = os.path.join(args.logdir, args.env, log_id)
-        os.makedirs(log_id_dir)
-        write_args_file(log_id_dir, args)
+        args, log_id_dir, initial_step = Init.from_prompt(MODE, args)
 
-    print_ascii_logo()
-    logger = make_logger(MODE, os.path.join(log_id_dir, 'train_log.txt'))
-    log_args(logger, args)
+    Init.print_ascii_logo()
+    Init.make_log_dirs(log_id_dir)
+    Init.write_args_file(log_id_dir, args)
+    logger = Init.setup_logger(MODE, log_id_dir)
+    Init.log_args(logger, args)
+    R.save_extern_classes(log_id_dir)
 
     processes = []
 
@@ -197,7 +167,7 @@ def main(
                 sys.executable,
                 "-u",
                 "-m",
-                "adept.scripts._impala",
+                "adept.scripts._actorlearner",
                 "--log-id-dir={}".format(log_id_dir)
             ]
         else:
@@ -205,12 +175,13 @@ def main(
                 sys.executable,
                 "-u",
                 "-m",
-                "adept.scripts._impala",
+                "adept.scripts._actorlearner",
                 "--log-id-dir={}".format(log_id_dir),
                 "--resume={}".format(True),
                 "--load-network={}".format(args.load_network),
                 "--load-optim={}".format(args.load_optim),
-                "--initial-step-count={}".format(initial_step_count)
+                "--initial-step-count={}".format(initial_step),
+                "--init-method={}".format(args.init_method)
             ]
 
         process = subprocess.Popen(cmd, env=current_env)
@@ -218,6 +189,17 @@ def main(
 
     for process in processes:
         process.wait()
+
+    if args.eval:
+        from adept.scripts.evaluate import main
+        eval_args = {
+            'log_id_dir': log_id_dir,
+            'gpu_id': 0,
+            'nb_episode': 30,
+        }
+        if args.custom_network:
+            eval_args['custom_network'] = args.custom_network
+        main(eval_args)
 
 
 if __name__ == '__main__':

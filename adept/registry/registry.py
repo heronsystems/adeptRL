@@ -1,5 +1,6 @@
 import os
-from collections import namedtuple
+import pickle
+from glob import glob
 from itertools import chain
 
 from adept.actor import ActorModule, ACActorEval
@@ -11,23 +12,6 @@ from adept.network import NetworkModule
 from adept.network.base.submodule import SubModule
 from adept.rewardnorm import RewardNormModule
 from adept.utils.requires_args import RequiresArgsMixin
-import pickle
-from glob import glob
-
-Topology = namedtuple('Topology', ['actor', 'learner', 'exp'])
-
-
-def topology_lookup():
-    from adept.actor import ImpalaActor
-    from adept.learner import ImpalaLearner
-    from adept.exp import ImpalaRollout
-    return {
-        'Impala': Topology(
-            ImpalaActor.__name__,
-            ImpalaLearner.__name__,
-            ImpalaRollout.__name__
-        )
-    }
 
 
 def agent_eval_lookup():
@@ -37,10 +21,10 @@ def agent_eval_lookup():
     }
 
 
-def topology_eval_lookup():
-    from adept.actor import ACActorEval
+def actor_eval_lookup():
+    from adept.actor import ImpalaActor
     return {
-        'Impala': ACActorEval.__name__
+        ImpalaActor.__name__: ACActorEval.__name__
     }
 
 
@@ -176,14 +160,12 @@ class Registry:
         :param action_space:
         :return:
         """
-        topologies = topology_lookup()
         if _id in self._agent_class_by_id:
             return self._agent_class_by_id[_id].output_space(action_space)
-        elif _id in topologies:
-            actor_id = topologies[_id][0]
-            return self._actor_class_by_id[actor_id].output_space(action_space)
+        elif _id in self._actor_class_by_id:
+            return self._actor_class_by_id[_id].output_space(action_space)
         else:
-            raise IndexError(f'Actor or Topology not found: {_id}')
+            raise IndexError(f'Agent or Actor not found: {_id}')
 
     # ACTOR METHODS
     def register_actor(self, actor_class):
@@ -209,11 +191,11 @@ class Registry:
         :return: ActorModule
         """
         agent_lookup = agent_eval_lookup()
-        topology_lookup = topology_eval_lookup()
+        actor_lookup = actor_eval_lookup()
         if train_name in agent_lookup:
             return self._actor_class_by_id[agent_lookup[train_name]]
-        elif train_name in topology_lookup:
-            return self._actor_class_by_id[topology_lookup[train_name]]
+        elif train_name in actor_lookup:
+            return self._actor_class_by_id[actor_lookup[train_name]]
         else:
             raise IndexError(f'Unknown training agent or actor: {train_name}')
 
@@ -256,8 +238,6 @@ class Registry:
         EnvID = str
 
         :param env_module_class: EnvModule
-        :param env_id_set: List[EnvID], list of environment ids supported by
-        the provided module.
         :return: EnvRegistry
         """
         engine_id = env_module_class.__name__

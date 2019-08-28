@@ -29,7 +29,7 @@ Usage:
 Commands:
     local               Train an agent on a single GPU.
     distrib             Train an agent on multiple machines and/or GPUs.
-    impala              Train an agent on multiple GPUs with IMPALA.
+    actorlearner        Train an agent on multiple machines and/or GPUs.
     evaluate            Evaluate a trained agent.
     render_atari        Visualize an agent playing an Atari game.
     replay_gen_sc2      Generate SC2 replay files of an agent playing SC2.
@@ -59,16 +59,11 @@ def parse_args():
             '-m',
             'adept.scripts.distrib'
         ] + argv, env=env))
-    elif args['<command>'] == 'impala':
-        nb_mpi_proc = input('Enter number of GPU workers [default: 2]\n')
-        nb_mpi_proc = 2 if not nb_mpi_proc else int(nb_mpi_proc)
+    elif args['<command>'] == 'actorlearner':
         exit(call([
-              'mpiexec',
-              '-n',
-              str(nb_mpi_proc + 1),  # Add one for host
               'python',
               '-m',
-              'adept.scripts.impala'
+              'adept.scripts.actorlearner'
           ] + argv, env=env))
     elif args['<command>'] == 'evaluate':
         exit(call(['python', '-m', 'adept.scripts.evaluate'] + argv, env=env))
@@ -85,8 +80,8 @@ def parse_args():
             exit(call(['python', '-m', 'adept.scripts.local', '-h']))
         elif 'distrib' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.distrib', '-h']))
-        elif 'impala' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.impala', '-h']))
+        elif 'actorlearner' in args['<args>']:
+            exit(call(['python', '-m', 'adept.scripts.actorlearner', '-h']))
         elif 'evaluate' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.evaluate', '-h']))
         elif 'render_atari' in args['<args>']:

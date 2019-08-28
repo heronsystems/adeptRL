@@ -28,7 +28,6 @@ from adept.utils.script_helpers import (
     LogDirHelper
 )
 from adept.utils.util import DotDict
-import time
 
 MODE = 'Distrib'
 WORLD_SIZE = int(os.environ['WORLD_SIZE'])
