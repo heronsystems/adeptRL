@@ -1,4 +1,6 @@
 import os
+from itertools import chain
+
 import torch
 import torch.distributed as dist
 
@@ -23,29 +25,22 @@ def on_host():
 
 
 if __name__ == '__main__':
+    nb_gpu = torch.cuda.device_count()
+    print('Device Count', nb_gpu)
+
     dist.init_process_group(
-        backend='gloo',
+        backend='nccl',
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )
+
     print('LOCAL_RANK', LOCAL_RANK, 'initialized.')
-    # groups = assign_groups()
-    if on_worker():
-        t = torch.Tensor([LOCAL_RANK])
-    else:
-        ts = [torch.Tensor([LOCAL_RANK]) for _ in range(LOCAL_SIZE - 1)]
+    t = torch.tensor([1., 2., 3.]).to(f'cuda:{LOCAL_RANK}')
 
     # tags to identify tensors
     # loop thru workers
+    dist.barrier()
+    handle = dist.all_reduce(t, async_op=True)
+    handle.wait()
 
-    if on_worker():
-        handle = dist.isend(t, 0)
-    else:
-        handles = []
-        for i in range(1, LOCAL_SIZE):
-            handle = dist.irecv(ts[i - 1], i)
-        for handle in handles:
-            handle.wait()
-        print(ts)
-
-    # dist.broadcast_multigpu([t], src=LOCAL_RANK, group=groups[GLOBAL_RANK])
+    print(t)

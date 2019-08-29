@@ -9,7 +9,6 @@ class Container:
                 path, map_location=lambda storage, loc: storage
             )
         )
-
         return network
 
     @staticmethod

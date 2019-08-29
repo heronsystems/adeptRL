@@ -34,12 +34,6 @@ class EvalContainer:
             nb_episode,
             seed
     ):
-        """
-        :param log_id_dir:
-        :param gpu_id:
-        :param nb_episode:
-        :param seed:
-        """
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
         self.device = device = self._device_from_gpu_id(gpu_id)

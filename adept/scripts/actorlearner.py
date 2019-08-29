@@ -38,7 +38,8 @@ Distributed Options:
     --init-method <str>     torch.distrib init [default: file:///tmp/adept_init]
 
 Topology Options:
-    --actor <str>             Name of actor [default: ImpalaActor]
+    --actor-host <str>        Name of host actor [default: ImpalaWorkerActor]
+    --actor-worker <str>      Name of worker actor [default: ACRolloutActorTrain]
     --learner <str>           Name of learner [default: ImpalaLearner]
     --exp <str>               Name of experience cache [default: ImpalaRollout]
 

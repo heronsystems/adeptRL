@@ -20,7 +20,7 @@ import os
 import torch
 import torch.distributed as dist
 
-from adept.container import Init
+from adept.container import Init, ActorLearnerHost, ActorLearnerWorker
 from adept.registry import REGISTRY as R
 from adept.manager.subproc_env_manager import SubProcEnvManager
 from adept.network.modular_network import ModularNetwork
@@ -34,6 +34,7 @@ WORLD_SIZE = int(os.environ['WORLD_SIZE'])
 GLOBAL_RANK = int(os.environ['RANK'])
 LOCAL_RANK = int(os.environ['LOCAL_RANK'])
 NB_NODE = int(os.environ['NB_NODE'])
+LOCAL_SIZE = WORLD_SIZE // NB_NODE
 
 # hack to use argparse for SC2
 from absl import flags
@@ -63,7 +64,7 @@ def parse_args():
     return args
 
 
-def main(local_args,):
+def main(local_args):
     """
     Run local training.
 
@@ -89,23 +90,28 @@ def main(local_args,):
         args = DotDict({**args, **vars(local_args)})
 
     dist.init_process_group(
-        backend='gloo',
+        backend='nccl',
         world_size=WORLD_SIZE,
         rank=LOCAL_RANK
     )
+    groups = []
+    for i in range(1, LOCAL_SIZE):
+        groups.append(dist.new_group([0, i]))
     logger.info('Rank {} initialized.'.format(GLOBAL_RANK))
 
     if LOCAL_RANK == 0:
-        container = ImpalaHost(
+        container = ActorLearnerHost(
             # TODO
         )
     else:
-        container = ImpalaWorker(
+        container = ActorLearnerWorker(
             # TODO
         )
 
-    container.run(args.nb_step, initial_count=initial_step_count)
-    env.close()
+    try:
+        container.run()
+    finally:
+        container.close()
 
 
 if __name__ == '__main__':

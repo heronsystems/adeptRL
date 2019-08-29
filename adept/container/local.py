@@ -90,14 +90,13 @@ class Local(Container):
         prev_step_t = time()
         ep_rewards = torch.zeros(self.nb_env)
 
-        next_obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
+        obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         internals = listd_to_dlist([
             self.network.new_internals(self.device) for _ in
             range(self.nb_env)
         ])
         start_time = time()
         while step_count < self.nb_step:
-            obs = next_obs
             actions, internals = self.agent.act(self.network, obs, internals)
             next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
@@ -112,6 +111,7 @@ class Local(Container):
             # Perform state updates
             step_count += self.nb_env
             ep_rewards += rewards.float()
+            obs = next_obs
 
             term_rewards = []
             for i, terminal in enumerate(terminals):

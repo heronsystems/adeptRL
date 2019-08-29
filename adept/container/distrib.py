@@ -45,6 +45,7 @@ class DistribHost(Container):
             if global_rank == 0 \
             else args.seed + args.nb_env * global_rank
         logger.info('Using {} for rank {} seed.'.format(seed, global_rank))
+
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
         env_cls = REGISTRY.lookup_env(args.env)
@@ -115,14 +116,13 @@ class DistribHost(Container):
         prev_step_t = time()
         ep_rewards = torch.zeros(self.nb_env)
 
-        next_obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
+        obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         internals = listd_to_dlist([
             self.network.new_internals(self.device) for _ in
             range(self.nb_env)
         ])
         start_time = time()
         while global_step_count < self.nb_step:
-            obs = next_obs
             actions, internals = self.agent.act(self.network, obs, internals)
             next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
@@ -142,6 +142,7 @@ class DistribHost(Container):
             local_step_count += self.nb_env
             global_step_count += self.nb_env * self.world_size
             ep_rewards += rewards.float()
+            obs = next_obs
 
             term_rewards = []
             for i, terminal in enumerate(terminals):
@@ -192,7 +193,7 @@ class DistribHost(Container):
                 handles = []
                 for param in self.network.parameters():
                     handles.append(
-                        dist.all_reduce_multigpu([param.grad], async_op=True))
+                        dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
                 for param in self.network.parameters():
@@ -236,6 +237,7 @@ class DistribWorker(Container):
             if global_rank == 0 \
             else args.seed + args.nb_env * global_rank
         logger.info('Using {} for rank {} seed.'.format(seed, global_rank))
+
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
         env_cls = REGISTRY.lookup_env(args.env)
@@ -299,14 +301,13 @@ class DistribWorker(Container):
         local_step_count = global_step_count = self.initial_step_count
         ep_rewards = torch.zeros(self.nb_env)
 
-        next_obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
+        obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         internals = listd_to_dlist([
             self.network.new_internals(self.device) for _ in
             range(self.nb_env)
         ])
         start_time = time()
         while global_step_count < self.nb_step:
-            obs = next_obs
             actions, internals = self.agent.act(self.network, obs, internals)
             next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
@@ -326,6 +327,7 @@ class DistribWorker(Container):
             local_step_count += self.nb_env
             global_step_count += self.nb_env * self.world_size
             ep_rewards += rewards.float()
+            obs = next_obs
 
             term_rewards = []
             for i, terminal in enumerate(terminals):
@@ -367,7 +369,7 @@ class DistribWorker(Container):
                 handles = []
                 for param in self.network.parameters():
                     handles.append(
-                        dist.all_reduce_multigpu([param.grad], async_op=True))
+                        dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
                 for param in self.network.parameters():
