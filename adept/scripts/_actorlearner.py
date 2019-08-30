@@ -101,11 +101,13 @@ def main(local_args):
 
     if LOCAL_RANK == 0:
         container = ActorLearnerHost(
-            # TODO
+            args, logger, log_id_dir, initial_step_count, LOCAL_RANK,
+            GLOBAL_RANK, WORLD_SIZE, groups
         )
     else:
         container = ActorLearnerWorker(
-            # TODO
+            args, logger, log_id_dir, initial_step_count, LOCAL_RANK,
+            GLOBAL_RANK, WORLD_SIZE, groups[LOCAL_RANK - 1]
         )
 
     try:

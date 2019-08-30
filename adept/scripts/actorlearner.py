@@ -41,14 +41,15 @@ Topology Options:
     --actor-host <str>        Name of host actor [default: ImpalaWorkerActor]
     --actor-worker <str>      Name of worker actor [default: ACRolloutActorTrain]
     --learner <str>           Name of learner [default: ImpalaLearner]
-    --exp <str>               Name of experience cache [default: ImpalaRollout]
+    --exp-host <str>          Name of host experience cache [default: ImpalaRollout]
+    --exp-worker <str>        Name of worker experience cache [default: ImpalaRollout]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
 
 Script Options:
     --gpu-ids <ids>            Comma-separated CUDA IDs [default: 0,1]
-    --nb-env <int>             Number of env per Tower [default: 32]
+    --nb-env <int>             Number of env per Tower [default: 16]
     --seed <int>               Seed for random variables [default: 0]
     --nb-step <int>            Number of steps to train for [default: 10e6]
     --load-network <path>      Path to network file

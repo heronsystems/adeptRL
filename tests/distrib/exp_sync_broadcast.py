@@ -26,6 +26,8 @@ cache_spec = {
 def gpu_id(local_rank, device_count):
     if local_rank == 0:
         return 0
+    elif device_count == 1:
+        return 0
     else:
         return (local_rank % (device_count - 1)) + 1
 

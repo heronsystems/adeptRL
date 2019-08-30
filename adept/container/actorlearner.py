@@ -15,12 +15,14 @@
 import os
 from time import time
 
+import numpy as np
 import torch
-
+from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.utils import listd_to_dlist, dtensor_to_dev
 from adept.utils.logging import SimpleModelSaver
+from torch import distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
 from .base import Container
@@ -75,11 +77,12 @@ class ActorLearnerHost(Container):
         actor = REGISTRY.lookup_actor(args.actor_host).from_args(
             args, env.action_space)
         learner = REGISTRY.lookup_learner(args.learner).from_args(args)
-        exp_cls = REGISTRY.lookup_exp(args.exp)
+        exp_cls = REGISTRY.lookup_exp(args.exp_host).from_args(args, rwd_norm)
 
         self.actor = actor
         self.learner = learner
-        self.exps = [exp_cls.from_args(args, rwd_norm) for _ in range(groups)]
+        self.exp = exp_cls.from_args(args, rwd_norm)
+        self.exps = [exp_cls.from_args(args, rwd_norm) for _ in range(len(groups))]
         self.batch_size = args.learn_batch_size
         self.nb_step = args.nb_step
         self.network = net.to(device)
@@ -97,6 +100,7 @@ class ActorLearnerHost(Container):
         self.local_rank = local_rank
         self.global_rank = global_rank
         self.world_size = world_size
+        self.groups = groups
 
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
@@ -114,13 +118,48 @@ class ActorLearnerHost(Container):
 
         start_time = time()
 
-        # sync exp from workers
-        # actor recompute forward
-        # write into cache
-        # learn on ready
+        dist.barrier()
+        handles = []
+        for i, exp in enumerate(self.exps):
+            handles.append(exp.sync(i + 1, self.groups[i]))
 
         while step_count < self.nb_step:
-            w_exps = self.exp.recv()
+            # wait for n batches to sync
+                # this needs to run in a thread
+            learn_indices = []
+            while len(learn_indices) < self.nb_learn_batch:
+                for i, hand in enumerate(handles):
+                    if all([h.is_completed() for h in hand]):
+                        learn_indices.append(i)
+
+            # merge tensors along batch dimension
+                # need to pick a data structure for experiences
+                # Dict[str,List[Tensor]]
+            merged_exp = {}
+            keys = self.exps[learn_indices[0]].sorted_keys  # cache these or from spec
+            lens = [len(self.exps[learn_indices[0]][k]) for k in keys]  # cache these
+            for k, l in zip(keys, lens):
+                for j in range(l):
+                    tensors_to_cat = []
+                    for i in learn_indices:
+                        exp = self.exps[i]
+                        tensors_to_cat.append(exp[k][j])
+
+                    cat = torch.cat(tensors_to_cat)
+                    if k in merged_exp:
+                        merged_exp[k].append(cat)
+                    else:
+                        merged_exp[k] = [cat]
+
+            # unblock the selected workers
+                # resync
+            for i in learn_indices:
+                dist.barrier(self.groups[i])
+                handles[i] = self.exps[i].sync(i + 1, self.groups[i])
+
+            # forward passes
+            # learning step
+
             for ob, internal in zip(w_exps['obs'], w_exps['internals']):
                 _, h_exp, _ = self.actor.act(self.network, ob, internal)
                 self.exp.write_actor(h_exp)
@@ -172,10 +211,130 @@ class ActorLearnerWorker(Container):
             world_size,
             group
     ):
-        self.env_mgr = None
+        seed = args.seed \
+            if global_rank == 0 \
+            else args.seed + args.nb_env * global_rank
+        logger.info('Using {} for rank {} seed.'.format(seed, global_rank))
 
-    def run(self, nb_step, initial_step_count=None):
-        pass
+        # ENV
+        engine = REGISTRY.lookup_engine(args.env)
+        env_cls = REGISTRY.lookup_env(args.env)
+        env_mgr = SubProcEnvManager.from_args(args, engine, env_cls, seed=seed)
+
+        # NETWORK
+        torch.manual_seed(args.seed)
+        device = torch.device("cuda:{}".format(self._device(local_rank)))
+        output_space = REGISTRY.lookup_output_space(
+            args.agent, env_mgr.action_space)
+        if args.custom_network:
+            net_cls = REGISTRY.lookup_network(args.custom_network)
+        else:
+            net_cls = ModularNetwork
+        net = net_cls.from_args(
+            args,
+            env_mgr.observation_space,
+            output_space,
+            env_mgr.gpu_preprocessor,
+            REGISTRY
+        )
+        rwd_norm = REGISTRY.lookup_reward_normalizer(
+            args.rwd_norm).from_args(args)
+        actor = REGISTRY.lookup_actor(args.actor_worker).from_args(
+            args, env_mgr.action_space
+        )
+        exp = REGISTRY.lookup_exp(args.exp).from_args(args, rwd_norm)
+
+        self.actor = actor
+        self.exp = exp
+        self.nb_step = args.nb_step
+        self.env_mgr = env_mgr
+        self.nb_env = args.nb_env
+        self.network = net.to(device)
+        self.device = device
+        self.initial_step_count = initial_step_count
+        self.log_id_dir = log_id_dir
+        self.epoch_len = args.epoch_len
+        self.logger = logger
+        self.local_rank = local_rank
+        self.global_rank = global_rank
+        self.world_size = world_size
+        self.group = group
+
+        if args.load_network:
+            self.network = self.load_network(self.network, args.load_network)
+            logger.info('Reloaded network from {}'.format(args.load_network))
+        if args.load_optim:
+            self.optimizer = self.load_optim(self.optimizer, args.load_optim)
+            logger.info('Reloaded optimizer from {}'.format(args.load_optim))
+
+        self.network.eval()
+
+    def run(self):
+        step_count = self.initial_step_count
+        ep_rewards = torch.zeros(self.nb_env)
+        future = None
+
+        obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
+        internals = listd_to_dlist([
+            self.network.new_internals(self.device) for _ in
+            range(self.nb_env)
+        ])
+        start_time = time()
+        dist.barrier()
+        while step_count * (self.world_size - 1) < self.nb_step:  # is this okay?
+            with torch.no_grad():
+                actions, exp, internals = self.actor.act(self.network, obs, internals)
+            self.exp.write_actor(exp)
+
+            next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
+            next_obs = dtensor_to_dev(next_obs, self.device)
+            self.exp.write_env(
+                obs,
+                rewards.to(self.device),
+                terminals.to(self.device),
+                infos
+            )
+
+            # Perform state updates
+            step_count += self.nb_env
+            ep_rewards += rewards.float()
+            obs = next_obs
+
+            term_rewards = []
+            for i, terminal in enumerate(terminals):
+                if terminal:
+                    for k, v in self.network.new_internals(self.device).items():
+                        internals[k][i] = v
+                    term_rewards.append(ep_rewards[i].item())
+                    ep_rewards[i].zero_()
+
+            if term_rewards:
+                term_reward = np.mean(term_rewards)
+                delta_t = time() - start_time
+                self.logger.info(
+                    'RANK: {} '
+                    'LOCAL STEP: {} '
+                    'REWARD: {} '
+                    'LOCAL STEP/S: {}'.format(
+                        self.global_rank,
+                        step_count,
+                        term_reward,
+                        (step_count - self.initial_step_count) / delta_t
+                    )
+                )
+
+            if self.exp.is_ready():
+                if future is not None:
+                    future.wait()
+                self.exp.sync(self.local_rank, self.group)
+                future = dist.barrier(self.group, async_op=True)
+
+    @staticmethod
+    def _device(local_rank):
+        if local_rank == 0:
+            return 0
+        else:
+            return (local_rank % (torch.cuda.device_count() - 1)) + 1
 
     def close(self):
         self.env_mgr.close()

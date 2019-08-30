@@ -32,7 +32,7 @@ def main(args):
 if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('--script', default='exp_cache_sync.py')
+    parser.add_argument('--script', default='exp_sync_broadcast.py')
     parser.add_argument('--nb-proc', type=int, default=2)
     args = parser.parse_args()
 
