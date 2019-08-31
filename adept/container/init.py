@@ -20,12 +20,34 @@ class Init:
     * write args file
     * log args
     * create log dir
-    * serialize any custom registry classes
     """
+    @staticmethod
+    def main(mode, args):
+        log_id = Init.make_log_id(args.tag, mode, args.agent, args.netbody)
+        log_id_dir = Init.log_id_dir(args.logdir, args.env, log_id)
+        initial_step = 0
+
+        if args.resume:
+            args, log_id_dir, initial_step = Init.from_resume(mode, args)
+        else:
+            if not args.prompt:
+                args = Init.from_defaults(args)
+            if args.config:
+                args = Init.from_config(args)
+            if args.prompt:
+                args = Init.from_prompt(args)
+
+        Init.print_ascii_logo()
+        Init.make_log_dirs(log_id_dir)
+        Init.write_args_file(log_id_dir, args)
+        logger = Init.setup_logger(mode, log_id_dir)
+        Init.log_args(logger, args)
+        return args, log_id_dir, initial_step, logger
 
     @staticmethod
     def from_resume(mode, args):
         """
+        :param mode: Script name
         :param args: Dict[str, Any], static args
         :return: args, log_id, initial_step_count
         """
@@ -38,15 +60,15 @@ class Init:
         args.load_network = log_dir_helper.latest_network_path()
         args.load_optim = log_dir_helper.latest_optim_path()
         initial_step_count = log_dir_helper.latest_epoch()
-        log_id = Init._make_log_id(
+        log_id = Init.make_log_id(
             args.tag, mode, args.agent, args.netbody,
             timestamp=log_dir_helper.timestamp()
         )
-        log_id_path = Init._log_id_dir(args.logdir, args.env, log_id)
+        log_id_path = Init.log_id_dir(args.logdir, args.env, log_id)
         return args, log_id_path, initial_step_count
 
     @staticmethod
-    def from_defaults(mode, args):
+    def from_defaults(args):
         agent_cls = R.lookup_agent(args.agent)
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
@@ -61,19 +83,25 @@ class Init:
         args = DotDict({
             **args, **agent_args, **env_args, **rwdnorm_args, **net_args
         })
-        log_id = Init._make_log_id(args.tag, mode, args.agent, args.netbody)
-        log_id_path = Init._log_id_dir(args.logdir, args.env, log_id)
-        return args, log_id_path, 0
+
+        return args
 
     @staticmethod
-    def from_prompt(mode, args):
+    def from_config(args):
+        with open(args.config, 'r') as args_file:
+            config_args = json.load(args_file)
+        args = DotDict({**args, **config_args})
+        return args
+
+    @staticmethod
+    def from_prompt(args):
         agent_cls = R.lookup_agent(args.agent)
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
 
-        agent_args = agent_cls.prompt()
-        env_args = env_cls.prompt()
-        rwdnorm_args = rwdnorm_cls.prompt()
+        agent_args = agent_cls.prompt(provided=args)
+        env_args = env_cls.prompt(provided=args)
+        rwdnorm_args = rwdnorm_cls.prompt(provided=args)
         if args.custom_network:
             net_args = R.lookup_network(args.custom_network).prompt()
         else:
@@ -81,9 +109,7 @@ class Init:
         args = DotDict({
             **args, **agent_args, **env_args, **rwdnorm_args, **net_args
         })
-        log_id = Init._make_log_id(args.tag, mode, args.agent, args.netbody)
-        log_id_path = Init._log_id_dir(args.logdir, args.env, log_id)
-        return args, log_id_path, 0
+        return args
 
     @staticmethod
     def print_ascii_logo():
@@ -139,7 +165,7 @@ class Init:
             json.dump(args, args_file, indent=4, sort_keys=True)
 
     @staticmethod
-    def _make_log_id(tag, mode_name, agent_name, network_name, timestamp=None):
+    def make_log_id(tag, mode_name, agent_name, network_name, timestamp=None):
         if timestamp is None:
             timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
@@ -149,5 +175,5 @@ class Init:
         return '_'.join(parts)
 
     @staticmethod
-    def _log_id_dir(logdir, env, log_id):
+    def log_id_dir(logdir, env, log_id):
         return os.path.join(logdir, env, log_id)

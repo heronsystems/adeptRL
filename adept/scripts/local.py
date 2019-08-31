@@ -45,8 +45,9 @@ Script Options:
     --load-network <path>   Path to network file (for pretrained weights)
     --load-optim <path>     Path to optimizer file
     --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
+    --config <path>         Use a JSON config file for arguments
     --eval                  Run an evaluation after training
-    -y, --use-defaults      Skip prompts, use defaults
+    --prompt                Prompt to modify arguments
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
@@ -103,6 +104,9 @@ def parse_args():
         args.resume = parse_path(args.resume)
         return args
 
+    if args.config:
+        args.config = parse_path(args.config)
+
     args.logdir = parse_path(args.logdir)
     args.gpu_id = int(args.gpu_id)
     args.nb_env = int(args.nb_env)
@@ -123,18 +127,7 @@ def main(args):
     :param args: Dict[str, Any]
     :return:
     """
-    if args.resume:
-        args, log_id_dir, initial_step = Init.from_resume(MODE, args)
-    elif args.use_defaults:
-        args, log_id_dir, initial_step = Init.from_defaults(MODE, args)
-    else:
-        args, log_id_dir, initial_step = Init.from_prompt(MODE, args)
-
-    Init.print_ascii_logo()
-    Init.make_log_dirs(log_id_dir)
-    Init.write_args_file(log_id_dir, args)
-    logger = Init.setup_logger(MODE, log_id_dir)
-    Init.log_args(logger, args)
+    args, log_id_dir, initial_step, logger = Init.main(MODE, args)
 
     container = Local(args, logger, log_id_dir, initial_step)
 

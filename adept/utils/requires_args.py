@@ -35,13 +35,19 @@ class RequiresArgsMixin(metaclass=abc.ABCMeta):
             )
 
     @classmethod
-    def prompt(cls):
+    def prompt(cls, provided=None):
         """
         Display defaults as JSON, prompt user for changes.
 
+        :param provided: Dict[str, Any], Override default prompts.
         :return: Dict[str, Any] Updated config dictionary.
         """
-        return cls._prompt(cls.__name__, cls.args)
+        if provided is not None:
+            overrides = {k: v for k, v in provided.items() if k in cls.args}
+            args = {**cls.args, **overrides}
+        else:
+            args = cls.args
+        return cls._prompt(cls.__name__, args)
 
     @staticmethod
     def _prompt(name, args):

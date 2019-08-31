@@ -48,13 +48,16 @@ Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
 
 Script Options:
-    --gpu-ids <ids>            Comma-separated CUDA IDs [default: 0,1]
-    --nb-env <int>             Number of env per Tower [default: 16]
-    --seed <int>               Seed for random variables [default: 0]
-    --nb-step <int>            Number of steps to train for [default: 10e6]
-    --load-network <path>      Path to network file
-    --load-optim <path>        Path to optimizer file
-    -y, --use-defaults         Skip prompts, use defaults
+    --gpu-ids <ids>         Comma-separated CUDA IDs [default: 0,1]
+    --nb-env <int>          Number of env per Tower [default: 16]
+    --seed <int>            Seed for random variables [default: 0]
+    --nb-step <int>         Number of steps to train for [default: 10e6]
+    --load-network <path>   Path to network file
+    --load-optim <path>     Path to optimizer file
+    --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
+    --config <path>         Use a JSON config file for arguments
+    --eval                  Run an evaluation after training
+    --prompt                Prompt to modify arguments
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
@@ -107,6 +110,14 @@ def parse_args():
     args.nb_proc = int(args.nb_proc)
     args.master_port = int(args.master_port)
 
+    # Ignore other args if resuming
+    if args.resume:
+        args.resume = parse_path(args.resume)
+        return args
+
+    if args.config:
+        args.config = parse_path(args.config)
+
     # Container Options
     args.logdir = parse_path(args.logdir)
     args.gpu_ids = parse_list_str(args.gpu_ids, int)
@@ -141,18 +152,8 @@ def main(args):
     current_env["MASTER_PORT"] = str(args.master_port)
     current_env["WORLD_SIZE"] = str(dist_world_size)
     current_env["NB_NODE"] = str(args.nb_node)
-    if args.resume:
-        args, log_id_dir, initial_step = Init.from_resume(MODE, args)
-    elif args.use_defaults:
-        args, log_id_dir, initial_step = Init.from_defaults(MODE, args)
-    else:
-        args, log_id_dir, initial_step = Init.from_prompt(MODE, args)
 
-    Init.print_ascii_logo()
-    Init.make_log_dirs(log_id_dir)
-    Init.write_args_file(log_id_dir, args)
-    logger = Init.setup_logger(MODE, log_id_dir)
-    Init.log_args(logger, args)
+    args, log_id_dir, initial_step, logger = Init.main(MODE, args)
     R.save_extern_classes(log_id_dir)
 
     processes = []

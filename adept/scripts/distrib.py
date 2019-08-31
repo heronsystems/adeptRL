@@ -55,8 +55,9 @@ Script Options:
     --load-network <path>   Path to network file
     --load-optim <path>     Path to optimizer file
     --resume <path>         Resume training from log ID .../<logdir>/<env>/<log-id>/
+    --config <path>         Use a JSON config file for arguments
     --eval                  Run an evaluation after training
-    -y, --use-defaults      Skip prompts, use defaults
+    --prompt                Prompt to modify arguments
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
@@ -113,6 +114,9 @@ def parse_args():
         args.resume = parse_path(args.resume)
         return args
 
+    if args.config:
+        args.config = parse_path(args.config)
+
     args.logdir = parse_path(args.logdir)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
@@ -140,18 +144,8 @@ def main(args):
     current_env["MASTER_ADDR"] = args.master_addr
     current_env["MASTER_PORT"] = str(args.master_port)
     current_env["WORLD_SIZE"] = str(dist_world_size)
-    if args.resume:
-        args, log_id_dir, initial_step = Init.from_resume(MODE, args)
-    elif args.use_defaults:
-        args, log_id_dir, initial_step = Init.from_defaults(MODE, args)
-    else:
-        args, log_id_dir, initial_step = Init.from_prompt(MODE, args)
 
-    Init.print_ascii_logo()
-    Init.make_log_dirs(log_id_dir)
-    Init.write_args_file(log_id_dir, args)
-    logger = Init.setup_logger(MODE, log_id_dir)
-    Init.log_args(logger, args)
+    args, log_id_dir, initial_step, logger = Init.main(MODE, args)
     R.save_extern_classes(log_id_dir)
 
     processes = []
