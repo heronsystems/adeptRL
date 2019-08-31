@@ -1,5 +1,6 @@
 import os
 from itertools import chain
+from collections import deque
 
 import torch
 import torch.distributed as dist
@@ -83,21 +84,33 @@ class HostContainer:
 
     def run(self):
         step_count = 0
+        nb_batch = 2
         dist.barrier()
         handles = []
+
         for i, exp in enumerate(self.exps):
             handles.append(exp.sync(i + 1, self.groups[i]))
 
-        while step_count < 10:
+        while step_count < 3:
             # wait for n batches to sync
                 # this needs to run in a thread
-            learn_indices = []
-            while len(learn_indices) < 2:
+
+            if nb_batch > len(self.groups):
+                print('warn')
+                nb_batch = len(self.groups)
+
+            q, q_lookup = deque(), set()
+            print('syncing...')
+            while len(q) < nb_batch:
                 for i, hand in enumerate(handles):
-                    if all([h.is_completed() for h in hand]):
-                        learn_indices.append(i)
-            
-            print('syncing', learn_indices)
+                    if i not in q_lookup:
+                        if all([h.is_completed() for h in hand]):
+                            q.append(i)
+                            q_lookup.add(i)
+
+            learn_indices = q
+
+            print('synced', learn_indices, 'merging...')
             # merge tensors along batch dimension
             # need to pick a data structure for experiences
             # Dict[str,List[Tensor]]
@@ -120,6 +133,7 @@ class HostContainer:
             # unblock the selected workers
             # resync
             for i in learn_indices:
+                print(f'unblocking and syncing {i+1}...')
                 dist.barrier(self.groups[i])
                 handles[i] = self.exps[i].sync(i + 1, self.groups[i])
 
@@ -144,12 +158,11 @@ class WorkerContainer:
 
     def run(self):
         step_count = 0
-        future = None
         dist.barrier()
-        while step_count * (self.world_size - 1) < 10:
-            if future is not None:
-                self.exp.sync(self.local_rank, self.group)
-            future = dist.barrier(self.group, async_op=True)
+        self.exp.sync(self.local_rank, self.group)
+        while step_count < 3:
+            dist.barrier(self.group)
+            self.exp.sync(self.local_rank, self.group)
             step_count += 1
 
 
@@ -178,8 +191,9 @@ if __name__ == '__main__':
 
     print('LOCAL_RANK', LOCAL_RANK, 'initialized.')
     if LOCAL_RANK == 0:
-        container = WorkerContainer(LOCAL_RANK, GLOBAL_RANK, WORLD_SIZE, groups[LOCAL_RANK - 1])
-    else:
         container = HostContainer(LOCAL_RANK, GLOBAL_RANK, WORLD_SIZE, groups)
+    else:
+        container = WorkerContainer(LOCAL_RANK, GLOBAL_RANK, WORLD_SIZE,
+                                    groups[LOCAL_RANK - 1])
 
     container.run()
