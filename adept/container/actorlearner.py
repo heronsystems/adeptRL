@@ -77,11 +77,11 @@ class ActorLearnerHost(Container):
         actor = REGISTRY.lookup_actor(args.actor_host).from_args(
             args, env.action_space)
         learner = REGISTRY.lookup_learner(args.learner).from_args(args)
-        exp_cls = REGISTRY.lookup_exp(args.exp_host).from_args(args, rwd_norm)
+        exp_cls = REGISTRY.lookup_exp(args.exp_worker).from_args(args, rwd_norm)
 
         self.actor = actor
         self.learner = learner
-        self.exp = exp_cls.from_args(args, rwd_norm)
+        self.exp = REGISTRY.lookup_exp(args.exp_host).from_args(args, rwd_norm)
         self.exps = [exp_cls.from_args(args, rwd_norm) for _ in range(len(groups))]
         self.batch_size = args.learn_batch_size
         self.nb_step = args.nb_step

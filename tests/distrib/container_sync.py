@@ -45,11 +45,11 @@ class WorkerCache(dict):
     def _init_rollout(self, spec, key):
         return [torch.ones(*spec[key][1:]).to(f'cuda:{self.gpu_id}') for _ in range(spec[key][0])]
 
-    def sync(self, src, grp):
+    def sync(self, src, grp, is_async=True):
         handles = []
         for k in self.sorted_keys:
             for t in self[k]:
-                handles.append(dist.broadcast(t, src=src, group=grp, async_op=True))
+                handles.append(dist.broadcast(t, src=src, group=grp, async_op=is_async))
         return handles
 
     def iter_tensors(self):
@@ -100,7 +100,6 @@ class HostContainer:
                 nb_batch = len(self.groups)
 
             q, q_lookup = deque(), set()
-            print('syncing...')
             while len(q) < nb_batch:
                 for i, hand in enumerate(handles):
                     if i not in q_lookup:
@@ -110,7 +109,7 @@ class HostContainer:
 
             learn_indices = q
 
-            print('synced', learn_indices, 'merging...')
+            print('synced', [i + 1 for i in learn_indices], 'merging...')
             # merge tensors along batch dimension
             # need to pick a data structure for experiences
             # Dict[str,List[Tensor]]
@@ -133,8 +132,9 @@ class HostContainer:
             # unblock the selected workers
             # resync
             for i in learn_indices:
-                print(f'unblocking and syncing {i+1}...')
+                print(f'HOST barrier {i+1}...')
                 dist.barrier(self.groups[i])
+                print(f'HOST sync {i + 1}...')
                 handles[i] = self.exps[i].sync(i + 1, self.groups[i])
 
             step_count += 1
@@ -159,10 +159,12 @@ class WorkerContainer:
     def run(self):
         step_count = 0
         dist.barrier()
-        self.exp.sync(self.local_rank, self.group)
+        self.exp.sync(self.local_rank, self.group, is_async=False)
         while step_count < 3:
+            print(f'WORKER barrier {self.local_rank}')
             dist.barrier(self.group)
-            self.exp.sync(self.local_rank, self.group)
+            print(f'WORKER sync {self.local_rank}')
+            self.exp.sync(self.local_rank, self.group, is_async=False)
             step_count += 1
 
 
