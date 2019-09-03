@@ -1,6 +1,7 @@
 import os
 from itertools import chain
 from collections import deque
+from glob import glob
 
 import torch
 import torch.distributed as dist
@@ -34,16 +35,16 @@ def gpu_id(local_rank, device_count):
 
 
 class WorkerCache(dict):
-    def __init__(self, cache_spec, gpu_id):
+    def __init__(self, cache_spec, device):
         super(WorkerCache, self).__init__()
         self.sorted_keys = sorted(cache_spec.keys())
-        self.gpu_id = gpu_id
+        self.device = device
 
         for k in self.sorted_keys:
             self[k] = self._init_rollout(cache_spec, k)
 
     def _init_rollout(self, spec, key):
-        return [torch.ones(*spec[key][1:]).to(f'cuda:{self.gpu_id}') for _ in range(spec[key][0])]
+        return [torch.ones(*spec[key][1:]).to(self.device) for _ in range(spec[key][0])]
 
     def sync(self, src, grp, is_async=True):
         handles = []
@@ -60,7 +61,7 @@ class WorkerCache(dict):
 
 class HostCache(WorkerCache):
     def _init_rollout(self, spec, key):
-        return [torch.zeros(*spec[key][1:]).to(f'cuda:{self.gpu_id}') for _ in
+        return [torch.zeros(*spec[key][1:]).to(self.device) for _ in
                 range(spec[key][0])]
 
 
@@ -76,11 +77,13 @@ class HostContainer:
         self.global_rank = global_rank
         self.world_size = world_size
         self.groups = groups
+        self.device = torch.device('cuda:{}'.format(gpu_id(local_rank, torch.cuda.device_count())))
         self.exps = [
-            HostCache(
-                cache_spec, gpu_id(local_rank, torch.cuda.device_count())
-            ) for _ in range(len(groups))
+            HostCache(cache_spec, self.device) for _ in range(len(groups))
         ]
+        os.makedirs('/tmp/actorlearner', exist_ok=True)
+        if os.path.exists('/tmp/actorlearner/done'):
+            os.rmdir('/tmp/actorlearner/done')
 
     def run(self):
         step_count = 0
@@ -91,7 +94,7 @@ class HostContainer:
         for i, exp in enumerate(self.exps):
             handles.append(exp.sync(i + 1, self.groups[i]))
 
-        while step_count < 3:
+        while step_count < 10:
             # wait for n batches to sync
                 # this needs to run in a thread
 
@@ -138,6 +141,7 @@ class HostContainer:
                 handles[i] = self.exps[i].sync(i + 1, self.groups[i])
 
             step_count += 1
+        os.mkdir('/tmp/actorlearner/done')
 
 
 class WorkerContainer:
@@ -152,20 +156,27 @@ class WorkerContainer:
         self.global_rank = global_rank
         self.world_size = world_size
         self.group = group
-        self.exp = WorkerCache(
-            cache_spec, gpu_id(local_rank, torch.cuda.device_count())
-        )
+        self.device = torch.device(
+            'cuda:{}'.format(gpu_id(local_rank, torch.cuda.device_count())))
+        self.exp = WorkerCache(cache_spec, self.device)
 
     def run(self):
-        step_count = 0
+        is_done = False
         dist.barrier()
         self.exp.sync(self.local_rank, self.group, is_async=False)
-        while step_count < 3:
+        while not is_done:
             print(f'WORKER barrier {self.local_rank}')
-            dist.barrier(self.group)
-            print(f'WORKER sync {self.local_rank}')
-            self.exp.sync(self.local_rank, self.group, is_async=False)
-            step_count += 1
+            future = dist.barrier(self.group, async_op=True)
+
+            while not future.is_completed():
+                if glob('/tmp/actorlearner/done'):
+                    print(f'complete - exiting worker {self.local_rank}')
+                    is_done = True
+                    break
+
+            if not is_done:
+                print(f'WORKER sync {self.local_rank}')
+                self.exp.sync(self.local_rank, self.group, is_async=True)
 
 
 def on_worker():
@@ -177,9 +188,6 @@ def on_host():
 
 
 if __name__ == '__main__':
-    nb_gpu = torch.cuda.device_count()
-    print('Device Count', nb_gpu)
-
     dist.init_process_group(
         backend='nccl',
         world_size=WORLD_SIZE,
