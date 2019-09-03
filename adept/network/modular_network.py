@@ -217,7 +217,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             ][0]
         else:
             other_dims = []
-        input_shape = [nb_body_feature, ] + other_dims
+        input_shape = [nb_body_feature, ] + list(other_dims)
         body_submod = body_cls.from_args(args, input_shape, 'body')
 
         # List[SubModule]

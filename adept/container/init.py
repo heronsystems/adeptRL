@@ -23,6 +23,7 @@ class Init:
     """
     @staticmethod
     def main(mode, args):
+        args = DotDict(args)
         log_id = Init.make_log_id(args.tag, mode, args.agent, args.netbody)
         log_id_dir = Init.log_id_dir(args.logdir, args.env, log_id)
         initial_step = 0
