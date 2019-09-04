@@ -27,3 +27,7 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
 
             actions[key] = action.cpu()
         return actions, {}
+
+    @staticmethod
+    def _exp_spec(rollout_len, batch_sz, obs_space, act_space, internal_space):
+        return {}

@@ -21,6 +21,17 @@ import abc
 from adept.utils.requires_args import RequiresArgsMixin
 
 
+class ExpSpecBuilder:
+    def __init__(self, obs_space, act_space, internal_space, build_fn):
+        self.obs_keys = sorted(obs_space.keys())
+        self.action_keys = sorted(act_space.keys())
+        self.internal_keys = sorted(internal_space.keys())
+        self.build_fn = build_fn
+
+    def __call__(self, exp_len, batch_sz):
+        return self.build_fn(exp_len, batch_sz)
+
+
 class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     def __init__(self, action_space):
@@ -37,6 +48,18 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     @staticmethod
     @abc.abstractmethod
     def output_space(action_space):
+        raise NotImplementedError
+
+    @staticmethod
+    def exp_spec_builder(self, obs_space, act_space, internal_space):
+        def build_fn(exp_len, batch_sz):
+            return self._exp_spec(
+                exp_len, batch_sz, obs_space, act_space, internal_space)
+        return ExpSpecBuilder(obs_space, act_space, internal_space, build_fn)
+
+    @staticmethod
+    @abc.abstractmethod
+    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
         raise NotImplementedError
 
     @abc.abstractmethod

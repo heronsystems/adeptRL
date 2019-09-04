@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import OrderedDict
+from functools import reduce
 
 import torch
 
@@ -58,3 +59,19 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
             'entropies': entropies,
             'values': values
         }
+
+    @staticmethod
+    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
+        flat_act_space = 0
+        for k, shape in act_space.items():
+            flat_act_space += reduce(lambda a, b: a * b, shape)
+
+        spec = {
+            'rewards': (exp_len, batch_sz),
+            'terminals': (exp_len, batch_sz),
+            'log_probs': (exp_len, batch_sz, flat_act_space),
+            'entropies': (exp_len, batch_sz, flat_act_space),
+            'values': (exp_len, batch_sz)
+        }
+
+        return spec
