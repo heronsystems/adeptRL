@@ -83,6 +83,7 @@ from adept.utils.script_helpers import (
     parse_none, parse_path
 )
 from adept.utils.util import DotDict
+from adept.registry import REGISTRY as R
 
 # hack to use bypass pysc2 flags
 FLAGS = flags.FLAGS
@@ -128,6 +129,7 @@ def main(args):
     :return:
     """
     args, log_id_dir, initial_step, logger = Init.main(MODE, args)
+    R.save_extern_classes(log_id_dir)
 
     container = Local(args, logger, log_id_dir, initial_step)
 

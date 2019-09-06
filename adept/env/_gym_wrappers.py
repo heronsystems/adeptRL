@@ -63,6 +63,8 @@ class FireResetEnv(gym.Wrapper):
     def __init__(self, env):
         """Take action on reset for env that are fixed until firing."""
         gym.Wrapper.__init__(self, env)
+        self.lives = 0
+        self.fire_action = env.unwrapped.get_action_meanings().index('FIRE')
         assert env.unwrapped.get_action_meanings()[1] == 'FIRE'
         assert len(env.unwrapped.get_action_meanings()) >= 3
 
@@ -77,6 +79,10 @@ class FireResetEnv(gym.Wrapper):
         return obs
 
     def step(self, ac):
+        lives = self.env.unwrapped.ale.lives()
+        if lives < self.lives and lives > 0:
+            self.env.step(self.fire_action)
+        self.lives = lives
         return self.env.step(ac)
 
 

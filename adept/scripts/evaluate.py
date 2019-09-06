@@ -45,6 +45,7 @@ from adept.container import EvalContainer
 from adept.utils.script_helpers import parse_path
 from adept.utils.util import DotDict
 from adept.container import Init
+from adept.registry import REGISTRY as R
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
@@ -82,6 +83,7 @@ def main(args):
     Init.print_ascii_logo()
     logger = Init.setup_logger(MODE, args.log_id_dir, 'eval')
     Init.log_args(logger, args)
+    R.load_extern_classes(args.log_id_dir)
 
     eval_container = EvalContainer(
         logger,
