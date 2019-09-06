@@ -11,9 +11,7 @@ class ImpalaRollout(dict, ExpModule):
         self['rewards'] = []
         self['terminals'] = []
         self['actions'] = []
-        self['values'] = []
         self['log_probs'] = []
-        self['entropies'] = []
         self['next_obs'] = []
         self.reward_normalizer = reward_normalizer
 
@@ -34,6 +32,9 @@ class ImpalaRollout(dict, ExpModule):
         # TODO: rename as terminals_mask or don't mask here
         self['terminals'].append(terminals)
 
+    def write_next_obs(self, obs):
+        self['next_obs'] = obs
+
     def read(self):
         # returns rollout as a named tuple
         return namedtuple(self.__class__.__name__, self.keys())(**self)
@@ -47,3 +48,4 @@ class ImpalaRollout(dict, ExpModule):
 
     def __len__(self):
         return len(self['rewards'])
+

@@ -6,5 +6,5 @@ from .impala import ImpalaWorkerActor
 ACTOR_REG = [
     ACRolloutActorTrain,
     ACActorEval,
-    # ImpalaActor
+    ImpalaWorkerActor
 ]

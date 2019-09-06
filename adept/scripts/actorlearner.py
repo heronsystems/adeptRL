@@ -39,13 +39,15 @@ Distributed Options:
 
 Topology Options:
     --actor-host <str>        Name of host actor [default: ImpalaWorkerActor]
-    --actor-worker <str>      Name of worker actor [default: ACRolloutActorTrain]
+    --actor-worker <str>      Name of worker actor [default: ImpalaWorkerActor]
     --learner <str>           Name of learner [default: ImpalaLearner]
     --exp-host <str>          Name of host experience cache [default: ImpalaRollout]
     --exp-worker <str>        Name of worker experience cache [default: ImpalaRollout]
+    --worker-rollout-len <int>   Number of steps to include in a worker rollout [default: 20]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
+    --rwd-norm <str>        Reward normalizer name [default: Clip]
 
 Script Options:
     --gpu-ids <ids>         Comma-separated CUDA IDs [default: 0,1]

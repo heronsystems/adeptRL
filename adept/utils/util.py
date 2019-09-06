@@ -142,3 +142,11 @@ class DotDict(dict):
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
+
+    # Support pickling
+    def __getstate__(obj):
+        return dict(obj.items())
+
+    def __setstate__(cls, attributes):
+        return DotDict(**attributes)
+

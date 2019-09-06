@@ -70,11 +70,15 @@ class Init:
 
     @staticmethod
     def from_defaults(args):
-        agent_cls = R.lookup_agent(args.agent)
+        if hasattr(args, 'agent') and args.agent is not None:
+            agent_cls = R.lookup_agent(args.agent)
+            agent_actor_args = agent_cls.args
+        else:
+            actor_cls = R.lookup_actor(args.actor_worker)
+            agent_actor_args = actor_cls.args
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
 
-        agent_args = agent_cls.args
         env_args = env_cls.args
         rwdnorm_args = rwdnorm_cls.args
         if args.custom_network:
@@ -82,7 +86,7 @@ class Init:
         else:
             net_args = R.lookup_modular_args(args)
         args = DotDict({
-            **args, **agent_args, **env_args, **rwdnorm_args, **net_args
+            **args, **agent_actor_args, **env_args, **rwdnorm_args, **net_args
         })
 
         return args
