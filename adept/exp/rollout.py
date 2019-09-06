@@ -69,16 +69,15 @@ class ACRollout(dict, ExpModule):
 class Rollout(dict, ExpModule):
     args = {'rollout_len': 20}
 
-    def __init__(self, reward_normalizer, spec_builder, batch_sz, device, rollout_len):
+    def __init__(self, reward_normalizer, spec_builder, rollout_len):
         super(Rollout, self).__init__()
-        self.spec = spec_builder(rollout_len, batch_sz)
+        self.spec = spec_builder(rollout_len)
         self.obs_keys = spec_builder.obs_keys
         self.action_keys = spec_builder.action_keys
         self.internal_keys = spec_builder.internal_keys
         dict_keys = set(chain(self.obs_keys, self.action_keys, self.internal_keys))
         self.exp_keys = [k for k in self.spec.keys() if k not in dict_keys]
         self.reward_normalizer = reward_normalizer
-        self.device = device
         self.rollout_len = rollout_len
 
         self.has_obs = all([
@@ -96,9 +95,9 @@ class Rollout(dict, ExpModule):
             self[k] = self._init_key(k)
 
     @classmethod
-    def from_args(cls, args, reward_normalizer, spec_builder, batch_sz, device):
+    def from_args(cls, args, reward_normalizer, spec_builder):
         return cls(
-            reward_normalizer, spec_builder, batch_sz, device, args.rollout_len
+            reward_normalizer, spec_builder, args.rollout_len
         )
 
     def write_actor(self, experience, no_env=False):
@@ -151,9 +150,15 @@ class Rollout(dict, ExpModule):
     def __len__(self):
         return self.rollout_len
 
+    def to(self, device):
+        for k, tensor_list in self.items():
+            for tensor_idx, tensor in enumerate(tensor_list):
+                self[k][tensor_idx] = tensor.to(device)
+        return self
+
     def _init_key(self, key):
         return [
-            torch.zeros(*self.spec[key][1:]).to(self.device)
+            torch.zeros(*self.spec[key][1:])
             for _ in range(self.spec[key][0])
         ]
 

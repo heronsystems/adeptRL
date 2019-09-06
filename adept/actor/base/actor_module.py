@@ -18,23 +18,16 @@ info necessary for model updates (learning) to occur.
 """
 import abc
 
+from adept.exp.base.spec_builder import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
-
-
-class ExpSpecBuilder:
-    def __init__(self, obs_space, act_space, internal_space, build_fn):
-        self.obs_keys = sorted(obs_space.keys())
-        self.action_keys = sorted(act_space.keys())
-        self.internal_keys = sorted(internal_space.keys())
-        self.build_fn = build_fn
-
-    def __call__(self, exp_len, batch_sz):
-        return self.build_fn(exp_len, batch_sz)
 
 
 class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
-    def __init__(self, action_space):
+    def __init__(
+            self,
+            action_space
+    ):
         self._action_space = action_space
 
     @property
@@ -51,9 +44,9 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @staticmethod
-    def exp_spec_builder(self, obs_space, act_space, internal_space):
-        def build_fn(exp_len, batch_sz):
-            return self._exp_spec(
+    def exp_spec_builder(obs_space, act_space, internal_space, batch_sz):
+        def build_fn(exp_len):
+            return ActorModule._exp_spec(
                 exp_len, batch_sz, obs_space, act_space, internal_space)
         return ExpSpecBuilder(obs_space, act_space, internal_space, build_fn)
 

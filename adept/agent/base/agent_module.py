@@ -17,6 +17,7 @@ An Agent interacts with the environment and accumulates experience.
 """
 import abc
 
+from adept.exp import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
 
 
@@ -30,9 +31,9 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
 
     def __init__(
-        self,
-        reward_normalizer,
-        action_space
+            self,
+            reward_normalizer,
+            action_space
     ):
         self._reward_normalizer = reward_normalizer
         self._action_space = action_space
@@ -58,6 +59,19 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     @property
     def action_keys(self):
         return list(sorted(self.action_space.keys()))
+
+    @staticmethod
+    def exp_spec_builder(obs_space, act_space, internal_space, batch_sz):
+        def build_fn(exp_len):
+            return AgentModule._exp_spec(
+                exp_len, batch_sz, obs_space, act_space, internal_space)
+
+        return ExpSpecBuilder(obs_space, act_space, internal_space, build_fn)
+
+    @staticmethod
+    @abc.abstractmethod
+    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
+        raise NotImplementedError
 
     @staticmethod
     @abc.abstractmethod
@@ -101,3 +115,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def observe(self, obs, rewards, terminals, infos):
         self.exp_cache.write_env(obs, rewards, terminals, infos)
         return rewards, terminals, infos
+
+    def to(self, device):
+        self.exp_cache.to(device)
+        return self

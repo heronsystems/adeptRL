@@ -12,34 +12,14 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import abc
-
-import torch
 
 
-class BaseNetwork(torch.nn.Module):
-    @classmethod
-    @abc.abstractmethod
-    def from_args(
-        cls,
-        args,
-        observation_space,
-        output_space,
-        gpu_preprocessor,
-        net_reg
-    ):
-        raise NotImplementedError
+class ExpSpecBuilder:
+    def __init__(self, obs_space, act_space, internal_space, build_fn):
+        self.obs_keys = sorted(obs_space.keys())
+        self.action_keys = sorted(act_space.keys())
+        self.internal_keys = sorted(internal_space.keys())
+        self.build_fn = build_fn
 
-    @abc.abstractmethod
-    def new_internals(self, device):
-        """
-        :return: Dict[InternalKey, torch.Tensor (ND)]
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def forward(self, observation, internals):
-        raise NotImplementedError
-
-    def internal_space(self):
-        return {k: t.shape for k, t in self.new_internals('cpu').items()}
+    def __call__(self, exp_len, batch_sz):
+        return self.build_fn(exp_len, batch_sz)

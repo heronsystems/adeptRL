@@ -54,13 +54,21 @@ class Local(Container):
         # AGENT
         rwd_norm = REGISTRY.lookup_reward_normalizer(
             args.rwd_norm).from_args(args)
-        agent = REGISTRY.lookup_agent(args.agent).from_args(
+        agent_cls = REGISTRY.lookup_agent(args.agent)
+        builder = agent_cls.exp_spec_builder(
+            env_mgr.observation_space,
+            env_mgr.action_space,
+            net.internal_space(),
+            env_mgr.nb_env
+        )
+        agent = agent_cls.from_args(
             args,
             rwd_norm,
-            env_mgr.action_space
+            env_mgr.action_space,
+            builder
         )
 
-        self.agent = agent
+        self.agent = agent.to(device)
         self.nb_step = args.nb_step
         self.env_mgr = env_mgr
         self.nb_env = args.nb_env
