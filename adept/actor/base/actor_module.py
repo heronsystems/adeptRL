@@ -29,6 +29,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             action_space
     ):
         self._action_space = action_space
+        assert self.exp_keys is not None
 
     @property
     def action_space(self):
@@ -43,16 +44,29 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def output_space(action_space):
         raise NotImplementedError
 
-    @staticmethod
-    def exp_spec_builder(obs_space, act_space, internal_space, batch_sz):
+    @classmethod
+    def exp_spec_builder(cls, obs_space, act_space, internal_space, batch_sz):
         def build_fn(exp_len):
-            return ActorModule._exp_spec(
+            exp_space = cls._exp_space(
                 exp_len, batch_sz, obs_space, act_space, internal_space)
-        return ExpSpecBuilder(obs_space, act_space, internal_space, build_fn)
+            env_space = {
+                'rewards': (exp_len, batch_sz),
+                'terminals': (exp_len, batch_sz)
+            }
+            return {**exp_space, **env_space}
 
-    @staticmethod
+        exp_keys = cls.exp_keys(obs_space, act_space, internal_space)
+        return ExpSpecBuilder(obs_space, act_space, internal_space,
+                              exp_keys, build_fn)
+
+    @classmethod
+    def exp_keys(cls, obs_space, act_space, internal_space):
+        dummy_spec = cls._exp_space(1, 1, obs_space, act_space, internal_space)
+        return dummy_spec.keys()
+
+    @classmethod
     @abc.abstractmethod
-    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
+    def _exp_space(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         raise NotImplementedError
 
     @abc.abstractmethod

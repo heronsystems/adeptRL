@@ -84,6 +84,7 @@ class ActorLearnerHost(Container):
         self.exp = REGISTRY.lookup_exp(args.exp_host).from_args(args, rwd_norm)
         self.exps = [exp_cls.from_args(args, rwd_norm) for _ in range(len(groups))]
         self.batch_size = args.learn_batch_size
+        self.nb_learn_batch = args.nb_learn_batch
         self.nb_step = args.nb_step
         self.network = net.to(device)
         self.optimizer = optim_fn(self.network.parameters())

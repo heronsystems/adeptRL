@@ -15,11 +15,12 @@
 
 
 class ExpSpecBuilder:
-    def __init__(self, obs_space, act_space, internal_space, build_fn):
-        self.obs_keys = sorted(obs_space.keys())
-        self.action_keys = sorted(act_space.keys())
-        self.internal_keys = sorted(internal_space.keys())
+    def __init__(self, obs_keys, act_keys, internal_keys, exp_keys, build_fn):
+        self.obs_keys = sorted(obs_keys.keys())
+        self.action_keys = sorted(act_keys.keys())
+        self.internal_keys = sorted(internal_keys.keys())
+        self.exp_keys = sorted(exp_keys)
         self.build_fn = build_fn
 
-    def __call__(self, exp_len, batch_sz):
-        return self.build_fn(exp_len, batch_sz)
+    def __call__(self, rollout_len):
+        return self.build_fn(rollout_len)

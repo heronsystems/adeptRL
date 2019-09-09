@@ -13,57 +13,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import namedtuple
-from itertools import chain
 
 import torch
 from adept.exp.base.exp_module import ExpModule
-
-
-class ACRollout(dict, ExpModule):
-    args = {'rollout_len': 20}
-
-    def __init__(self, reward_normalizer, rollout_len):
-        super(ACRollout, self).__init__()
-        assert type(rollout_len == int)
-        self['states'] = []
-        self['rewards'] = []
-        self['terminals'] = []
-        self['values'] = []
-        self['log_probs'] = []
-        self['entropies'] = []
-        self.rollout_len = rollout_len
-        self.reward_normalizer = reward_normalizer
-
-    @classmethod
-    def from_args(cls, args, reward_normalizer):
-        return cls(reward_normalizer, args.rollout_len)
-
-    def write_actor(self, experience):
-        for k, v in experience.items():
-            if k not in self:
-                raise KeyError(f'Incompatible rollout key: {k}')
-            self[k].append(v)
-
-    def write_env(self, obs, rewards, terminals, infos):
-        rewards = self.reward_normalizer(rewards)
-        self['states'].append(obs)
-        self['rewards'].append(rewards)
-        # TODO: rename as terminals_mask or don't mask here
-        self['terminals'].append(terminals)
-
-    def read(self):
-        # returns rollout as a named tuple
-        return namedtuple(self.__class__.__name__, self.keys())(**self)
-
-    def clear(self):
-        for k in self.keys():
-            self[k] = []
-
-    def is_ready(self):
-        return len(self) == self.rollout_len
-
-    def __len__(self):
-        return len(self['rewards'])
 
 
 class Rollout(dict, ExpModule):
@@ -75,8 +27,7 @@ class Rollout(dict, ExpModule):
         self.obs_keys = spec_builder.obs_keys
         self.action_keys = spec_builder.action_keys
         self.internal_keys = spec_builder.internal_keys
-        dict_keys = set(chain(self.obs_keys, self.action_keys, self.internal_keys))
-        self.exp_keys = [k for k in self.spec.keys() if k not in dict_keys]
+        self.exp_keys = spec_builder.exp_keys
         self.reward_normalizer = reward_normalizer
         self.rollout_len = rollout_len
 
@@ -137,11 +88,14 @@ class Rollout(dict, ExpModule):
             tmp['internals'] = {k: self[k] for k in self.internal_keys}
         for k in self.exp_keys:
             tmp[k] = self[k]
+        tmp['rewards'] = self['rewards']
+        tmp['terminals'] = self['terminals']
         return namedtuple(self.__class__.__name__, tmp.keys())(**tmp)
 
     def clear(self):
-        for t in self._iter_tensors():
-            t.detach_()
+        for k, tensor_list in self.items():
+            for i in range(len(tensor_list)):
+                self[k][i] = self[k][i].detach()
         self.cur_idx = 0
 
     def is_ready(self):
@@ -161,8 +115,3 @@ class Rollout(dict, ExpModule):
             torch.zeros(*self.spec[key][1:])
             for _ in range(self.spec[key][0])
         ]
-
-    def _iter_tensors(self):
-        return chain(
-            *[self[k] for k in self.spec.keys()]
-        )

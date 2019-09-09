@@ -159,7 +159,7 @@ class EvalContainer:
             if best_mean >= overall_mean:
                 best_epoch_id = epoch_id
                 overall_mean = best_mean
-        print(f'*** EPOCH_ID: {best_epoch_id} MEAN_REWARD: {overall_mean} ***')
+        self.logger.info(f'*** EPOCH_ID: {best_epoch_id} MEAN_REWARD: {overall_mean} ***')
 
     def close(self):
         self.env_mgr.close()

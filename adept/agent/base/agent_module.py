@@ -60,17 +60,29 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def action_keys(self):
         return list(sorted(self.action_space.keys()))
 
-    @staticmethod
-    def exp_spec_builder(obs_space, act_space, internal_space, batch_sz):
+    @classmethod
+    def exp_spec_builder(cls, obs_space, act_space, internal_space, batch_sz):
         def build_fn(exp_len):
-            return AgentModule._exp_spec(
+            exp_space = cls._exp_space(
                 exp_len, batch_sz, obs_space, act_space, internal_space)
+            env_space = {
+                'rewards': (exp_len, batch_sz),
+                'terminals': (exp_len, batch_sz)
+            }
+            return {**exp_space, **env_space}
 
-        return ExpSpecBuilder(obs_space, act_space, internal_space, build_fn)
+        exp_keys = cls.exp_keys(obs_space, act_space, internal_space)
+        return ExpSpecBuilder(obs_space, act_space, internal_space,
+                              exp_keys, build_fn)
 
-    @staticmethod
+    @classmethod
+    def exp_keys(cls, obs_space, act_space, internal_space):
+        dummy_spec = cls._exp_space(1, 1, obs_space, act_space, internal_space)
+        return dummy_spec.keys()
+
+    @classmethod
     @abc.abstractmethod
-    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
+    def _exp_space(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         raise NotImplementedError
 
     @staticmethod

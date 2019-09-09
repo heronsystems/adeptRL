@@ -71,9 +71,9 @@ class ActorCritic(AgentModule):
     def exp_cache(self):
         return self._exp_cache
 
-    @staticmethod
-    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
-        return ACRolloutActorTrain._exp_spec(
+    @classmethod
+    def _exp_space(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
+        return ACRolloutActorTrain._exp_space(
             exp_len, batch_sz, obs_space, act_space, internal_space
         )
 

@@ -60,15 +60,13 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
             'values': values
         }
 
-    @staticmethod
-    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
+    @classmethod
+    def _exp_space(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         flat_act_space = 0
         for k, shape in act_space.items():
             flat_act_space += reduce(lambda a, b: a * b, shape)
 
         spec = {
-            'rewards': (exp_len, batch_sz),
-            'terminals': (exp_len, batch_sz),
             'log_probs': (exp_len, batch_sz, flat_act_space),
             'entropies': (exp_len, batch_sz, flat_act_space),
             'values': (exp_len, batch_sz)
