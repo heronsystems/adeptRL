@@ -16,7 +16,7 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
         head_dict = {'critic': (1,), **action_space}
         return head_dict
 
-    def process_predictions(self, preds, available_actions):
+    def compute_action_exp(self, preds, internals, available_actions):
         actions = OrderedDict()
 
         for key in self.action_keys:
@@ -29,5 +29,5 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
         return actions, {}
 
     @classmethod
-    def _exp_space(cls, rollout_len, batch_sz, obs_space, act_space, internal_space):
+    def _exp_spec(cls, rollout_len, batch_sz, obs_space, act_space, internal_space):
         return {}

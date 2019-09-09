@@ -29,7 +29,6 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             action_space
     ):
         self._action_space = action_space
-        assert self.exp_keys is not None
 
     @property
     def action_space(self):
@@ -47,7 +46,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     @classmethod
     def exp_spec_builder(cls, obs_space, act_space, internal_space, batch_sz):
         def build_fn(exp_len):
-            exp_space = cls._exp_space(
+            exp_space = cls._exp_spec(
                 exp_len, batch_sz, obs_space, act_space, internal_space)
             env_space = {
                 'rewards': (exp_len, batch_sz),
@@ -61,12 +60,12 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     @classmethod
     def exp_keys(cls, obs_space, act_space, internal_space):
-        dummy_spec = cls._exp_space(1, 1, obs_space, act_space, internal_space)
+        dummy_spec = cls._exp_spec(1, 1, obs_space, act_space, internal_space)
         return dummy_spec.keys()
 
     @classmethod
     @abc.abstractmethod
-    def _exp_space(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
+    def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -74,7 +73,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def process_predictions(self, preds, available_actions):
+    def compute_action_exp(self, preds, internals, available_actions):
         """
         B = Batch Size
 
@@ -102,5 +101,6 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         else:
             av_actions = None
 
-        actions, exp = self.process_predictions(predictions, av_actions)
+        actions, exp = self.compute_action_exp(
+            predictions, prev_internals, av_actions)
         return actions, exp, internal_states

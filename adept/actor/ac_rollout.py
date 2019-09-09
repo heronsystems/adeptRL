@@ -33,7 +33,7 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
         head_dict = {'critic': (1,), **action_space}
         return head_dict
 
-    def process_predictions(self, preds, available_actions):
+    def compute_action_exp(self, preds, internals, available_actions):
         values = preds['critic'].squeeze(1)
 
         actions = OrderedDict()
@@ -61,7 +61,7 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
         }
 
     @classmethod
-    def _exp_space(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
+    def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         flat_act_space = 0
         for k, shape in act_space.items():
             flat_act_space += reduce(lambda a, b: a * b, shape)

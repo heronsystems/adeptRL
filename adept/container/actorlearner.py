@@ -74,10 +74,16 @@ class ActorLearnerHost(Container):
         # LEARNER / EXP
         rwd_norm = REGISTRY.lookup_reward_normalizer(
             args.rwd_norm).from_args(args)
-        actor = REGISTRY.lookup_actor(args.actor_host).from_args(
-            args, env.action_space)
+        actor_cls = REGISTRY.lookup_actor(args.actor_host)
+        builder = actor_cls.exp_spec_builder(
+            env.observation_space,
+            env.action_space,
+            net.internal_space(),
+            args.nb_env
+        )
+        actor = actor_cls.from_args(args, env.action_space)
         learner = REGISTRY.lookup_learner(args.learner).from_args(args)
-        exp_cls = REGISTRY.lookup_exp(args.exp_worker).from_args(args, rwd_norm)
+        exp_cls = REGISTRY.lookup_exp(args.exp).from_args(args, rwd_norm, builder)
 
         self.actor = actor
         self.learner = learner
@@ -160,6 +166,7 @@ class ActorLearnerHost(Container):
 
             # forward passes
             # learning step
+
 
             for ob, internal in zip(w_exps['obs'], w_exps['internals']):
                 _, h_exp, _ = self.actor.act(self.network, ob, internal)

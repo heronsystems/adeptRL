@@ -68,15 +68,6 @@ class Rollout(dict, ExpModule):
 
         self.cur_idx += 1
 
-    def write_next_obs(self, next_obs):
-        if self.has_obs:
-            for k in self.obs_keys:
-                self[k][self.rollout_len] = next_obs[k]
-        else:
-            raise Exception(
-                'This rollout does not store observations. Select a valid actor'
-            )
-
     def read(self):
         tmp = {}
         if self.has_obs:
