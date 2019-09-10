@@ -148,7 +148,7 @@ def main(args):
             from pyinstrument import Profiler
         except:
             raise ImportError('You must install pyinstrument to use profiling.')
-        container.nb_step = 10e3
+        container.nb_step = 10e4
         profiler = Profiler()
         profiler.start()
 

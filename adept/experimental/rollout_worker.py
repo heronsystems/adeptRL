@@ -122,6 +122,9 @@ class RolloutWorker(Container):
 
                 self.exp.write_actor(exp)
 
+                # need to copy the obs since zmq returns a pointer
+                self.obs = {k: [x.clone() for x in v] for k, v in self.obs.items()}
+
                 next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
                 next_obs = dtensor_to_dev(next_obs, self.device)
                 self.exp.write_env(
