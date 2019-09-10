@@ -13,19 +13,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
+from collections import deque
+from glob import glob
 from time import time
 
 import numpy as np
 import torch
-from torch import distributed as dist
-from torch.utils.tensorboard import SummaryWriter
-
 from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.rewardnorm import Identity
 from adept.utils import listd_to_dlist, dtensor_to_dev
 from adept.utils.logging import SimpleModelSaver
+from torch import distributed as dist
+from torch.utils.tensorboard import SummaryWriter
+
 from .base import Container
 
 
@@ -92,7 +94,7 @@ class ActorLearnerHost(Container):
         self.exps = [
             exp_cls.from_args(args, Identity()) for _ in range(len(groups))
         ]
-        self.batch_size = args.learn_batch_size
+        self.batch_size = args.nb_env * args.nb_learn_batch
         self.nb_learn_batch = args.nb_learn_batch
         self.nb_step = args.nb_step
         self.network = net.to(device)
@@ -119,89 +121,114 @@ class ActorLearnerHost(Container):
             self.optimizer = self.load_optim(self.optimizer, args.load_optim)
             logger.info('Reloaded optimizer from {}'.format(args.load_optim))
 
+        os.makedirs('/tmp/actorlearner', exist_ok=True)
+        if os.path.exists('/tmp/actorlearner/done'):
+            os.rmdir('/tmp/actorlearner/done')
+
         self.network.train()
 
     def run(self):
         step_count = self.initial_step_count
         next_save = self.init_next_save(self.initial_step_count, self.epoch_len)
         prev_step_t = time()
-
-        start_time = time()
+        ep_rewards = torch.zeros(self.batch_size)
 
         dist.barrier()
         handles = []
         for i, exp in enumerate(self.exps):
-            handles.append(exp.sync(i + 1, self.groups[i]))
+            handles.append(exp.sync(i + 1, self.groups[i], async_op=True))
 
+        if self.nb_learn_batch > len(self.groups):
+            self.logger.warn('More learn batches than workers, reducing '
+                             'learn batches to {}'.format(len(self.groups)))
+            self.nb_learn_batch = len(self.groups)
+
+        start_time = time()
         while step_count < self.nb_step:
             # wait for n batches to sync
                 # this needs to run in a thread
-            learn_indices = []
-            while len(learn_indices) < self.nb_learn_batch:
+            q, q_lookup = deque(), set()
+            while len(q) < self.nb_learn_batch:
                 for i, hand in enumerate(handles):
-                    if all([h.is_completed() for h in hand]):
-                        learn_indices.append(i)
+                    if i not in q_lookup:
+                        if all([h.is_completed() for h in hand]):
+                            q.append(i)
+                            q_lookup.add(i)
 
-            # merge tensors along batch dimension
-                # need to pick a data structure for experiences
-                # Dict[str,List[Tensor]]
-
-            for rollout_idx in range(len(self.exp)):
-                merged_exp = {}
-                for k in self.exps[0].keys():
-                    tensors_to_cat = []
-                    for i in learn_indices:
-                        exp = self.exps[i]
-                        tensors_to_cat.append(exp[k][rollout_idx])
-
-                    cat = torch.cat(tensors_to_cat)
-                    merged_exp[k] = cat
-                self.exp.write_actor(merged_exp, no_env=True)
-
+            self.exp.write_exps([self.exps[i] for i in q])
 
             # unblock the selected workers
-                # resync
-            for i in learn_indices:
+            for i in q:
                 dist.barrier(self.groups[i])
-                handles[i] = self.exps[i].sync(i + 1, self.groups[i])
+                handles[i] = self.exps[i].sync(i + 1, self.groups[i],
+                                               async_op=True)
 
-            # forward passes
-            # learning step
-
-            for ob, internal in zip(
-                merged_exp['observations'],
-                merged_exp['internals'],
-
+            r = self.exp.read()
+            internals = r.internals[0]
+            for obs, rewards, terminals in zip(
+                    r.observations,
+                    r.rewards,
+                    r.terminals
             ):
-                _, h_exp, _ = self.actor.act(self.network, ob, internal)
-                self.exp.write_actor(h_exp)
+                _, h_exp, internals = self.actor.act(self.network, obs,
+                                                     internals)
+                self.exp.write_actor(h_exp, no_env=True)
 
                 # Perform state updates
                 step_count += self.batch_size
+                ep_rewards += rewards.cpu().float()
 
-            if self.exp.is_ready():
-                loss_dict, metric_dict = self.learner.compute_loss(
-                    self.network, self.exp.read(),
-                    w_exps['next_obs'], w_exps['internals'][-1]
-                )
-                total_loss = torch.sum(
-                    torch.stack(tuple(loss for loss in loss_dict.values()))
-                )
+                term_rewards = []
+                for i, terminal in enumerate(terminals.cpu()):
+                    if terminal:
+                        for k, v in self.network.new_internals(
+                                self.device).items():
+                            internals[k][i] = v
+                        term_rewards.append(ep_rewards[i].item())
+                        ep_rewards[i].zero_()
 
-                self.optimizer.zero_grad()
-                total_loss.backward()
-                self.optimizer.step()
-
-                self.exp.clear()
-
-                # write summaries
-                cur_step_t = time()
-                if cur_step_t - prev_step_t > self.summary_freq:
-                    self.write_summaries(
-                        self.summary_writer, step_count, total_loss,
-                        loss_dict, metric_dict, self.network.named_parameters()
+                if term_rewards:
+                    term_reward = np.mean(term_rewards)
+                    delta_t = time() - start_time
+                    self.logger.info(
+                        'STEP: {} REWARD: {} STEP/S: {}'.format(
+                            step_count,
+                            term_reward,
+                            (step_count - self.initial_step_count) / delta_t
+                        )
                     )
-                    prev_step_t = cur_step_t
+                    self.summary_writer.add_scalar(
+                        'reward', term_reward, step_count
+                    )
+
+                if step_count >= next_save:
+                    self.saver.save_state_dicts(
+                        self.network, step_count, self.optimizer
+                    )
+                    next_save += self.epoch_len
+
+            loss_dict, metric_dict = self.learner.compute_loss(
+                self.network, self.exp.read(), r.next_observation, internals
+            )
+            total_loss = torch.sum(
+                torch.stack(tuple(loss for loss in loss_dict.values()))
+            )
+
+            self.optimizer.zero_grad()
+            total_loss.backward()
+            self.optimizer.step()
+
+            self.exp.clear()
+
+            # write summaries
+            cur_step_t = time()
+            if cur_step_t - prev_step_t > self.summary_freq:
+                self.write_summaries(
+                    self.summary_writer, step_count, total_loss,
+                    loss_dict, metric_dict, self.network.named_parameters()
+                )
+                prev_step_t = cur_step_t
+        os.mkdir('/tmp/actorlearner/done')
 
     def close(self):
         return None
@@ -282,7 +309,7 @@ class ActorLearnerWorker(Container):
     def run(self):
         step_count = self.initial_step_count
         ep_rewards = torch.zeros(self.nb_env)
-        future = None
+        is_done = False
 
         obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         internals = listd_to_dlist([
@@ -291,7 +318,9 @@ class ActorLearnerWorker(Container):
         ])
         start_time = time()
         dist.barrier()
-        while step_count * (self.world_size - 1) < self.nb_step:  # is this okay?
+        self.exp.sync(self.local_rank, self.group)
+
+        while not is_done:
             with torch.no_grad():
                 actions, exp, internals = self.actor.act(self.network, obs, internals)
             self.exp.write_actor(exp)
@@ -334,10 +363,14 @@ class ActorLearnerWorker(Container):
                 )
 
             if self.exp.is_ready():
-                if future is not None:
-                    future.wait()
-                self.exp.sync(self.local_rank, self.group)
                 future = dist.barrier(self.group, async_op=True)
+                while not future.is_completed():
+                    if glob('/tmp/actorlearner/done'):
+                        print(f'complete - exiting worker {self.local_rank}')
+                        is_done = True
+                        break
+                    if not is_done:
+                        self.exp.sync(self.local_rank, self.group, async_op=True)
 
     @staticmethod
     def _device(local_rank):

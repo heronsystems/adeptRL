@@ -15,6 +15,7 @@
 from collections import namedtuple
 
 import torch
+from torch import distributed as dist
 from adept.exp.base.exp_module import ExpModule
 
 
@@ -45,6 +46,8 @@ class Rollout(dict, ExpModule):
         for k in self.spec.keys():
             self[k] = self._init_key(k)
 
+        self.sorted_keys = sorted(self.keys())
+
     @classmethod
     def from_args(cls, args, reward_normalizer, spec_builder):
         return cls(
@@ -52,7 +55,7 @@ class Rollout(dict, ExpModule):
         )
 
     def write_actor(self, experience, no_env=False):
-        for k in self.exp_keys:
+        for k in experience.keys() & self.keys():
             self[k][self.cur_idx] = experience[k]
 
         if no_env:
@@ -67,6 +70,17 @@ class Rollout(dict, ExpModule):
         self['terminals'][self.cur_idx] = terminals
 
         self.cur_idx += 1
+
+    def write_exps(self, exps):
+        other_exp_keys = exps[0].keys()
+        for rollout_idx in range(self.rollout_len):
+            for k in self.sorted_keys:
+                if k in other_exp_keys:
+                    tensors_to_cat = []
+                    for exp in exps:
+                        tensors_to_cat.append(exp[k][rollout_idx])
+                    cat = torch.cat(tensors_to_cat)
+                    self[k][rollout_idx] = cat
 
     def read(self):
         tmp = {}
@@ -106,3 +120,12 @@ class Rollout(dict, ExpModule):
             torch.zeros(*self.spec[key][1:])
             for _ in range(self.spec[key][0])
         ]
+
+    def sync(self, src, grp, async_op=False):
+        handles = []
+        for k in self.sorted_keys:
+            for t in self[k]:
+                handles.append(
+                    dist.broadcast(t, src=src, group=grp, async_op=async_op)
+                )
+        return handles

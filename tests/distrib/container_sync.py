@@ -110,19 +110,17 @@ class HostContainer:
                             q.append(i)
                             q_lookup.add(i)
 
-            learn_indices = q
-
-            print('synced', [i + 1 for i in learn_indices], 'merging...')
+            print('synced', [i + 1 for i in q], 'merging...')
             # merge tensors along batch dimension
             # need to pick a data structure for experiences
             # Dict[str,List[Tensor]]
             merged_exp = {}
-            keys = self.exps[learn_indices[0]].sorted_keys  # cache these or from spec
-            lens = [len(self.exps[learn_indices[0]][k]) for k in keys]  # cache these
+            keys = self.exps[q[0]].sorted_keys  # cache these or from spec
+            lens = [len(self.exps[q[0]][k]) for k in keys]  # cache these
             for k, l in zip(keys, lens):
                 for j in range(l):
                     tensors_to_cat = []
-                    for i in learn_indices:
+                    for i in q:
                         exp = self.exps[i]
                         tensors_to_cat.append(exp[k][j])
 
@@ -134,7 +132,7 @@ class HostContainer:
 
             # unblock the selected workers
             # resync
-            for i in learn_indices:
+            for i in q:
                 print(f'HOST barrier {i+1}...')
                 dist.barrier(self.groups[i])
                 print(f'HOST sync {i + 1}...')
