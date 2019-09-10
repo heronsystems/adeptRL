@@ -135,7 +135,6 @@ class RayContainer(Container):
 
             # Learn
             batch, terminal_rewards = self.rollout_queuer.get()
-            # TODO: log rewards
             # Perform state updates
             global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len
 
@@ -165,6 +164,7 @@ class RayContainer(Container):
             # write summaries
             cur_step_t = time()
             if cur_step_t - prev_step_t > self.summary_freq:
+                print('Metrics:', self.rollout_queuer.metrics())
                 self.write_summaries(
                     self.summary_writer, global_step_count, total_loss,
                     loss_dict, metric_dict, self.network.named_parameters()

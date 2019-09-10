@@ -1,3 +1,5 @@
+from time import time
+
 import queue
 import ray
 import threading
@@ -14,6 +16,8 @@ class RolloutQueuerAsync:
         self.future_inds = [w for w in range(len(self.workers))]
         self._should_stop = True
         self.rollout_queue = queue.Queue(self.queue_max_size)
+        self._worker_wait_time = 0
+        self._host_wait_time = 0
 
     def _background_queing_thread(self):
         while not self._should_stop:
@@ -49,7 +53,10 @@ class RolloutQueuerAsync:
             print('WARNING: Not all rollout workers finished')
 
     def _add_to_queue(self, rollout):
+        st = time()
         self.rollout_queue.put(rollout, timeout=5.0)
+        et = time()
+        self._worker_wait_time += et - st
 
     def start(self):
         self._should_stop = False
@@ -57,7 +64,10 @@ class RolloutQueuerAsync:
         self.background_thread.start()
 
     def get(self):
+        st = time()
         worker_data = [self.rollout_queue.get(True) for _ in range(self.num_rollouts)]
+        et = time()
+        self._host_wait_time += et - st
 
         rollouts = []
         terminal_rewards = []
@@ -88,6 +98,12 @@ class RolloutQueuerAsync:
 
         # try to join background thread
         self.background_thread.join()
+
+    def metrics(self):
+        return {
+            'Host wait time': self._host_wait_time,
+            'Worker wait time': self._worker_wait_time
+        }
 
     def _restart_idle_workers(self):
         del_inds = []
