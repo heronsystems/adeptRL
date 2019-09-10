@@ -23,20 +23,26 @@ from torch.utils.tensorboard import SummaryWriter
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.experimental.rollout_queuer import RolloutQueuerAsync
+from adept.experimental.rollout_worker import RolloutWorker
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
 from .base import Container
 
 
-class RayHost(Container):
+class RayContainer(Container):
     def __init__(
             self,
             args,
             logger,
             log_id_dir,
-            initial_step_count,
-            workers
+            initial_step_count
     ):
+        # DISTRIBUTED WORKERS
+        # TODO: actually lookup from registry
+        workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
+                                           num_gpus=args.worker_gpu_alloc)
+                   .remote(args, initial_step_count, w_ind)
+                   for w_ind in range(args.nb_workers)]
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
         env_cls = REGISTRY.lookup_env(args.env)
@@ -90,7 +96,6 @@ class RayHost(Container):
         self.logger = logger
         self.summary_writer = SummaryWriter(log_id_dir)
         self.saver = SimpleModelSaver(log_id_dir)
-        self.workers = workers
         self.nb_rollouts_in_batch = args.nb_rollouts_in_batch
         self.rollout_queue_size = args.rollout_queue_size
 
