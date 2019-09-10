@@ -81,7 +81,6 @@ class ImpalaLearner(LearnerModule):
         """
         network.train()
         next_obs_on_device = network.gpu_preprocessor(next_obs)
-
         values = []
         log_probs_of_action = []
         entropies = []
@@ -155,7 +154,7 @@ class ImpalaLearner(LearnerModule):
     def compute_loss(self, network, rollouts):
         rewards = rollouts['rewards'].to(network.device)
         terminals_mask = rollouts['terminals'].cpu()  # cpu is faster
-        discount_terminal_mask = (self.discount * terminals_mask.float()).to(network.device)
+        discount_terminal_mask = (self.discount * (1 - terminals_mask.float())).to(network.device)
         states = {k: v.to(network.device) for k, v in rollouts['states'].items()}
         # next states is a single item not a sequence, squeeze first dim
         next_states = {k: v.to(network.device).squeeze(0) for k, v in rollouts['next_obs'].items()}
