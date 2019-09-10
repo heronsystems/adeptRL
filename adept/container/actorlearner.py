@@ -17,14 +17,15 @@ from time import time
 
 import numpy as np
 import torch
-from adept.manager import SubProcEnvManager
-from adept.network import ModularNetwork
-from adept.registry import REGISTRY
-from adept.utils import listd_to_dlist, dtensor_to_dev
-from adept.utils.logging import SimpleModelSaver
 from torch import distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
+from adept.manager import SubProcEnvManager
+from adept.network import ModularNetwork
+from adept.registry import REGISTRY
+from adept.rewardnorm import Identity
+from adept.utils import listd_to_dlist, dtensor_to_dev
+from adept.utils.logging import SimpleModelSaver
 from .base import Container
 
 
@@ -88,7 +89,9 @@ class ActorLearnerHost(Container):
         self.actor = actor
         self.learner = learner
         self.exp = REGISTRY.lookup_exp(args.exp_host).from_args(args, rwd_norm)
-        self.exps = [exp_cls.from_args(args, rwd_norm) for _ in range(len(groups))]
+        self.exps = [
+            exp_cls.from_args(args, Identity()) for _ in range(len(groups))
+        ]
         self.batch_size = args.learn_batch_size
         self.nb_learn_batch = args.nb_learn_batch
         self.nb_step = args.nb_step
@@ -142,21 +145,19 @@ class ActorLearnerHost(Container):
             # merge tensors along batch dimension
                 # need to pick a data structure for experiences
                 # Dict[str,List[Tensor]]
-            merged_exp = {}
-            keys = self.exps[learn_indices[0]].sorted_keys  # cache these or from spec
-            lens = [len(self.exps[learn_indices[0]][k]) for k in keys]  # cache these
-            for k, l in zip(keys, lens):
-                for j in range(l):
+
+            for rollout_idx in range(len(self.exp)):
+                merged_exp = {}
+                for k in self.exps[0].keys():
                     tensors_to_cat = []
                     for i in learn_indices:
                         exp = self.exps[i]
-                        tensors_to_cat.append(exp[k][j])
+                        tensors_to_cat.append(exp[k][rollout_idx])
 
                     cat = torch.cat(tensors_to_cat)
-                    if k in merged_exp:
-                        merged_exp[k].append(cat)
-                    else:
-                        merged_exp[k] = [cat]
+                    merged_exp[k] = cat
+                self.exp.write_actor(merged_exp, no_env=True)
+
 
             # unblock the selected workers
                 # resync
@@ -167,8 +168,11 @@ class ActorLearnerHost(Container):
             # forward passes
             # learning step
 
+            for ob, internal in zip(
+                merged_exp['observations'],
+                merged_exp['internals'],
 
-            for ob, internal in zip(w_exps['obs'], w_exps['internals']):
+            ):
                 _, h_exp, _ = self.actor.act(self.network, ob, internal)
                 self.exp.write_actor(h_exp)
 
@@ -245,12 +249,10 @@ class ActorLearnerWorker(Container):
             env_mgr.gpu_preprocessor,
             REGISTRY
         )
-        rwd_norm = REGISTRY.lookup_reward_normalizer(
-            args.rwd_norm).from_args(args)
         actor = REGISTRY.lookup_actor(args.actor_worker).from_args(
             args, env_mgr.action_space
         )
-        exp = REGISTRY.lookup_exp(args.exp).from_args(args, rwd_norm)
+        exp = REGISTRY.lookup_exp(args.exp).from_args(args, Identity())
 
         self.actor = actor
         self.exp = exp
