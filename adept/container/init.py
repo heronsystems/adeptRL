@@ -24,7 +24,12 @@ class Init:
     @staticmethod
     def main(mode, args):
         args = DotDict(args)
-        log_id = Init.make_log_id(args.tag, mode, args.agent, args.netbody)
+        if hasattr(args, 'agent') and args.agent is not None:
+            agent_log_str = args.agent
+        else:
+            agent_log_str = args.learner
+
+        log_id = Init.make_log_id(args.tag, mode, agent_log_str, args.netbody)
         log_id_dir = Init.log_id_dir(args.logdir, args.env, log_id)
         initial_step = 0
 
@@ -75,7 +80,8 @@ class Init:
             agent_actor_args = agent_cls.args
         else:
             actor_cls = R.lookup_actor(args.actor_worker)
-            agent_actor_args = actor_cls.args
+            learner_cls = R.lookup_learner(args.learner)
+            agent_actor_args = {**actor_cls.args, **learner_cls.args}
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
 

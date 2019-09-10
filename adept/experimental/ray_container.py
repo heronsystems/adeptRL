@@ -20,13 +20,13 @@ import ray
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from adept.container.base import Container
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.experimental.rollout_queuer import RolloutQueuerAsync
 from adept.experimental.rollout_worker import RolloutWorker
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
-from .base import Container
 
 
 class RayContainer(Container):
@@ -37,24 +37,26 @@ class RayContainer(Container):
             log_id_dir,
             initial_step_count
     ):
+        ray.init()
         # DISTRIBUTED WORKERS
         # TODO: actually lookup from registry
-        workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
+        self.workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
                                            num_gpus=args.worker_gpu_alloc)
-                   .remote(args, initial_step_count, w_ind)
-                   for w_ind in range(args.nb_workers)]
+                        .remote(args, initial_step_count, w_ind)
+                        for w_ind in range(args.nb_workers)]
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
         env_cls = REGISTRY.lookup_env(args.env)
         # make a temporary env to get stuff
         # TODO: this can be done by a worker
-        dummy_env = env_cls.from_args_curry(args, 0)
+        dummy_env = env_cls.from_args_curry(args, 0)()
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device("cuda:{}".format(args.gpu_id))
+        # TODO: this should come from cluster spec
+        device = torch.device("cuda:{}".format(0))
         output_space = REGISTRY.lookup_output_space(
-            args.agent, dummy_env.action_space)
+            args.actor_worker, dummy_env.action_space)
         if args.custom_network:
             net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
@@ -71,22 +73,19 @@ class RayContainer(Container):
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
 
-        # AGENT
+        # Learner
         rwd_norm = REGISTRY.lookup_reward_normalizer(
             args.rwd_norm).from_args(args)
-        agent = REGISTRY.lookup_agent(args.agent).from_args(
-            args,
-            rwd_norm,
-            dummy_env.action_space
-        )
+        learner = REGISTRY.lookup_learner(args.learner).from_args(args)
 
         # close dummy env
         dummy_env.close()
 
-        self.agent = agent
+        self.learner = learner
         self.nb_step = args.nb_step
         self.nb_env = args.nb_env
         self.network = net.to(device)
+        self.network.device = device
         self.optimizer = optim_fn(self.network.parameters())
         self.device = device
         self.initial_step_count = initial_step_count
@@ -98,6 +97,7 @@ class RayContainer(Container):
         self.saver = SimpleModelSaver(log_id_dir)
         self.nb_rollouts_in_batch = args.nb_rollouts_in_batch
         self.rollout_queue_size = args.rollout_queue_size
+        self.worker_rollout_len = args.worker_rollout_len
 
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
@@ -117,7 +117,7 @@ class RayContainer(Container):
         self.rollout_queuer.start()
 
         # initial setup
-        local_step_count = self.initial_step_count
+        global_step_count = self.initial_step_count
         next_save = self.init_next_save(self.initial_step_count, self.epoch_len)
         prev_step_t = time()
         ep_rewards = torch.zeros(self.nb_env)
@@ -126,10 +126,6 @@ class RayContainer(Container):
 
         # loop until total number steps
         while global_step_count < self.nb_step:
-            # Perform state updates
-            local_step_count += self.nb_env
-            global_step_count += self.nb_env * self.world_size
-
             # possible save
             if global_step_count >= next_save:
                 self.saver.save_state_dicts(
@@ -139,6 +135,10 @@ class RayContainer(Container):
 
             # Learn
             batch = self.rollout_queuer.get()
+            # TODO: log rewards
+            # Perform state updates
+            global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len
+
             loss_dict, metric_dict = self.learner.compute_loss(
                 self.network, batch
             )
@@ -153,6 +153,8 @@ class RayContainer(Container):
             # send weights
             self.synchronize_weights()
 
+            # TODO: send global step to workers
+
             # write summaries
             cur_step_t = time()
             if cur_step_t - prev_step_t > self.summary_freq:
@@ -166,8 +168,8 @@ class RayContainer(Container):
         self.rollout_queuer.stop()
 
     def get_parameters(self):
-        params = [p for p in self.network.parameters()]
-        params.extend([b for b in self.network.buffers()])
+        params = [p.cpu() for p in self.network.parameters()]
+        params.extend([b.cpu() for b in self.network.buffers()])
         return params
 
     def synchronize_weights(self, blocking=False):

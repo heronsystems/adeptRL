@@ -165,7 +165,7 @@ class Registry:
         elif _id in self._actor_class_by_id:
             return self._actor_class_by_id[_id].output_space(action_space)
         else:
-            raise IndexError(f'Agent or Actor not found: {_id}')
+            raise IndexError('Agent or Actor not found: {}'.format(_id))
 
     # ACTOR METHODS
     def register_actor(self, actor_class):

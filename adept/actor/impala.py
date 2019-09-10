@@ -34,11 +34,9 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
         return head_dict
 
     def process_predictions(self, preds, available_actions):
-        values = preds['critic'].squeeze(1)
-
-        actions = OrderedDict()
         log_probs = []
-        compressed_actions = []
+        actions_gpu = OrderedDict()
+        actions_cpu = OrderedDict()
 
         for key in self.action_keys:
             logit = self.flatten_logits(preds[key])
@@ -47,15 +45,14 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
             action = self.sample_action(softmax)
 
             log_probs.append(self.log_probability(log_softmax, action))
-            compressed_actions.append(action)
-
-            actions[key] = action.cpu()
+            actions_gpu[key] = action
+            actions_cpu[key] = action.cpu()
 
         log_probs = torch.cat(log_probs, dim=1)
 
-        return actions, {
+        return actions_cpu, {
             'log_probs': log_probs,
-            'actions': compressed_actions
+            'actions': actions_gpu
         }
 
     @staticmethod

@@ -9,6 +9,7 @@ Run:
 run one rollout and put data into cache
 return cache
 """
+from collections import namedtuple
 from time import time
 
 import numpy as np
@@ -57,9 +58,10 @@ class RolloutWorker(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
+        # TODO: cluster config to get gpu id
         device = torch.device(
-            "cuda:{}".format(args.gpu_id)
-            if (torch.cuda.is_available() and args.gpu_id >= 0)
+            "cuda"
+            if (torch.cuda.is_available())
             else "cpu"
         )
         output_space = REGISTRY.lookup_output_space(
@@ -157,16 +159,15 @@ class RolloutWorker(Container):
                         )
                     )
 
-            # rollout is full return it
-            self.exp.write_next_obs(self.obs)
-            return self.exp.read()
-
-        # TODO: pack/compress or something before sending 
-        # return self.exp.pack()
+        # rollout is full return it
+        self.exp.write_next_obs(self.obs)
+        # TODO: compression?
+        return self._ray_pack(self.exp)
 
     def set_weights(self, weights):
         for w, local_w in zip(weights, self.get_parameters()):
-            local_w.copy_(w, non_blocking=True)
+            # use data to ignore weights requiring grads
+            local_w.data.copy_(w, non_blocking=True)
         self._weights_synced = True
 
     def get_parameters(self):
@@ -176,6 +177,24 @@ class RolloutWorker(Container):
 
     def close(self):
         return self.env_mgr.close()
+
+    def _ray_pack(self, exp):
+        on_cpu = {k: self._to_cpu(v) for k, v in exp.items()}
+        return on_cpu
+
+    def _to_cpu(self, var):
+        if isinstance(var, list):
+            # list of dict -> dict of lists
+            if isinstance(var[0], dict):
+                return {k: torch.stack(v).cpu() for k, v in listd_to_dlist(var).items()}
+            elif isinstance(var[0], torch.Tensor):
+                return torch.stack(var).cpu()
+            else:
+                raise NotImplementedError("Expected rollout item to be a Tensor or dict(Tensors) got {}".format(type(var[0])))
+        elif isinstance(var, dict):
+            return {k: v.cpu() for k, v in var.items()}
+        else:
+            raise NotImplementedError("Expected rollout object to be a list got {}".format(type(var)))
 
 
 if __name__ == '__main__':
@@ -200,8 +219,24 @@ if __name__ == '__main__':
 
     # get batches directly, just to make sure it works
     futures = [w.run.remote() for w in workers]
-    batches = ray.get(futures)
+    rollouts = ray.get(futures)
     print('got batches manually')
+    batch = {}
+    # TODO: this assumes all rollouts have the same keys
+    for k in rollouts[0].keys():
+        # cat over batch dimension
+        if isinstance(rollouts[0][k], torch.Tensor):
+            v_list = [r[k] for r in rollouts]
+            agg = torch.cat(v_list, dim=1)
+        elif isinstance(rollouts[0][k], dict):
+            # cat all elements of dict
+            agg = {}
+            for r_key in rollouts[0][k].keys():
+                agg[r_key] = torch.cat([r[k][r_key] for r in rollouts], dim=1)
+        batch[k] = agg
+
+    print(batch['states']['Box'].shape)
+
 
     # setup queuer
     from rollout_queuer import RolloutQueuerAsync

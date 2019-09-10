@@ -29,11 +29,11 @@ class ImpalaRollout(dict, ExpModule):
         rewards = self.reward_normalizer(rewards)
         self['states'].append(obs)
         self['rewards'].append(rewards)
-        # TODO: rename as terminals_mask or don't mask here
         self['terminals'].append(terminals)
 
     def write_next_obs(self, obs):
-        self['next_obs'] = obs
+        # must be a list, but only has 1 element
+        self['next_obs'].append(obs)
 
     def read(self):
         # returns rollout as a named tuple

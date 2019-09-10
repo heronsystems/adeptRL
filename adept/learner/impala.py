@@ -17,7 +17,6 @@ import torch
 from torch.nn import functional as F
 import numpy as np
 
-from adept.expcaches.rollout import RolloutCache
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 from .base import LearnerModule
@@ -64,15 +63,15 @@ class ImpalaLearner(LearnerModule):
             return_scale=args.return_scale
         )
 
-    def seq_obs_to_pathways(self, obs, device):
+    def seq_obs_to_pathways(self, network, obs):
         """
             Converts a dict of sequential observations to a list(of seq len) of dicts
         """
-        pathway_dict = self.gpu_preprocessor(obs, device)
+        pathway_dict = network.gpu_preprocessor(obs)
         return dlist_to_listd(pathway_dict)
 
     def act_on_host(
-        self, obs, next_obs, terminal_masks, sampled_actions, internals
+        self, network, obs, next_obs, terminal_masks, sampled_actions, internals
     ):
         """
         This is the method to recompute the forward pass on the host, it
@@ -80,8 +79,8 @@ class ImpalaLearner(LearnerModule):
         terminal_masks here are [seq, batch], internals must be reset if
         terminal
         """
-        self.network.train()
-        next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
+        network.train()
+        next_obs_on_device = network.gpu_preprocessor(next_obs)
 
         values = []
         log_probs_of_action = []
@@ -93,11 +92,11 @@ class ImpalaLearner(LearnerModule):
         # if network is modular,
         # trunk can be sped up by combining batch & seq dim
         def get_results_generator():
-            obs_on_device = self.seq_obs_to_pathways(obs, self.device)
+            obs_on_device = self.seq_obs_to_pathways(network, obs)
 
             def get_results(seq_ind, internals):
                 obs_of_seq_ind = obs_on_device[seq_ind]
-                return self.network(obs_of_seq_ind, internals)
+                return network(obs_of_seq_ind, internals)
 
             return get_results
 
@@ -114,15 +113,15 @@ class ImpalaLearner(LearnerModule):
             entropies.append(entropies_seq)
 
             # if this state was terminal reset internals
-            terminals = np.where(terminal_masks[seq_ind] == 0)[0]
+            terminals = np.where(terminal_masks[seq_ind])[0]
             for batch_ind in terminals:
-                reset_internals = self.network.new_internals(self.device)
+                reset_internals = network.new_internals(network.device)
                 for k, v in reset_internals.items():
                     internals[k][batch_ind] = v
 
         # forward on state t+1
         with torch.no_grad():
-            results, _ = self.network(next_obs_on_device, internals)
+            results, _ = network(next_obs_on_device, internals)
             last_values = results['critic'].squeeze(1)
 
         return torch.stack(log_probs_of_action), torch.stack(
@@ -135,13 +134,13 @@ class ImpalaLearner(LearnerModule):
         log_probs = []
         entropies = []
         # TODO support multi-dimensional action spaces?
-        for key_ind, key in enumerate(self._action_keys):
+        for key in actions_taken.keys():
             logit = predictions[key]
             prob = F.softmax(logit, dim=1)
             log_softmax = F.log_softmax(logit, dim=1)
             # actions taken is batch, num_actions
             log_prob = log_softmax.gather(
-                1, actions_taken[:, key_ind].unsqueeze(1)
+                1, actions_taken[key].unsqueeze(1)
             )
             entropy = -(log_softmax * prob).sum(1, keepdim=True)
 
@@ -153,42 +152,21 @@ class ImpalaLearner(LearnerModule):
 
         return log_probs, entropies
 
-    def compute_loss(self, rollouts):
-        import pudb; pudb.set_trace()
-        # rollouts here are a list of [seq, nb_env]
-        # cat along the 1 dim gives [seq, batch = nb_env*nb_batches]
-        # pull from rollout and convert to tensors of [seq, batch, ...]
-        rewards = torch.cat(rollouts['rewards'], 1).to(self.device)
-        terminals_mask = torch.cat(rollouts['terminals'], 1)  # cpu
-        discount_terminal_mask = (self.discount * terminals_mask).to(self.device)
-        states = {
-            k.split('-')[-1]: torch.cat(rollouts[k], 1)
-            for k, v in rollouts.items() if 'rollout_obs-' in k
-        }
-        next_states = {
-            k.split('-')[-1]:
-            torch.cat(rollouts[k],
-                      0)  # 0 dim here is batch since next obs has no seq
-            for k, v in rollouts.items() if 'next_obs-' in k
-        }
-        behavior_log_prob_of_action = torch.cat(
-            rollouts['log_prob_of_action'], 1
-        ).to(self.device)
-        behavior_sampled_action = torch.cat(rollouts['sampled_action'],
-                                            1).long().to(self.device)
-        # internals are prefixed like internals-
-        # they are a list[]
-        behavior_starting_internals = {
-            # list flattening
-            # https://stackoverflow.com/questions/952914/making-a-flat-list-out-of-list-of-lists-in-python
-            k.split('-')[-1]:
-            [item.to(self.device) for sublist in v for item in sublist]
-            for k, v in rollouts.items() if 'internals' in k
-        }
+    def compute_loss(self, network, rollouts):
+        rewards = rollouts['rewards'].to(network.device)
+        terminals_mask = rollouts['terminals'].cpu()  # cpu is faster
+        discount_terminal_mask = (self.discount * terminals_mask.float()).to(network.device)
+        states = {k: v.to(network.device) for k, v in rollouts['states'].items()}
+        # next states is a single item not a sequence, squeeze first dim
+        next_states = {k: v.to(network.device).squeeze(0) for k, v in rollouts['next_obs'].items()}
+        behavior_log_prob_of_action = rollouts['log_probs'].to(network.device)
+        # actions must be list[dict]
+        behavior_sampled_action = dlist_to_listd({k: v.to(network.device) for k, v in rollouts['actions'].items()})
+        behavior_starting_internals = {}
 
         # compute current policy/critic forward
         current_log_prob_of_action, current_values, estimated_value, current_entropies = self.act_on_host(
-            states, next_states, terminals_mask, behavior_sampled_action,
+            network, states, next_states, terminals_mask, behavior_sampled_action,
             behavior_starting_internals
         )
 

@@ -34,13 +34,16 @@ Distributed Options:
     --nb-workers <int>         Number of distributed workers [default: 2]
 
 Topology Options:
-    --worker-type <str>       Name of distributed workers [default: RolloutWorker]
-    --actor-worker <str>      Name of worker actor [default: ImpalaWorkerActor]
-    --learner <str>           Name of learner [default: ImpalaLearner]
-    --exp-worker <str>        Name of worker experience cache [default: ImpalaRollout]
+    --worker-type <str>          Name of distributed workers [default: RolloutWorker]
+    --actor-worker <str>         Name of worker actor [default: ImpalaWorkerActor]
+    --learner <str>              Name of learner [default: ImpalaLearner]
+    --exp-worker <str>           Name of worker experience cache [default: ImpalaRollout]
+    --nb-env <int>               Number of env per worker [default: 32]
     --worker-rollout-len <int>   Number of steps to include in a worker rollout [default: 20]
-    --worker-cpu-alloc <int>    Number of cpus for each rollout worker [default: 32]
-    --worker-gpu-alloc <int>    Number of gpus for each rollout worker [default: 0.25]
+    --worker-cpu-alloc <int>     Number of cpus for each rollout worker [default: 32]
+    --worker-gpu-alloc <float>   Number of gpus for each rollout worker [default: 0.25]
+    --nb-rollouts-in-batch <int>  Number of rollouts per batch [default: 2]
+    --rollout-queue-size <int>   Max length of rollout queue before blocking [default: 4]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
@@ -48,7 +51,6 @@ Environment Options:
 
 Script Options:
     --host-gpu-ids <ids>    Comma-separated CUDA IDs to use for the host [default: 0,1]
-    --nb-env <int>          Number of env per worker [default: 32]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
@@ -112,16 +114,22 @@ def parse_args():
         args.config = parse_path(args.config)
 
     args.logdir = parse_path(args.logdir)
-    args.gpu_id = int(args.gpu_id)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
     args.nb_step = int(float(args.nb_step))
     args.tag = parse_none(args.tag)
-    args.nb_eval_env = int(args.nb_eval_env)
     args.summary_freq = int(args.summary_freq)
     args.lr = float(args.lr)
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
+
+    args.nb_workers = int(args.nb_workers)
+    args.worker_cpu_alloc = int(args.worker_cpu_alloc)
+    args.worker_gpu_alloc = float(args.worker_gpu_alloc)
+    args.worker_rollout_len = int(args.worker_rollout_len)
+
+    args.nb_rollouts_in_batch = int(args.nb_rollouts_in_batch)
+    args.rollout_queue_size = int(args.rollout_queue_size)
     return args
 
 
