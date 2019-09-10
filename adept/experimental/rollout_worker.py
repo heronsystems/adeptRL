@@ -117,6 +117,8 @@ class RolloutWorker(Container):
         self.exp.clear()
         self.exp.write_internals(self.internals)
 
+        all_terminal_rewards = []
+
         # loop to generate a rollout
         with torch.no_grad():
             for _ in range(self.rollout_len):
@@ -148,6 +150,7 @@ class RolloutWorker(Container):
 
                 if term_rewards:
                     term_reward = np.mean(term_rewards)
+                    all_terminal_rewards.append(term_reward)
                     delta_t = time() - self.start_time
                     print(
                         'RANK: {} '
@@ -164,7 +167,10 @@ class RolloutWorker(Container):
         # rollout is full return it
         self.exp.write_next_obs(self.obs)
         # TODO: compression?
-        return self._ray_pack(self.exp)
+        if len(all_terminal_rewards) > 0:
+            return {'rollout': self._ray_pack(self.exp), 'terminal_rewards': np.mean(all_terminal_rewards)}
+        else:
+            return {'rollout': self._ray_pack(self.exp), 'terminal_rewards': None}
 
     def set_weights(self, weights):
         for w, local_w in zip(weights, self.get_parameters()):

@@ -25,10 +25,11 @@ class RolloutQueuerAsync:
                 print('WARNING: ray returned no ready rollouts')
             # otherwise rollout was returned
             else:
-                # get object and add to queue
-                rollouts = ray.get(ready_ids)
-                # this will block if queue is at max size
-                self._add_to_queue(rollouts)
+                for ready in ready_ids:
+                    # get object and add to queue
+                    rollouts = ray.get(ready)
+                    # this will block if queue is at max size
+                    self._add_to_queue(rollouts)
 
                 # remove from futures
                 self._idle_workers = []
@@ -47,9 +48,8 @@ class RolloutQueuerAsync:
         if len(not_dones) > 0:
             print('WARNING: Not all rollout workers finished')
 
-    def _add_to_queue(self, rollouts):
-        for r in rollouts:
-            self.rollout_queue.put(r, timeout=5.0)
+    def _add_to_queue(self, rollout):
+        self.rollout_queue.put(rollout, timeout=5.0)
 
     def start(self):
         self._should_stop = False
@@ -57,7 +57,14 @@ class RolloutQueuerAsync:
         self.background_thread.start()
 
     def get(self):
-        rollouts = [self.rollout_queue.get(True) for _ in range(self.num_rollouts)]
+        worker_data = [self.rollout_queue.get(True) for _ in range(self.num_rollouts)]
+
+        rollouts = []
+        terminal_rewards = []
+        for w in worker_data:
+            r, t = w['rollout'], w['terminal_rewards']
+            rollouts.append(r)
+            terminal_rewards.append(t)
 
         # aggregate into batch
         batch = {}
@@ -74,7 +81,7 @@ class RolloutQueuerAsync:
                     agg[r_key] = torch.cat([r[k][r_key] for r in rollouts], dim=1)
             batch[k] = agg
 
-        return batch
+        return batch, terminal_rewards
 
     def stop(self):
         self._should_stop = True

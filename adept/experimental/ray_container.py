@@ -134,7 +134,7 @@ class RayContainer(Container):
                 next_save += self.epoch_len
 
             # Learn
-            batch = self.rollout_queuer.get()
+            batch, terminal_rewards = self.rollout_queuer.get()
             # TODO: log rewards
             # Perform state updates
             global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len
@@ -154,6 +154,13 @@ class RayContainer(Container):
             self.synchronize_weights()
 
             # TODO: send global step to workers
+
+            # write reward summaries
+            if any(terminal_rewards):
+                terminal_rewards = list(filter(lambda x: x is not None, terminal_rewards))
+                self.summary_writer.add_scalar(
+                    'reward', np.mean(terminal_rewards), global_step_count
+                )
 
             # write summaries
             cur_step_t = time()
