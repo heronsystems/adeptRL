@@ -13,6 +13,7 @@ class ImpalaRollout(dict, ExpModule):
         self['actions'] = []
         self['log_probs'] = []
         self['next_obs'] = []
+        self['internals'] = []
         self.reward_normalizer = reward_normalizer
 
     @classmethod
@@ -34,6 +35,10 @@ class ImpalaRollout(dict, ExpModule):
     def write_next_obs(self, obs):
         # must be a list, but only has 1 element
         self['next_obs'].append(obs)
+
+    def write_internals(self, internals):
+        # must be a list, but only has 1 element
+        self['internals'].append(internals)
 
     def read(self):
         # returns rollout as a named tuple

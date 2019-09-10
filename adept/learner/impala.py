@@ -156,12 +156,15 @@ class ImpalaLearner(LearnerModule):
         terminals_mask = rollouts['terminals'].cpu()  # cpu is faster
         discount_terminal_mask = (self.discount * (1 - terminals_mask.float())).to(network.device)
         states = {k: v.to(network.device) for k, v in rollouts['states'].items()}
-        # next states is a single item not a sequence, squeeze first dim
-        next_states = {k: v.to(network.device).squeeze(0) for k, v in rollouts['next_obs'].items()}
         behavior_log_prob_of_action = rollouts['log_probs'].to(network.device)
         # actions must be list[dict]
         behavior_sampled_action = dlist_to_listd({k: v.to(network.device) for k, v in rollouts['actions'].items()})
-        behavior_starting_internals = {}
+
+        # TODO: the below are hacky, better to have it already in the right format
+        # next states is a single item not a sequence, squeeze first dim
+        next_states = {k: v.to(network.device).squeeze(0) for k, v in rollouts['next_obs'].items()}
+        # internals must be dict[list[tensor]]
+        behavior_starting_internals = {k: v[0].to(network.device).unbind() for k, v in rollouts['internals'].items()}
 
         # compute current policy/critic forward
         current_log_prob_of_action, current_values, estimated_value, current_entropies = self.act_on_host(

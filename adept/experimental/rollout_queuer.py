@@ -61,7 +61,7 @@ class RolloutQueuerAsync:
 
         # aggregate into batch
         batch = {}
-        # TODO: this assumes all rollouts have the same keys
+        # TODO: this assumes all rollouts have the same keys, and send torch.Tensors
         for k in rollouts[0].keys():
             # cat over batch dimension
             if isinstance(rollouts[0][k], torch.Tensor):

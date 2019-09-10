@@ -94,7 +94,8 @@ class RolloutWorker(Container):
         self.initial_step_count = initial_step_count
         self.rollout_len = int(args.worker_rollout_len)
 
-        self.network.eval()
+        # TODO: this should be set to eval after some number of training steps
+        self.network.train()
 
         # SETUP state variables for run
         self.step_count = self.initial_step_count
@@ -114,6 +115,7 @@ class RolloutWorker(Container):
             raise Exception("Must set weights before calling run")
 
         self.exp.clear()
+        self.exp.write_internals(self.internals)
 
         # loop to generate a rollout
         with torch.no_grad():
@@ -183,16 +185,32 @@ class RolloutWorker(Container):
         return on_cpu
 
     def _to_cpu(self, var):
+        # TODO: this is a hack, should instead register a custom serializer for torch tensors to go
+        # to CPU
         if isinstance(var, list):
             # list of dict -> dict of lists
+            # observations/actions/internals
             if isinstance(var[0], dict):
-                return {k: torch.stack(v).cpu() for k, v in listd_to_dlist(var).items()}
+                first_v = next(iter(var[0].values()))
+                # observations/actions
+                if isinstance(first_v, torch.Tensor):
+                    return {k: torch.stack(v).cpu() for k, v in listd_to_dlist(var).items()}
+                # internals
+                elif isinstance(first_v, list):
+                    # TODO: there's gotta be a better way to do this
+                    assert len(var) == 1
+                    return {k: torch.stack(v).cpu().unsqueeze(0) for k, v in var[0].items()}
+            # other actor stuff
             elif isinstance(var[0], torch.Tensor):
                 return torch.stack(var).cpu()
             else:
                 raise NotImplementedError("Expected rollout item to be a Tensor or dict(Tensors) got {}".format(type(var[0])))
         elif isinstance(var, dict):
-            return {k: v.cpu() for k, v in var.items()}
+            # next obs
+            if isinstance(first_v, torch.Tensor):
+                return {k: v.cpu() for k, v in var.items()}
+            else:
+                raise NotImplementedError("Expected rollout dict item to be a tensor got {}".format(type(var)))
         else:
             raise NotImplementedError("Expected rollout object to be a list got {}".format(type(var)))
 
