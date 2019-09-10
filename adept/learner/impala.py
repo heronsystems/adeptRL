@@ -71,7 +71,7 @@ class ImpalaLearner(LearnerModule):
         return dlist_to_listd(pathway_dict)
 
     def act_on_host(
-        self, network, obs, next_obs, terminal_masks, sampled_actions, internals
+        self, network, obs, next_obs, terminal_masks, sampled_actions, internals, dist_net
     ):
         """
         This is the method to recompute the forward pass on the host, it
@@ -95,7 +95,7 @@ class ImpalaLearner(LearnerModule):
 
             def get_results(seq_ind, internals):
                 obs_of_seq_ind = obs_on_device[seq_ind]
-                return network(obs_of_seq_ind, internals)
+                return dist_net(obs_of_seq_ind, internals)
 
             return get_results
 
@@ -120,7 +120,7 @@ class ImpalaLearner(LearnerModule):
 
         # forward on state t+1
         with torch.no_grad():
-            results, _ = network(next_obs_on_device, internals)
+            results, _ = dist_net(next_obs_on_device, internals)
             last_values = results['critic'].squeeze(1)
 
         return torch.stack(log_probs_of_action), torch.stack(
@@ -151,7 +151,7 @@ class ImpalaLearner(LearnerModule):
 
         return log_probs, entropies
 
-    def compute_loss(self, network, rollouts):
+    def compute_loss(self, network, rollouts, dist_net):
         rewards = rollouts['rewards'].to(network.device)
         terminals_mask = rollouts['terminals'].cpu()  # cpu is faster
         discount_terminal_mask = (self.discount * (1 - terminals_mask.float())).to(network.device)
@@ -169,7 +169,7 @@ class ImpalaLearner(LearnerModule):
         # compute current policy/critic forward
         current_log_prob_of_action, current_values, estimated_value, current_entropies = self.act_on_host(
             network, states, next_states, terminals_mask, behavior_sampled_action,
-            behavior_starting_internals
+            behavior_starting_internals, dist_net
         )
 
         # compute target for current value and advantage

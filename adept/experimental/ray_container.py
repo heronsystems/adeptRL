@@ -86,6 +86,7 @@ class RayContainer(Container):
         self.nb_env = args.nb_env
         self.network = net.to(device)
         self.network.device = device
+        self.dist_net = torch.nn.DataParallel(self.network)
         self.optimizer = optim_fn(self.network.parameters())
         self.device = device
         self.initial_step_count = initial_step_count
@@ -139,7 +140,7 @@ class RayContainer(Container):
             global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len
 
             loss_dict, metric_dict = self.learner.compute_loss(
-                self.network, batch
+                self.network, batch, self.dist_net
             )
             total_loss = torch.sum(
                 torch.stack(tuple(loss for loss in loss_dict.values()))
