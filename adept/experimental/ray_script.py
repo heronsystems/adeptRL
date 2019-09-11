@@ -31,7 +31,8 @@ Usage:
     ray (-h | --help)
 
 Distributed Options:
-    --nb-workers <int>         Number of distributed workers [default: 2]
+    --nb-learners <int>         Number of distributed learners [default: 2]
+    --nb-workers <int>         Number of distributed workers per learner [default: 2]
 
 Topology Options:
     --worker-type <str>          Name of distributed workers [default: RolloutWorker]
@@ -88,7 +89,7 @@ import os
 
 
 from adept.container import Init
-from adept.experimental.ray_container import RayContainer
+from adept.experimental.ray_nccl_container import RayContainer
 from adept.utils.script_helpers import (
     parse_list_str, parse_path, parse_none, LogDirHelper
 )
@@ -123,6 +124,7 @@ def parse_args():
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
 
+    args.nb_learners = int(args.nb_learners)
     args.nb_workers = int(args.nb_workers)
     args.worker_cpu_alloc = int(args.worker_cpu_alloc)
     args.worker_gpu_alloc = float(args.worker_gpu_alloc)

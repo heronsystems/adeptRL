@@ -83,20 +83,21 @@ class RayContainer(Container):
             ray.init()
 
             # nccl setup
-            ip = ray.services.get_node_ip_address()
-            port = find_free_port
-            address = "tcp://{ip}:{port}".format(ip=ip, port=port)
-            dist.init_process_group(
-                    backend='nccl',
-                    init_method=args.init_method,
-                    world_size=args.nb_learners,
-                    rank=rank
-            )
+            if args.nb_learners > 1:
+                ip = ray.services.get_node_ip_address()
+                port = find_free_port
+                address = "tcp://{ip}:{port}".format(ip=ip, port=port)
+                dist.init_process_group(
+                        backend='nccl',
+                        init_method=args.init_method,
+                        world_size=args.nb_learners,
+                        rank=rank
+                )
 
-            self.peer_learners = [RayContainer.as_remote(num_cpus=args.worker_cpu_alloc * args.nb_workers,
-                                                         num_gpus=1 + args.worker_gpu_alloc * args.nb_workers)
-                                  .remote(logger, log_id_dir, initial_step_count, host=False)
-                                  for p_ind in range(args.nb_learners - 1)]
+                self.peer_learners = [RayContainer.as_remote(num_cpus=args.worker_cpu_alloc * args.nb_workers,
+                                                             num_gpus=1 + args.worker_gpu_alloc * args.nb_workers)
+                                      .remote(logger, log_id_dir, initial_step_count, host=False)
+                                      for p_ind in range(args.nb_learners - 1)]
         logger.info('Rank {} initialized.'.format(rank))
         # DISTRIBUTED WORKERS
         # TODO: actually lookup from registry
@@ -143,11 +144,16 @@ class RayContainer(Container):
         dummy_env.close()
 
         self.learner = learner
+        self.nb_learners = args.nb_learners
+        self.rank = rank
         self.nb_step = args.nb_step
         self.nb_env = args.nb_env
         self.network = net.to(device)
         self.network.device = device
-        self.optimizer = NCCLOptimizer(optim_fn, self.network.parameters())
+        if args.nb_learners > 1:
+            self.optimizer = NCCLOptimizer(optim_fn, self.network.parameters())
+        else:
+            self.optimizer = optim_fn(self.network.parameters())
         self.device = device
         self.initial_step_count = initial_step_count
         self.log_id_dir = log_id_dir
@@ -168,10 +174,11 @@ class RayContainer(Container):
         self.network.train()
 
         # synchronize peer weights
-        dist.barrier()
-        for p in self.network.parameters():
-            dist.all_reduce(p)
-            p.data = p.data / dist.get_world_size()
+        if args.nb_learners > 1:
+            dist.barrier()
+            for p in self.network.parameters():
+                dist.all_reduce(p)
+                p.data = p.data / dist.get_world_size()
 
         # synchronize worker weights
         self.synchronize_weights(blocking=True)
@@ -194,14 +201,15 @@ class RayContainer(Container):
         start_time = time()
 
         # loop until total number steps
+        # TODO: for not rank 0 this should just run forever
         while global_step_count < self.nb_step:
             # Learn
             batch, terminal_rewards = self.rollout_queuer.get()
             # Perform state updates
-            global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len
+            global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len * self.nb_learners
 
             loss_dict, metric_dict = self.learner.compute_loss(
-                self.network, batch, self.dist_net
+                self.network, batch
             )
             total_loss = torch.sum(
                 torch.stack(tuple(loss for loss in loss_dict.values()))
@@ -243,6 +251,9 @@ class RayContainer(Container):
 
     def close(self):
         self.rollout_queuer.stop()
+        if self.rank == 0 and self.nb_learners > 1:
+            for l in self.peer_learners:
+                ray.get(l.close.remote())
 
     def get_parameters(self):
         params = [p.cpu() for p in self.network.parameters()]
