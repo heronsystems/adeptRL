@@ -174,10 +174,10 @@ class RayContainer(Container):
         # setup peers
         if self.rank == 0 and self.nb_learners > 1:
             # create peer containers
-            self._init_peer_learners()
+            peers = self._init_peer_learners()
 
             # tell them to connect to nccl and sync parameters
-            self._init_peer_nccl()
+            self._init_peer_nccl(peers)
             self._sync_peer_parameters()
 
             # startup the run method of peer containers
@@ -291,21 +291,20 @@ class RayContainer(Container):
 
     def _init_peer_learners(self):
         # create N peer learners
-        if self.nb_learners > 1:
-            self.nccl_addr, self.nccl_ip, self.nccl_port = self._rank0_nccl_port_init()
+        self.nccl_addr, self.nccl_ip, self.nccl_port = self._rank0_nccl_port_init()
 
-            peer_learners = []
-            for p_ind in range(self.nb_learners - 1):
-                remote_cls = RayContainer.as_remote(num_cpus=1,
-                                                    # TODO: learner GPU alloc from args
-                                                    num_gpus=0.25)
-                # init
-                remote = remote_cls.remote(self._args, self.initial_step_count, rank=p_ind + 1,
-                                           nccl_addr=self.nccl_addr, nccl_ip=self.nccl_ip, nccl_port=self.nccl_port)
-                peer_learners.append(remote)
+        peer_learners = []
+        for p_ind in range(self.nb_learners - 1):
+            remote_cls = RayPeerLearnerContainer.as_remote(num_cpus=1,
+                                                           # TODO: learner GPU alloc from args
+                                                           num_gpus=0.25)
+            # init
+            remote = remote_cls.remote(self._args, self.initial_step_count, rank=p_ind + 1,
+                                       nccl_addr=self.nccl_addr, nccl_ip=self.nccl_ip, nccl_port=self.nccl_port)
+            peer_learners.append(remote)
 
-            # wait for all peer learners to initialize so errors are reported
-            ray.get(peer_learners)
+        # wait for all peer learners to initialize?
+        return peer_learners
 
     def _init_peer_nccl(self, peers):
         # start init for all peers
