@@ -33,21 +33,21 @@ from adept.utils.logging import SimpleModelSaver
 
 
 class NCCLOptimizer:
-    def __init__(self, optimizer_fn, parameters, buffers=[], param_sync_rate=1000):
-        self.optimizer = optimizer_fn(parameters)
-        self.parameters = parameters
-        self.buffers = buffers
+    def __init__(self, optimizer_fn, network, param_sync_rate=1000):
+        self.network = network
+        self.optimizer = optimizer_fn(self.network.parameters())
         self.param_sync_rate = param_sync_rate
         self._opt_count = 0
 
     def step(self):
+        dist.barrier()
         handles = []
-        for param in self.parameters:
+        for param in self.network.parameters():
             handles.append(
             dist.all_reduce(param.grad, async_op=True))
         for handle in handles:
             handle.wait()
-        for param in self.parameters:
+        for param in self.network.parameters():
             param.grad.mul_(1. / dist.get_world_size())
         self.optimizer.step()
         self._opt_count += 1
@@ -58,12 +58,12 @@ class NCCLOptimizer:
             self.sync_buffers()
 
     def sync_parameters(self):
-        for param in self.parameters:
+        for param in self.network.parameters():
             dist.all_reduce(param.data)
             param.data.mul_(1. / dist.get_world_size())
 
     def sync_buffers(self):
-        for b in self.buffers:
+        for b in self.network.buffers():
             dist.all_reduce(b.data)
             b.data.mul_(1. / dist.get_world_size())
 
@@ -149,7 +149,7 @@ class RayContainer(Container):
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
         if args.nb_learners > 1:
-            self.optimizer = NCCLOptimizer(optim_fn, self.network.parameters())
+            self.optimizer = NCCLOptimizer(optim_fn, self.network)
         else:
             self.optimizer = optim_fn(self.network.parameters())
 
