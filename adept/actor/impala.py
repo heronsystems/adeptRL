@@ -51,7 +51,7 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
         log_probs = torch.cat(log_probs, dim=1)
 
         return actions_cpu, {
-            'log_probs': log_probs,
+            'log_probs_w': log_probs,
             **actions_gpu,
             **internals
         }
@@ -69,7 +69,7 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
         }
 
         spec = {
-            'log_probs': (exp_len, batch_sz, flat_act_space),
+            'log_probs_w': (exp_len, batch_sz, flat_act_space),
             **obs_spec,
             **action_spec,
             **internal_spec

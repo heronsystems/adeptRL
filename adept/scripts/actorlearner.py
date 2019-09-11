@@ -41,8 +41,7 @@ Topology Options:
     --actor-host <str>        Name of host actor [default: ImpalaWorkerActor]
     --actor-worker <str>      Name of worker actor [default: ACRolloutActorTrain]
     --learner <str>           Name of learner [default: ImpalaLearner]
-    --exp-host <str>          Name of host experience cache [default: ImpalaRollout]
-    --exp-worker <str>        Name of worker experience cache [default: ImpalaRollout]
+    --exp <str>          Name of host experience cache [default: Rollout]
     --nb-learn-batch <int>    Number of worker batches to learn on [default: 2]
 
 Environment Options:
