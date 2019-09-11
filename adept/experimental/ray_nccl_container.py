@@ -174,18 +174,18 @@ class RayContainer(Container):
         # setup peers
         if self.rank == 0 and self.nb_learners > 1:
             # create peer containers
-            peers = self._init_peer_learners()
+            self.peer_learners = self._init_peer_learners()
 
             # tell them to connect to nccl and sync parameters
-            self._init_peer_nccl(peers)
+            self._init_peer_nccl(self.peer_learners)
             print('All NCCL peers initialized')
+
+            # sync nccl, must start others first otherwise deadlock
+            [f._sync_peer_parameters.remote() for f in self.peer_learners]
             self._sync_peer_parameters()
-            print('All NCCL peers parameters synced')
 
             # startup the run method of peer containers
             [f.run.remote() for f in self.peer_learners]
-
-        print('{} starting training'.format(self.rank))
 
         # synchronize worker variables
         self.synchronize_worker_parameters(self.initial_step_count, blocking=True)
@@ -202,6 +202,7 @@ class RayContainer(Container):
         start_time = time()
 
         # loop until total number steps
+        print('{} starting training'.format(self.rank))
         while not self.done(global_step_count):
             # Learn
             batch, terminal_rewards = self.rollout_queuer.get()
@@ -248,6 +249,7 @@ class RayContainer(Container):
                         loss_dict, metric_dict, self.network.named_parameters()
                     )
                     prev_step_t = cur_step_t
+        print('{} stopped training'.format(self.rank))
 
     def done(self, global_step_count):
         return global_step_count >= self.nb_step
