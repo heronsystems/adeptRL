@@ -9,7 +9,7 @@ Run:
 run one rollout and put data into cache
 return cache
 """
-from collections import namedtuple
+from collections import namedtuple, deque
 from time import time
 
 import numpy as np
@@ -51,7 +51,6 @@ class RolloutWorker(Container):
             if global_rank == 0 \
             else args.seed + args.nb_env * global_rank
         print('Worker {} using seed {}'.format(global_rank, seed))
-        self.global_rank = global_rank
 
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
@@ -103,6 +102,10 @@ class RolloutWorker(Container):
         self.global_step_count = self.initial_step_count
         self.prev_step_t = time()
         self.ep_rewards = torch.zeros(self.nb_env)
+        self.rolling_ep_rewards = deque(maxlen=100)
+        self.global_rank = global_rank
+        self.summary_freq = args.summary_freq
+        self.prev_step_t = time()
 
         self.obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         self.internals = listd_to_dlist([
@@ -147,24 +150,32 @@ class RolloutWorker(Container):
                     if terminal:
                         for k, v in self.network.new_internals(self.device).items():
                             self.internals[k][i] = v
-                        term_rewards.append(self.ep_rewards[i].item())
+                        rew = self.ep_rewards[i].item()
+                        term_rewards.append(rew)
+                        self.rolling_ep_rewards.append(rew)
                         self.ep_rewards[i].zero_()
 
+                # print metrics
                 if term_rewards:
-                    term_reward = np.mean(term_rewards)
-                    all_terminal_rewards.append(term_reward)
-                    delta_t = time() - self.start_time
-                    print(
-                        'RANK: {} '
-                        'LOCAL STEP: {} '
-                        'REWARD: {} '
-                        'LOCAL STEP/S: {}'.format(
-                            self.global_rank,
-                            self.step_count,
-                            term_reward,
-                            (self.step_count - self.initial_step_count) / delta_t
+                    cur_step_t = time()
+                    if cur_step_t - self.prev_step_t > self.summary_freq:
+                        term_reward = np.mean(term_rewards)
+                        all_terminal_rewards.append(term_reward)
+                        delta_t = time() - self.start_time
+                        print(
+                            'RANK: {} '
+                            'LOCAL STEP: {} '
+                            'REWARD: {} '
+                            'AVG REWARD: {} '
+                            'LOCAL STEP/S: {:.2f}'.format(
+                                self.global_rank,
+                                self.step_count,
+                                term_reward,
+                                round(np.mean(self.rolling_ep_rewards), 2),
+                                (self.step_count - self.initial_step_count) / delta_t
+                            )
                         )
-                    )
+                        self.prev_step_t = cur_step_t
 
         # rollout is full return it
         self.exp.write_next_obs(self.obs)
