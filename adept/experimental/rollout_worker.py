@@ -197,6 +197,9 @@ class RolloutWorker(Container):
             # list of dict -> dict of lists
             # observations/actions/internals
             if isinstance(var[0], dict):
+                # not empty dictionary:
+                if len(var[0]) == 0:
+                    return {}
                 first_v = next(iter(var[0].values()))
                 # observations/actions
                 if isinstance(first_v, torch.Tensor):
