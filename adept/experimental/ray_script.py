@@ -32,7 +32,8 @@ Usage:
 
 Distributed Options:
     --nb-learners <int>         Number of distributed learners [default: 2]
-    --nb-workers <int>         Number of distributed workers per learner [default: 2]
+    --nb-workers <int>          Number of distributed workers per learner [default: 2]
+    --nccl-timeout <int>        Seconds to wait for any NCCL op before timeout [default: 30]
 
 Topology Options:
     --worker-type <str>          Name of distributed workers [default: RolloutWorker]
@@ -129,6 +130,7 @@ def parse_args():
     args.worker_cpu_alloc = int(args.worker_cpu_alloc)
     args.worker_gpu_alloc = float(args.worker_gpu_alloc)
     args.worker_rollout_len = int(args.worker_rollout_len)
+    args.nccl_timeout = int(args.nccl_timeout)
 
     args.nb_rollouts_in_batch = int(args.nb_rollouts_in_batch)
     args.rollout_queue_size = int(args.rollout_queue_size)

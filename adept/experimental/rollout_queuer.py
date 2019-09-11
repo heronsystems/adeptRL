@@ -7,10 +7,11 @@ import torch
 
 
 class RolloutQueuerAsync:
-    def __init__(self, workers, num_rollouts, queue_max_size):
+    def __init__(self, workers, num_rollouts, queue_max_size, timeout=15.0):
         self.workers = workers
         self.num_rollouts = num_rollouts
         self.queue_max_size = queue_max_size
+        self.queue_timeout = timeout
 
         self.futures = [w.run.remote() for w in self.workers]
         self.future_inds = [w for w in range(len(self.workers))]
@@ -47,14 +48,14 @@ class RolloutQueuerAsync:
                 self._restart_idle_workers()
 
         # done, wait for all remaining to finish
-        dones, not_dones = ray.wait(self.futures, len(self.futures), timeout=5.0)
+        dones, not_dones = ray.wait(self.futures, len(self.futures), timeout=self.queue_timeout)
 
         if len(not_dones) > 0:
             print('WARNING: Not all rollout workers finished')
 
     def _add_to_queue(self, rollout):
         st = time()
-        self.rollout_queue.put(rollout, timeout=5.0)
+        self.rollout_queue.put(rollout, timeout=self.queue_timeout)
         et = time()
         self._worker_wait_time += et - st
 

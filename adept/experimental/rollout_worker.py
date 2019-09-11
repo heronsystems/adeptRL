@@ -32,6 +32,7 @@ class RolloutWorker(Container):
                   memory=None,
                   object_store_memory=None,
                   resources=None):
+        # Worker can't use more than 1 gpu, but can also be cpu only
         assert num_gpus is None or num_gpus <= 1
         return ray.remote(
             num_cpus=num_cpus,
@@ -49,6 +50,7 @@ class RolloutWorker(Container):
         seed = args.seed \
             if global_rank == 0 \
             else args.seed + args.nb_env * global_rank
+        print('Worker {} using seed {}'.format(global_rank, seed))
         self.global_rank = global_rank
 
         # ENV
@@ -58,7 +60,6 @@ class RolloutWorker(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        # TODO: cluster config to get gpu id
         device = torch.device(
             "cuda"
             if (torch.cuda.is_available())
@@ -99,6 +100,7 @@ class RolloutWorker(Container):
 
         # SETUP state variables for run
         self.step_count = self.initial_step_count
+        self.global_step_count = self.initial_step_count
         self.prev_step_t = time()
         self.ep_rewards = torch.zeros(self.nb_env)
 
@@ -178,6 +180,9 @@ class RolloutWorker(Container):
             local_w.data.copy_(w, non_blocking=True)
         self._weights_synced = True
 
+    def set_global_step(self, global_step_count):
+        self.global_step_count = global_step_count
+
     def get_parameters(self):
         params = [p for p in self.network.parameters()]
         params.extend([b for b in self.network.buffers()])
@@ -197,7 +202,7 @@ class RolloutWorker(Container):
             # list of dict -> dict of lists
             # observations/actions/internals
             if isinstance(var[0], dict):
-                # not empty dictionary:
+                # if empty dict it doesn't matter
                 if len(var[0]) == 0:
                     return {}
                 first_v = next(iter(var[0].values()))
