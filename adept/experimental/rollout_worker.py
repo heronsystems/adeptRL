@@ -155,12 +155,14 @@ class RolloutWorker(Container):
                         self.rolling_ep_rewards.append(rew)
                         self.ep_rewards[i].zero_()
 
-                # print metrics
+                # avg rewards
                 if term_rewards:
+                    term_reward = np.mean(term_rewards)
+                    all_terminal_rewards.append(term_reward)
+
+                    # print metrics
                     cur_step_t = time()
                     if cur_step_t - self.prev_step_t > self.summary_freq:
-                        term_reward = np.mean(term_rewards)
-                        all_terminal_rewards.append(term_reward)
                         delta_t = time() - self.start_time
                         print(
                             'RANK: {} '
