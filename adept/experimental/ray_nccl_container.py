@@ -178,10 +178,14 @@ class RayContainer(Container):
 
             # tell them to connect to nccl and sync parameters
             self._init_peer_nccl(peers)
+            print('All NCCL peers initialized')
             self._sync_peer_parameters()
+            print('All NCCL peers parameters synced')
 
             # startup the run method of peer containers
             [f.run.remote() for f in self.peer_learners]
+
+        print('{} starting training'.format(self.rank))
 
         # synchronize worker variables
         self.synchronize_worker_parameters(self.initial_step_count, blocking=True)
@@ -315,10 +319,12 @@ class RayContainer(Container):
         ray.get(nccl_inits)
 
     def _sync_peer_parameters(self):
+        print('Rank {} syncing parameters.'.format(self.rank))
         dist.barrier()
         for p in self.network.parameters():
             dist.all_reduce(p.data)
             p.data = p.data / dist.get_world_size()
+        print('Rank {} parameters synced.'.format(self.rank))
 
 
 class RayPeerLearnerContainer(RayContainer):
