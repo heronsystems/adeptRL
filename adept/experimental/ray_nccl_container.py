@@ -33,7 +33,7 @@ from adept.utils.logging import SimpleModelSaver
 
 class NCCLOptimizer:
     def __init__(self, optimizer_fn, parameters, buffers=None):
-        self.optimizer(optimizer_fn(parameters))
+        self.optimizer = optimizer_fn(parameters)
         self.parameters = parameters
         self.buffers = None
 
@@ -78,6 +78,7 @@ class RayContainer(Container):
             initial_step_count,
             rank=0,
             nccl_addr=None,
+            nccl_ip=None,
             nccl_port=None,
     ):
         # if root create peer learners
@@ -87,7 +88,7 @@ class RayContainer(Container):
             if args.nb_learners > 1:
                 ip = ray.services.get_node_ip_address()
                 port = find_free_port()
-                address = "tcp://{ip}:{port}".format(ip=ip, port=port)
+                nccl_addr = "tcp://{ip}:{port}".format(ip=ip, port=port)
                 os.environ["MASTER_ADDR"] = ip
                 os.environ["MASTER_PORT"] = str(port)
 
@@ -95,24 +96,25 @@ class RayContainer(Container):
                 # TODO: ray requires full GPU alloc for values > 1, so 1.25 is invalid
                 self.peer_learners = [RayContainer.as_remote(num_cpus=int(args.worker_cpu_alloc * args.nb_workers),
                                                              num_gpus=np.ceil(1 + args.worker_gpu_alloc * args.nb_workers))
-                                      .remote(args, logger, log_id_dir, initial_step_count, rank=p_ind + 1)
+                                      .remote(args, logger, log_id_dir, initial_step_count, rank=p_ind + 1,
+                                              nccl_addr=nccl_addr, nccl_ip=ip, nccl_port=port)
                                       for p_ind in range(args.nb_learners - 1)]
 
         # else peer learner
         else:
-            os.environ["MASTER_ADDR"] = ip
-            os.environ["MASTER_PORT"] = str(port)
+            os.environ["MASTER_ADDR"] = nccl_ip
+            os.environ["MASTER_PORT"] = str(nccl_port)
 
         # sync all learners
         if args.nb_learners > 1:
-            logger.info('Rank {} calling init_process_group.'.format(rank))
+            print('Rank {} calling init_process_group.'.format(rank))
             dist.init_process_group(
                     backend='nccl',
-                    init_method=address,
+                    init_method=nccl_addr,
                     world_size=args.nb_learners,
                     rank=rank
             )
-            logger.info('Rank {} initialized.'.format(rank))
+            print('Rank {} initialized.'.format(rank))
         # DISTRIBUTED WORKERS
         # TODO: actually lookup from registry
         self.workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
@@ -193,6 +195,7 @@ class RayContainer(Container):
             for p in self.network.parameters():
                 dist.all_reduce(p)
                 p.data = p.data / dist.get_world_size()
+            print('Rank {} parameters synced'.format(self.rank))
 
         # synchronize worker weights
         self.synchronize_weights(blocking=True)
@@ -202,6 +205,9 @@ class RayContainer(Container):
             self.saver = SimpleModelSaver(log_id_dir)
 
     def run(self):
+        # setup peers
+        if self.rank == 0:
+            [f.run.remote() for f in self.peer_learners]
         # setup queuer
         self.rollout_queuer = RolloutQueuerAsync(self.workers, self.nb_rollouts_in_batch, self.rollout_queue_size)
         self.rollout_queuer.start()
