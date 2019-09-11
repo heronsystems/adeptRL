@@ -76,29 +76,43 @@ class RayContainer(Container):
             logger,
             log_id_dir,
             initial_step_count,
-            rank=0
+            rank=0,
+            nccl_addr=None,
+            nccl_port=None,
     ):
         # if root create peer learners
         if rank == 0:
             ray.init()
-
             # nccl setup
             if args.nb_learners > 1:
                 ip = ray.services.get_node_ip_address()
-                port = find_free_port
+                port = find_free_port()
                 address = "tcp://{ip}:{port}".format(ip=ip, port=port)
-                dist.init_process_group(
-                        backend='nccl',
-                        init_method=args.init_method,
-                        world_size=args.nb_learners,
-                        rank=rank
-                )
+                os.environ["MASTER_ADDR"] = ip
+                os.environ["MASTER_PORT"] = str(port)
 
-                self.peer_learners = [RayContainer.as_remote(num_cpus=args.worker_cpu_alloc * args.nb_workers,
-                                                             num_gpus=1 + args.worker_gpu_alloc * args.nb_workers)
-                                      .remote(logger, log_id_dir, initial_step_count, host=False)
+                # TODO: don't sent logger
+                # TODO: ray requires full GPU alloc for values > 1, so 1.25 is invalid
+                self.peer_learners = [RayContainer.as_remote(num_cpus=int(args.worker_cpu_alloc * args.nb_workers),
+                                                             num_gpus=np.ceil(1 + args.worker_gpu_alloc * args.nb_workers))
+                                      .remote(args, logger, log_id_dir, initial_step_count, rank=p_ind + 1)
                                       for p_ind in range(args.nb_learners - 1)]
-        logger.info('Rank {} initialized.'.format(rank))
+
+        # else peer learner
+        else:
+            os.environ["MASTER_ADDR"] = ip
+            os.environ["MASTER_PORT"] = str(port)
+
+        # sync all learners
+        if args.nb_learners > 1:
+            logger.info('Rank {} calling init_process_group.'.format(rank))
+            dist.init_process_group(
+                    backend='nccl',
+                    init_method=address,
+                    world_size=args.nb_learners,
+                    rank=rank
+            )
+            logger.info('Rank {} initialized.'.format(rank))
         # DISTRIBUTED WORKERS
         # TODO: actually lookup from registry
         self.workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
