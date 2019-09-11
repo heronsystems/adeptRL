@@ -36,7 +36,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     @property
     def action_keys(self):
-        return list(sorted(self.action_space.keys()))
+        return sorted(self.action_space.keys())
 
     @staticmethod
     @abc.abstractmethod

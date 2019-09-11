@@ -46,12 +46,13 @@ class ACRolloutLearner(LearnerModule):
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(experiences.values)
-        value_targets, batch_advantages = self._compute_returns_advantages(
-            batch_values, last_values, experiences.rewards, experiences.terminals
+        batch_tgt_returns = self.compute_returns(
+            last_values, experiences.rewards, experiences.terminals
         )
+        batch_advantages = batch_tgt_returns - batch_values.data
 
         # batched value loss
-        value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
+        value_loss = 0.5 * torch.mean((batch_tgt_returns - batch_values).pow(2))
 
         # normalize advantage so that an even number
         # of actions are reinforced and penalized
@@ -88,9 +89,7 @@ class ACRolloutLearner(LearnerModule):
         metrics = {}
         return losses, metrics
 
-    def _compute_returns_advantages(
-            self, values, estimated_value, rewards, terminals
-    ):
+    def compute_returns(self, estimated_value, rewards, terminals):
         # First step of nstep reward target is estimated value of t+1
         target_return = estimated_value
         nstep_target_returns = []
@@ -115,6 +114,5 @@ class ACRolloutLearner(LearnerModule):
         nstep_target_returns = torch.stack(
             list(reversed(nstep_target_returns))
         ).data
-        advantages = nstep_target_returns - values.data
 
-        return nstep_target_returns, advantages
+        return nstep_target_returns
