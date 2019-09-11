@@ -90,7 +90,7 @@ class RayContainer(Container):
         # Ray can only be started once 
         # TODO: this shouldn't happen on a cluster, ray should already be setup
         if rank == 0:
-            ray.init()
+            ray.init(num_gpus=2)
 
         # ARGS TO STATE VARS
         self._args = args
@@ -112,7 +112,7 @@ class RayContainer(Container):
         # TODO: actually lookup from registry
         self.workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
                                                 num_gpus=args.worker_gpu_alloc)
-                        .remote(args, initial_step_count, w_ind + self.rank)
+                        .remote(args, initial_step_count, w_ind + (self.rank * args.nb_workers))
                         for w_ind in range(args.nb_workers)]
         # wait for all workers to ready so that init errors can be reported
         # ENV
