@@ -33,7 +33,7 @@ from adept.utils.logging import SimpleModelSaver
 
 
 class NCCLOptimizer:
-    def __init__(self, optimizer_fn, parameters, buffers=[], param_sync_rate=100):
+    def __init__(self, optimizer_fn, parameters, buffers=[], param_sync_rate=1000):
         self.optimizer = optimizer_fn(parameters)
         self.parameters = parameters
         self.buffers = buffers
@@ -90,7 +90,7 @@ class RayContainer(Container):
         # Ray can only be started once 
         # TODO: this shouldn't happen on a cluster, ray should already be setup
         if rank == 0:
-            ray.init(num_gpus=2)
+            ray.init()
 
         # ARGS TO STATE VARS
         self._args = args
