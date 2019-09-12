@@ -33,6 +33,7 @@ Usage:
 Distributed Options:
     --nb-learners <int>         Number of distributed learners [default: 2]
     --nb-workers <int>          Number of distributed workers per learner [default: 2]
+    --ray-addr <str>            Ray head node address, None for local [default: None]
     --nccl-timeout <int>        Seconds to wait for any NCCL op before timeout [default: 30]
 
 Topology Options:

@@ -87,9 +87,13 @@ class RayContainer(Container):
             rank=0,
     ):
         # Ray can only be started once 
-        # TODO: this shouldn't happen on a cluster, ray should already be setup
         if rank == 0:
-            ray.init()
+            if args.ray_addr is not None:
+                ray.init(address=args.ray_addr)
+                print('Using Ray on a cluster. Head node address: {}'.format(args.ray_addr))
+            else:
+                print('Using Ray on a single machine.')
+                ray.init()
 
         # ARGS TO STATE VARS
         self._args = args
