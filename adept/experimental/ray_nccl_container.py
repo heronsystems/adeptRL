@@ -40,7 +40,6 @@ class NCCLOptimizer:
         self._opt_count = 0
 
     def step(self):
-        dist.barrier()
         handles = []
         for param in self.network.parameters():
             handles.append(
