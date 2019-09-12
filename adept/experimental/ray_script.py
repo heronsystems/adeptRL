@@ -136,6 +136,10 @@ def parse_args():
 
     args.nb_rollouts_in_batch = int(args.nb_rollouts_in_batch)
     args.rollout_queue_size = int(args.rollout_queue_size)
+
+    # arg checking
+    assert args.nb_rollouts_in_batch <= args.nb_workers, 'WARNING: nb_rollouts_in_batch must be <= nb_workers. Got {} <= {}' \
+           .format(args.nb_rollouts_in_batch, args.nb_workers)
     return args
 
 

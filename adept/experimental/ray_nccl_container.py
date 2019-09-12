@@ -33,21 +33,26 @@ from adept.utils.logging import SimpleModelSaver
 
 
 class NCCLOptimizer:
-    def __init__(self, optimizer_fn, network, param_sync_rate=1000):
+    def __init__(self, optimizer_fn, network, world_size, param_sync_rate=1000):
         self.network = network
         self.optimizer = optimizer_fn(self.network.parameters())
         self.param_sync_rate = param_sync_rate
         self._opt_count = 0
+        self.process_group = None
+        self.world_size = world_size
+
+    def set_process_group(self, pg):
+        self.process_group = pg
 
     def step(self):
         handles = []
         for param in self.network.parameters():
             handles.append(
-            dist.all_reduce(param.grad, async_op=True))
+            self.process_group.allreduce(param.grad))
         for handle in handles:
             handle.wait()
         for param in self.network.parameters():
-            param.grad.mul_(1. / dist.get_world_size())
+            param.grad.mul_(1. / self.world_size)
         self.optimizer.step()
         self._opt_count += 1
 
@@ -58,13 +63,13 @@ class NCCLOptimizer:
 
     def sync_parameters(self):
         for param in self.network.parameters():
-            dist.all_reduce(param.data)
-            param.data.mul_(1. / dist.get_world_size())
+            self.process_group.allreduce(param.data)
+            param.data.mul_(1. / self.world_size)
 
     def sync_buffers(self):
         for b in self.network.buffers():
-            dist.all_reduce(b.data)
-            b.data.mul_(1. / dist.get_world_size())
+            self.process_group.allreduce(b.data)
+            b.data.mul_(1. / self.world_size)
 
     def zero_grad(self):
         self.optimizer.zero_grad()
@@ -152,7 +157,7 @@ class RayContainer(Container):
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
         if args.nb_learners > 1:
-            self.optimizer = NCCLOptimizer(optim_fn, self.network)
+            self.optimizer = NCCLOptimizer(optim_fn, self.network, self.nb_learners)
         else:
             self.optimizer = optim_fn(self.network.parameters())
 
@@ -189,6 +194,10 @@ class RayContainer(Container):
 
             # startup the run method of peer containers
             [f.run.remote() for f in self.peer_learners]
+
+        if self.nb_learners > 1:
+            # set optimizer process_group
+            self.optimizer.set_process_group(self.process_group)
 
         # synchronize worker variables
         self.synchronize_worker_parameters(self.initial_step_count, blocking=True)
@@ -282,21 +291,17 @@ class RayContainer(Container):
         ip = ray.services.get_node_ip_address()
         port = find_free_port()
         nccl_addr = "tcp://{ip}:{port}".format(ip=ip, port=port)
-        return nccl_addr, ip, str(port)
+        return nccl_addr, ip, port
 
     def _nccl_init(self):
-        os.environ["MASTER_ADDR"] = self.nccl_ip
-        os.environ["MASTER_PORT"] = self.nccl_port
         print('Rank {} calling init_process_group.'.format(self.rank))
-        dist.init_process_group(
-            backend='nccl',
-            init_method=self.nccl_addr,
-            world_size=self.nb_learners,
-            rank=self.rank,
-            # overrides timeout for all nccl ops
-            timeout=datetime.timedelta(self._args.nccl_timeout)
-        )
-        print('Rank {} initialized.'.format(self.rank))
+        # from https://github.com/pytorch/pytorch/blob/master/test/simulate_nccl_errors.py
+        store = dist.TCPStore(self.nccl_ip, self.nccl_port, self.nb_learners, self.rank == 0)
+        process_group = dist.ProcessGroupNCCL(store, self.rank, self.nb_learners)
+        print('Rank {} initialized process group.'.format(self.rank))
+        process_group.barrier()
+        print('Rank {} process group barrier finished.'.format(self.rank))
+        self.process_group = process_group
 
     def _init_peer_learners(self):
         # create N peer learners
@@ -325,10 +330,10 @@ class RayContainer(Container):
 
     def _sync_peer_parameters(self):
         print('Rank {} syncing parameters.'.format(self.rank))
-        dist.barrier()
+        self.process_group.barrier()
         for p in self.network.parameters():
-            dist.all_reduce(p.data)
-            p.data = p.data / dist.get_world_size()
+            self.process_group.allreduce(p.data)
+            p.data = p.data / self.nb_learners
         print('Rank {} parameters synced.'.format(self.rank))
 
 
