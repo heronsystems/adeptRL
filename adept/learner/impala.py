@@ -17,6 +17,7 @@ import torch
 from torch.nn import functional as F
 import numpy as np
 
+from adept.network import ModularNetwork
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 
 from .base import LearnerModule
@@ -87,15 +88,34 @@ class ImpalaLearner(LearnerModule):
 
         # numpy to vectorize check for terminals
         terminal_masks = terminal_masks.numpy()
+        seq_len, batch_size = terminal_masks.shape
 
-        # if network is modular,
+        # if network is modular and source nets don't have internals
         # trunk can be sped up by combining batch & seq dim
         def get_results_generator():
-            obs_on_device = self.seq_obs_to_pathways(network, obs)
+            if isinstance(network, ModularNetwork):
+                # TODO: assert source nets don't have internals
+                pathway_dict = network.gpu_preprocessor(obs)
+                # flatten obs
+                flat_obs = {k: v.view(-1, *v.shape[2:]) for k, v in pathway_dict.items()}
+                embeddings, source_internals = network._source_nets_forward(flat_obs, {})
+                # add back in seq dim
+                seq_embeddings = [e.view(seq_len, batch_size, e.shape[-1]) for e in embeddings]
 
-            def get_results(seq_ind, internals):
-                obs_of_seq_ind = obs_on_device[seq_ind]
-                return network(obs_of_seq_ind, internals)
+                def get_results(seq_ind, internals):
+                    embedding = [se[seq_ind] for se in seq_embeddings]
+                    pre_result, internals = network._body_forward(embedding, internals)
+                    outputs, out_internals = network._head_forward(pre_result, internals)
+                    return outputs, network._merge_internals(internals + out_internals)
+
+                return get_results
+
+            else:
+                obs_on_device = self.seq_obs_to_pathways(network, obs)
+
+                def get_results(seq_ind, internals):
+                    obs_of_seq_ind = obs_on_device[seq_ind]
+                    return network(obs_of_seq_ind, internals)
 
             return get_results
 
@@ -103,6 +123,7 @@ class ImpalaLearner(LearnerModule):
         for seq_ind in range(terminal_masks.shape[0]):
             results, internals = result_fn(seq_ind, internals)
             logits_seq = {k: v for k, v in results.items() if k != 'critic'}
+            # TODO: batch this somewhere else
             log_probs_action_seq, entropies_seq = self._predictions_to_logprobs_ents_host(
                 seq_ind, obs, logits_seq, sampled_actions[seq_ind]
             )
