@@ -17,16 +17,11 @@ import argparse
 import json
 import os
 
-import torch
 import torch.distributed as dist
 
 from adept.container import Init, ActorLearnerHost, ActorLearnerWorker
 from adept.registry import REGISTRY as R
-from adept.manager.subproc_env_manager import SubProcEnvManager
-from adept.network.modular_network import ModularNetwork
-from adept.utils.script_helpers import (
-    LogDirHelper
-)
+from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import DotDict
 
 MODE = 'ActorLearner'

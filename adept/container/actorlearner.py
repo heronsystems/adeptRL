@@ -31,6 +31,17 @@ from torch.utils.tensorboard import SummaryWriter
 from .base import Container
 
 
+def gpu_id(local_rank, gpu_ids):
+    device_count = len(gpu_ids)
+    if local_rank == 0:
+        return gpu_ids[0]
+    elif device_count == 1:
+        return gpu_ids[0]
+    else:
+        gpu_idx = (local_rank % (device_count - 1)) + 1
+        return gpu_ids[gpu_idx]
+
+
 class ActorLearnerHost(Container):
     def __init__(
             self,
@@ -55,7 +66,9 @@ class ActorLearnerHost(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device("cuda:{}".format(local_rank))
+        device = torch.device("cuda:{}".format(
+            gpu_id(local_rank, args.gpu_ids))
+        )
         output_space = REGISTRY.lookup_output_space(
             args.actor_host, env.action_space
         )
@@ -136,9 +149,11 @@ class ActorLearnerHost(Container):
         ep_rewards = torch.zeros(self.batch_size)
 
         dist.barrier()
+        print(self.local_rank, 'first barrier')
         handles = []
         for i, exp in enumerate(self.exps):
             handles.append(exp.sync(i + 1, self.groups[i], async_op=True))
+        print(self.local_rank, 'first sync')
 
         if self.nb_learn_batch > len(self.groups):
             self.logger.warn('More learn batches than workers, reducing '
@@ -267,7 +282,9 @@ class ActorLearnerWorker(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device("cuda:{}".format(self._device(local_rank)))
+        device = torch.device("cuda:{}".format(
+            gpu_id(local_rank, args.gpu_ids))
+        )
         output_space = REGISTRY.lookup_output_space(
             args.actor_host, env_mgr.action_space
         )
@@ -329,7 +346,9 @@ class ActorLearnerWorker(Container):
         ])
         start_time = time()
         dist.barrier()
+        print(self.local_rank, 'first barrier')
         self.exp.sync(self.local_rank, self.group)
+        print(self.local_rank, 'first sync')
 
         while not is_done:
             with torch.no_grad():
@@ -383,12 +402,6 @@ class ActorLearnerWorker(Container):
                     if not is_done:
                         self.exp.sync(self.local_rank, self.group, async_op=True)
 
-    @staticmethod
-    def _device(local_rank):
-        if local_rank == 0:
-            return 0
-        else:
-            return (local_rank % (torch.cuda.device_count() - 1)) + 1
 
     def close(self):
         self.env_mgr.close()
