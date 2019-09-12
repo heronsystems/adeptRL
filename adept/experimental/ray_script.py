@@ -126,6 +126,7 @@ def parse_args():
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
 
+    args.ray_addr = args.ray_addr if args.ray_addr != '' else None
     args.nb_learners = int(args.nb_learners)
     args.nb_workers = int(args.nb_workers)
     args.worker_cpu_alloc = int(args.worker_cpu_alloc)
