@@ -33,6 +33,7 @@ Usage:
 Distributed Options:
     --nb-learners <int>         Number of distributed learners [default: 2]
     --nb-workers <int>          Number of distributed workers per learner [default: 2]
+    --colocate-workers <bool>   Colocate workers with actors [default: False]
     --ray-addr <str>            Ray head node address, None for local [default: None]
     --nccl-timeout <int>        Seconds to wait for any NCCL op before timeout [default: 30]
 
@@ -93,7 +94,7 @@ import os
 from adept.container import Init
 from adept.experimental.ray_nccl_container import RayContainer
 from adept.utils.script_helpers import (
-    parse_list_str, parse_path, parse_none, LogDirHelper
+    parse_list_str, parse_path, parse_none, LogDirHelper, parse_bool_str
 )
 from adept.utils.util import DotDict
 
@@ -126,9 +127,10 @@ def parse_args():
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
 
-    args.ray_addr = args.ray_addr if args.ray_addr != 'None' else None
+    args.ray_addr = parse_none(args.ray_addr)
     args.nb_learners = int(args.nb_learners)
     args.nb_workers = int(args.nb_workers)
+    args.colocate_workers = parse_bool_str(args.colocate_workers)
     args.worker_cpu_alloc = int(args.worker_cpu_alloc)
     args.worker_gpu_alloc = float(args.worker_gpu_alloc)
     args.worker_rollout_len = int(args.worker_rollout_len)

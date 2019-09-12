@@ -103,6 +103,8 @@ class RayContainer(Container):
         # ARGS TO STATE VARS
         self._args = args
         self.nb_learners = args.nb_learners
+        self.nb_workers = args.nb_workers
+        self.colocate_workers = args.colocate_workers
         self.rank = rank
         self.nb_step = args.nb_step
         self.nb_env = args.nb_env
@@ -112,17 +114,12 @@ class RayContainer(Container):
         self.nb_rollouts_in_batch = args.nb_rollouts_in_batch
         self.rollout_queue_size = args.rollout_queue_size
         self.worker_rollout_len = args.worker_rollout_len
+        self.worker_cpu_alloc = args.worker_cpu_alloc
+        self.worker_gpu_alloc = args.worker_gpu_alloc
         # can be none if rank != 0
         self.logger = logger
         self.log_id_dir = log_id_dir
 
-        # DISTRIBUTED WORKERS
-        # TODO: actually lookup from registry
-        self.workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
-                                                num_gpus=args.worker_gpu_alloc)
-                        .remote(args, initial_step_count, w_ind + (self.rank * args.nb_workers))
-                        for w_ind in range(args.nb_workers)]
-        # wait for all workers to ready so that init errors can be reported
         # ENV
         env_cls = REGISTRY.lookup_env(args.env)
         env = env_cls.from_args_curry(args, 0)()
@@ -198,6 +195,20 @@ class RayContainer(Container):
         if self.nb_learners > 1:
             # set optimizer process_group
             self.optimizer.set_process_group(self.process_group)
+
+        # peers are all synced, now create workers
+        # TODO: this is a hack, probably a better way to do it
+        if self.colocate_workers:
+            resources = {"Agent{}_Colocate".format(self.rank): (1/self.nb_workers) - 0.1}
+        else:
+            resources = {}
+
+        # TODO: actually lookup from registry
+        self.workers = [RolloutWorker.as_remote(num_cpus=self.worker_cpu_alloc,
+                                                num_gpus=self.worker_gpu_alloc,
+                                                resources=resources)
+                        .remote(self._args, self.initial_step_count, w_ind + (self.rank * self.nb_workers))
+                        for w_ind in range(self.nb_workers)]
 
         # synchronize worker variables
         self.synchronize_worker_parameters(self.initial_step_count, blocking=True)
@@ -309,9 +320,15 @@ class RayContainer(Container):
 
         peer_learners = []
         for p_ind in range(self.nb_learners - 1):
+            # TODO: this is a hack
+            if self.colocate_workers:
+                resources = {"Agent{}_Colocate".format(p_ind + 1): 0.1}
+            else:
+                resources = {}
             remote_cls = RayPeerLearnerContainer.as_remote(num_cpus=1,
                                                            # TODO: learner GPU alloc from args
-                                                           num_gpus=0.25)
+                                                           num_gpus=0.25,
+                                                           resources=resources)
             # init
             remote = remote_cls.remote(self._args, self.initial_step_count, rank=p_ind + 1,
                                        nccl_addr=self.nccl_addr, nccl_ip=self.nccl_ip, nccl_port=self.nccl_port)
