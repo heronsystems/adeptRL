@@ -21,6 +21,63 @@ from adept.actor.base.ac_helper import ACActorHelperMixin
 from adept.actor.base.actor_module import ActorModule
 
 
+class ImpalaHostActor(ActorModule, ACActorHelperMixin):
+    args = {}
+
+    @classmethod
+    def from_args(cls, args, action_space):
+        return cls(action_space)
+
+    @staticmethod
+    def output_space(action_space):
+        head_dict = {'critic': (1,), **action_space}
+        return head_dict
+
+    def compute_action_exp(self, preds, internals, available_actions):
+        values = preds['critic'].squeeze(1)
+
+        log_softmaxes = []
+        entropies = []
+        actions_gpu = OrderedDict()
+        actions_cpu = OrderedDict()
+
+        for key in self.action_keys:
+            logit = self.flatten_logits(preds[key])
+
+            log_softmax, softmax = self.log_softmax(logit), self.softmax(logit)
+            entropy = self.entropy(log_softmax, softmax)
+            action = self.sample_action(softmax)
+
+            entropies.append(entropy)
+            log_softmaxes.append(log_softmax)
+            actions_gpu[key] = action
+            actions_cpu[key] = action.cpu()
+
+        log_softmaxes = torch.stack(log_softmaxes, dim=1)
+        entropies = torch.cat(entropies, dim=1)
+
+        return actions_cpu, {
+            'log_softmaxes': log_softmaxes,
+            'entropies': entropies,
+            'values': values
+        }
+
+    @classmethod
+    def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
+        flat_act_space = 0
+        for k, shape in act_space.items():
+            flat_act_space += reduce(lambda a, b: a * b, shape)
+        act_key_len = len(act_space.keys())
+
+        spec = {
+            'log_softmaxes': (exp_len, batch_sz, act_key_len, flat_act_space),
+            'entropies': (exp_len, batch_sz, act_key_len),
+            'values': (exp_len, batch_sz)
+        }
+
+        return spec
+
+
 class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
     args = {}
 
@@ -62,10 +119,10 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
         for k, shape in act_space.items():
             flat_act_space += reduce(lambda a, b: a * b, shape)
 
-        obs_spec = {k: (exp_len + 1, batch_sz, *shape) for k, shape in obs_space}
-        action_spec = {k: (exp_len, batch_sz, *shape) for k, shape in act_space}
+        obs_spec = {k: (exp_len + 1, batch_sz, *shape) for k, shape in obs_space.items()}
+        action_spec = {k: (exp_len, batch_sz, *shape) for k, shape in act_space.items()}
         internal_spec = {
-            k: (exp_len, batch_sz, *shape) for k, shape in internal_space
+            k: (exp_len, batch_sz, *shape) for k, shape in internal_space.items()
         }
 
         spec = {
@@ -73,63 +130,6 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
             **obs_spec,
             **action_spec,
             **internal_spec
-        }
-
-        return spec
-
-
-class ImpalaHostActor(ActorModule, ACActorHelperMixin):
-    args = {}
-
-    @classmethod
-    def from_args(cls, args, action_space):
-        return cls(action_space)
-
-    @staticmethod
-    def output_space(action_space):
-        head_dict = {'critic': (1,), **action_space}
-        return head_dict
-
-    def compute_action_exp(self, preds, internals, available_actions):
-        values = preds['critic'].squeeze(1)
-
-        log_softmaxes = []
-        entropies = []
-        actions_gpu = OrderedDict()
-        actions_cpu = OrderedDict()
-
-        for key in self.action_keys:
-            logit = self.flatten_logits(preds[key])
-
-            log_softmax, softmax = self.log_softmax(logit), self.softmax(logit)
-            entropy = self.entropy(log_softmax, softmax)
-            action = self.sample_action(softmax)
-
-            entropies.append(entropy)
-            log_softmaxes.append(log_softmax)
-            actions_gpu[key] = action
-            actions_cpu[key] = action.cpu()
-
-        log_softmaxes = torch.cat(log_softmaxes, dim=1)
-        entropies = torch.cat(entropies, dim=1)
-
-        return actions_cpu, {
-            'log_softmaxes': log_softmaxes,
-            'entropies': entropies,
-            'values': values
-        }
-
-    @classmethod
-    def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
-        flat_act_space = 0
-        for k, shape in act_space.items():
-            flat_act_space += reduce(lambda a, b: a * b, shape)
-        act_key_len = len(act_space.keys())
-
-        spec = {
-            'log_softmaxes': (exp_len, batch_sz, flat_act_space),
-            'entropies': (exp_len, batch_sz, act_key_len),
-            'values': (exp_len, batch_sz)
         }
 
         return spec

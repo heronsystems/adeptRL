@@ -3,5 +3,5 @@ from .ac_rollout import ACRolloutLearner
 from .impala import ImpalaLearner
 
 LEARNER_REG = [
-    ACRolloutLearner  # , ImpalaLearner
+    ACRolloutLearner, ImpalaLearner
 ]

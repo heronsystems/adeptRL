@@ -50,14 +50,15 @@ class ActorLearnerHost(Container):
 
         # ENV (temporary)
         env_cls = REGISTRY.lookup_env(args.env)
-        env = env_cls.from_args(args.env, 0)
+        env = env_cls.from_args(args, 0)
         env.close()
 
         # NETWORK
         torch.manual_seed(args.seed)
         device = torch.device("cuda:{}".format(local_rank))
         output_space = REGISTRY.lookup_output_space(
-            args.agent, env.action_space)
+            args.actor_host, env.action_space
+        )
         if args.custom_network:
             net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
@@ -90,9 +91,10 @@ class ActorLearnerHost(Container):
 
         self.actor = actor
         self.learner = learner
-        self.exp = REGISTRY.lookup_exp(args.exp_host).from_args(args, rwd_norm)
+        self.exp = exp_cls.from_args(args, rwd_norm, builder).to(device)
         self.exps = [
-            exp_cls.from_args(args, Identity()) for _ in range(len(groups))
+            exp_cls.from_args(args, Identity(), builder).to(device)
+            for _ in range(len(groups))
         ]
         self.batch_size = args.nb_env * args.nb_learn_batch
         self.nb_learn_batch = args.nb_learn_batch
@@ -154,6 +156,8 @@ class ActorLearnerHost(Container):
                         if all([h.is_completed() for h in hand]):
                             q.append(i)
                             q_lookup.add(i)
+
+            print(f'syncing {q}')
 
             self.exp.write_exps([self.exps[i] for i in q])
 
@@ -219,6 +223,7 @@ class ActorLearnerHost(Container):
             self.optimizer.step()
 
             self.exp.clear()
+            [exp.clear() for exp in self.exps]  # necessary?
 
             # write summaries
             cur_step_t = time()
@@ -264,7 +269,8 @@ class ActorLearnerWorker(Container):
         torch.manual_seed(args.seed)
         device = torch.device("cuda:{}".format(self._device(local_rank)))
         output_space = REGISTRY.lookup_output_space(
-            args.agent, env_mgr.action_space)
+            args.actor_host, env_mgr.action_space
+        )
         if args.custom_network:
             net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
@@ -276,13 +282,18 @@ class ActorLearnerWorker(Container):
             env_mgr.gpu_preprocessor,
             REGISTRY
         )
-        actor = REGISTRY.lookup_actor(args.actor_worker).from_args(
-            args, env_mgr.action_space
+        actor_cls = REGISTRY.lookup_actor(args.actor_worker)
+        actor = actor_cls.from_args(args, env_mgr.action_space)
+        builder = actor_cls.exp_spec_builder(
+            env_mgr.observation_space,
+            env_mgr.action_space,
+            net.internal_space(),
+            env_mgr.nb_env
         )
-        exp = REGISTRY.lookup_exp(args.exp).from_args(args, Identity())
+        exp = REGISTRY.lookup_exp(args.exp).from_args(args, Identity(), builder)
 
         self.actor = actor
-        self.exp = exp
+        self.exp = exp.to(device)
         self.nb_step = args.nb_step
         self.env_mgr = env_mgr
         self.nb_env = args.nb_env

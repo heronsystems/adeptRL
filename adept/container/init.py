@@ -24,12 +24,18 @@ class Init:
     @staticmethod
     def main(mode, args):
         args = DotDict(args)
-        log_id = Init.make_log_id(args.tag, mode, args.agent, args.netbody)
+
+        if args.agent:
+            name = args.agent
+        else:
+            name = args.actor_host
+
+        log_id = Init.make_log_id(args.tag, mode, name, args.netbody)
         log_id_dir = Init.log_id_dir(args.logdir, args.env, log_id)
         initial_step = 0
 
         if args.resume:
-            args, log_id_dir, initial_step = Init.from_resume(mode, args)
+            args, log_id_dir, initial_step = Init.from_resume(mode, args, name)
         else:
             if not args.prompt:
                 args = Init.from_defaults(args)
@@ -46,7 +52,7 @@ class Init:
         return args, log_id_dir, initial_step, logger
 
     @staticmethod
-    def from_resume(mode, args):
+    def from_resume(mode, args, name):
         """
         :param mode: Script name
         :param args: Dict[str, Any], static args
@@ -62,7 +68,7 @@ class Init:
         args.load_optim = log_dir_helper.latest_optim_path()
         initial_step_count = log_dir_helper.latest_epoch()
         log_id = Init.make_log_id(
-            args.tag, mode, args.agent, args.netbody,
+            args.tag, mode, name, args.netbody,
             timestamp=log_dir_helper.timestamp()
         )
         log_id_path = Init.log_id_dir(args.logdir, args.env, log_id)
@@ -70,11 +76,19 @@ class Init:
 
     @staticmethod
     def from_defaults(args):
-        agent_cls = R.lookup_agent(args.agent)
+        if args.agent:
+            agent_cls = R.lookup_agent(args.agent)
+            agent_args = agent_cls.args
+        else:
+            h = R.lookup_actor(args.actor_host)
+            w = R.lookup_actor(args.actor_worker)
+            l = R.lookup_learner(args.learner)
+            e = R.lookup_exp(args.exp)
+            agent_args = {**h.args, **w.args, **l.args, **e.args}
+
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
 
-        agent_args = agent_cls.args
         env_args = env_cls.args
         rwdnorm_args = rwdnorm_cls.args
         if args.custom_network:
@@ -96,11 +110,22 @@ class Init:
 
     @staticmethod
     def from_prompt(args):
-        agent_cls = R.lookup_agent(args.agent)
+        if args.agent:
+            agent_cls = R.lookup_agent(args.agent)
+            agent_args = agent_cls.prompt(provided=args)
+        else:
+            h = R.lookup_actor(args.actor_host)
+            w = R.lookup_actor(args.actor_worker)
+            l = R.lookup_learner(args.learner)
+            e = R.lookup_exp(args.exp)
+            agent_args = {
+                **h.prompt(args), **w.prompt(args),
+                **l.prompt(args), **e.prompt(args)
+            }
+
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
 
-        agent_args = agent_cls.prompt(provided=args)
         env_args = env_cls.prompt(provided=args)
         rwdnorm_args = rwdnorm_cls.prompt(provided=args)
         if args.custom_network:

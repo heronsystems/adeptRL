@@ -29,8 +29,7 @@ class ImpalaLearner(LearnerModule):
         'discount': 0.99,
         'minimum_importance_value': 1.0,
         'minimum_importance_policy': 1.0,
-        'entropy_weight': 0.01,
-        'return_scale': False
+        'entropy_weight': 0.01
     }
 
     def __init__(
@@ -38,16 +37,12 @@ class ImpalaLearner(LearnerModule):
         discount,
         minimum_importance_value,
         minimum_importance_policy,
-        entropy_weight,
-        return_scale
+        entropy_weight
     ):
         self.discount = discount
         self.minimum_importance_value = minimum_importance_value
         self.minimum_importance_policy = minimum_importance_policy
         self.entropy_weight = entropy_weight
-        self.return_scale = return_scale
-        if return_scale:
-            self.dm_scaler = DeepMindReturnScaler(10. ** -3)
 
     @classmethod
     def from_args(cls, args):
@@ -55,59 +50,46 @@ class ImpalaLearner(LearnerModule):
             discount=args.discount,
             minimum_importance_value=args.minimum_importance_value,
             minimum_importance_policy=args.minimum_importance_policy,
-            entropy_weight=args.entropy_weight,
-            return_scale=args.return_scale
+            entropy_weight=args.entropy_weight
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):
         # estimate value of next state
         with torch.no_grad():
             results, _ = network(next_obs, internals)
-            last_values = results['critic'].squeeze(1).data
+            b_last_values = results['critic'].squeeze(1).data
 
-        log_softmaxes = torch.stack(experiences.log_softmaxes)
-        actions = torch.stack(experiences.actions)
+        # Gather host log_probs
+        r_log_probs = []
+        for action, log_softs in zip(experiences.actions, experiences.log_softmaxes):
+            b_log_probs = []
+            for act_tensor, log_soft in zip(action.values(), log_softs.unbind(1)):
+                log_prob = log_soft.gather(1, act_tensor.unsqueeze(1))
+                b_log_probs.append(log_prob)
+            r_log_probs.append(torch.stack(b_log_probs))
 
+        r_log_probs_learner = torch.stack(r_log_probs)
+        r_log_probs_actor = torch.stack(experiences.log_probs)
+        r_rewards = torch.stack(experiences.rewards)
+        r_values = torch.stack(experiences.values)
+        r_terminals = torch.stack(experiences.terminals)
+        r_entropies = torch.stack(experiences.entropies)
+        r_dterminal_masks = self.discount * (1. - r_terminals.float())
 
-        log_prob_diffs = torch.stack(experiences.log_probs) - \
-                         torch.stack(experiences.log_probs_w)
-        values = torch.stack(experiences.values)
-        terminals = torch.stack(experiences.terminals)
-
-        discount_terminal_mask = (self.discount * (1 - terminals_mask.float())).to(network.device)
-        states = {k: v.to(network.device) for k, v in rollouts['states'].items()}
-        behavior_log_prob_of_action = rollouts['log_probs'].to(network.device)
-        # actions must be list[dict]
-        behavior_sampled_action = dlist_to_listd({k: v.to(network.device) for k, v in rollouts['actions'].items()})
-
-        # TODO: the below are hacky, better to have it already in the right format
-        # next states is a single item not a sequence, squeeze first dim
-        next_states = {k: v.to(network.device).squeeze(0) for k, v in rollouts['next_obs'].items()}
-        # internals must be dict[list[tensor]]
-        behavior_starting_internals = {k: v[0].to(network.device).unbind() for k, v in rollouts['internals'].items()}
-
-        # compute current policy/critic forward
-        current_log_prob_of_action, current_values, estimated_value, current_entropies = self.act_on_host(
-            network, states, next_states, terminals_mask, behavior_sampled_action,
-            behavior_starting_internals
-        )
-
-        # compute target for current value and advantage
         with torch.no_grad():
-            # create importance sampling
-            log_diff_behavior_vs_current = current_log_prob_of_action - behavior_log_prob_of_action
-            value_trace_target, pg_advantage, importance = self._vtrace_returns(
-                log_diff_behavior_vs_current, discount_terminal_mask, rewards,
-                current_values, estimated_value, self.minimum_importance_value,
+            r_log_diffs = r_log_probs_learner - r_log_probs_actor
+            vtrace_target, pg_advantage, importance = self._vtrace_returns(
+                r_log_diffs, r_dterminal_masks, r_rewards, r_values,
+                b_last_values, self.minimum_importance_value,
                 self.minimum_importance_policy
             )
 
         # using torch.no_grad so detach is unnecessary
         value_loss = 0.5 * torch.mean(
-            (value_trace_target - current_values).pow(2)
+            (vtrace_target - r_values).pow(2)
         )
-        policy_loss = torch.mean(-current_log_prob_of_action * pg_advantage)
-        entropy_loss = torch.mean(-current_entropies) * self.entropy_weight
+        policy_loss = torch.mean(-r_log_probs_learner * pg_advantage)
+        entropy_loss = torch.mean(-r_entropies) * self.entropy_weight
 
         losses = {
             'value_loss': value_loss,
@@ -143,9 +125,7 @@ class ImpalaLearner(LearnerModule):
 
         # create nstep vtrace return
         # first create d_tV of function 1 in the paper
-        values_t_plus_1 = torch.cat(
-            (values[1:], estimated_value.unsqueeze(0)), 0
-        )
+        values_t_plus_1 = torch.cat((values[1:], estimated_value.unsqueeze(0)))
         diff_value_per_step = clamped_importance_value * (
             rewards + discount_terminal_mask * values_t_plus_1 - values
         )
@@ -172,7 +152,7 @@ class ImpalaLearner(LearnerModule):
         # advantage is pg_importance * (v_s of t+1 - values)
         clamped_importance_pg = importance.clamp(max=minimum_importance_policy)
 
-        v_s_tp1 = torch.cat((v_s[1:], estimated_value.unsqueeze(0)), 0)
+        v_s_tp1 = torch.cat((v_s[1:], estimated_value.unsqueeze(0)))
         advantage = rewards + discount_terminal_mask * v_s_tp1 - values
 
         # if multiple actions broadcast the advantage to be weighted by the
