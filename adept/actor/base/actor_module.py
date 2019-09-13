@@ -18,6 +18,7 @@ info necessary for model updates (learning) to occur.
 """
 import abc
 
+import torch
 from adept.exp.base.spec_builder import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
 
@@ -102,5 +103,8 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             av_actions = None
 
         actions, exp = self.compute_action_exp(
-            predictions, prev_internals, av_actions)
+            predictions,
+            {k: torch.stack(vs) for k, vs in prev_internals.items()},
+            av_actions
+        )
         return actions, exp, internal_states

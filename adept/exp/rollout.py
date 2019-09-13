@@ -56,6 +56,10 @@ class Rollout(dict, ExpModule):
 
     def write_actor(self, experience, no_env=False):
         for k in experience.keys() & self.keys():
+            exp_shape = self[k][self.cur_idx].shape
+            write_shape = experience[k].shape
+            if exp_shape != write_shape:
+                print(f'actor shape mismatch {k} {exp_shape} {write_shape}')
             self[k][self.cur_idx] = experience[k]
 
         if no_env:
@@ -65,8 +69,20 @@ class Rollout(dict, ExpModule):
         rewards = self.reward_normalizer(rewards)
         if self.has_obs:
             for k in self.obs_keys:
-                self[k] = obs[k]
+                exp_shape = self[k][self.cur_idx].shape
+                write_shape = obs[k].shape
+                if exp_shape != write_shape:
+                    print(f'obs {k} {exp_shape} {write_shape}')
+                self[k][self.cur_idx] = obs[k]
+        exp_shape = self['rewards'][self.cur_idx].shape
+        write_shape = rewards.shape
+        if exp_shape != write_shape:
+            print(f'rewards shape mismatch {exp_shape} {write_shape}')
         self['rewards'][self.cur_idx] = rewards
+        exp_shape = self['terminals'][self.cur_idx].shape
+        write_shape = terminals.shape
+        if exp_shape != write_shape:
+            print(f'terminals shape mismatch')
         self['terminals'][self.cur_idx] = terminals
 
         self.cur_idx += 1
@@ -80,6 +96,10 @@ class Rollout(dict, ExpModule):
                     for exp in exps:
                         tensors_to_cat.append(exp[k][rollout_idx])
                     cat = torch.cat(tensors_to_cat)
+                    exp_shape = self[k][rollout_idx].shape
+                    write_shape = cat.shape
+                    if self[k][rollout_idx].shape != cat.shape:
+                        print(f'write_exps shape mismatch {k} {exp_shape} {write_shape}')
                     self[k][rollout_idx] = cat
 
     def read(self):
@@ -125,7 +145,13 @@ class Rollout(dict, ExpModule):
         handles = []
         for k in self.sorted_keys:
             for t in self[k]:
+                if t.dtype == torch.bool:
+                    t = t.float()  # cast terminals
                 handles.append(
-                    dist.broadcast(t, src=src, group=grp, async_op=async_op)
+                    dist.broadcast(t, src=src, group=grp, async_op=True)
                 )
+
+        if not async_op:
+            [handle.wait() for handle in handles]
+
         return handles

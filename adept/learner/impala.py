@@ -84,7 +84,6 @@ class ImpalaLearner(LearnerModule):
                 self.minimum_importance_policy
             )
 
-        # using torch.no_grad so detach is unnecessary
         value_loss = 0.5 * torch.mean(
             (vtrace_target - r_values).pow(2)
         )

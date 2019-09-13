@@ -96,6 +96,12 @@ class ActorLearnerHost(Container):
             env.observation_space,
             env.action_space,
             net.internal_space(),
+            args.nb_env * args.nb_learn_batch
+        )
+        w_builder = REGISTRY.lookup_actor(args.actor_worker).exp_spec_builder(
+            env.observation_space,
+            env.action_space,
+            net.internal_space(),
             args.nb_env
         )
         actor = actor_cls.from_args(args, env.action_space)
@@ -105,8 +111,8 @@ class ActorLearnerHost(Container):
         self.actor = actor
         self.learner = learner
         self.exp = exp_cls.from_args(args, rwd_norm, builder).to(device)
-        self.exps = [
-            exp_cls.from_args(args, Identity(), builder).to(device)
+        self.worker_exps = [
+            exp_cls.from_args(args, Identity(), w_builder).to(device)
             for _ in range(len(groups))
         ]
         self.batch_size = args.nb_env * args.nb_learn_batch
@@ -143,6 +149,11 @@ class ActorLearnerHost(Container):
         self.network.train()
 
     def run(self):
+        if self.nb_learn_batch > len(self.groups):
+            self.logger.warn('More learn batches than workers, reducing '
+                             'learn batches to {}'.format(len(self.groups)))
+            self.nb_learn_batch = len(self.groups)
+
         step_count = self.initial_step_count
         next_save = self.init_next_save(self.initial_step_count, self.epoch_len)
         prev_step_t = time()
@@ -150,37 +161,34 @@ class ActorLearnerHost(Container):
 
         dist.barrier()
         print(self.local_rank, 'first barrier')
-        handles = []
-        for i, exp in enumerate(self.exps):
-            handles.append(exp.sync(i + 1, self.groups[i], async_op=True))
+        e_handles = []
+        for i, exp in enumerate(self.worker_exps):
+            w_local_rank = i + 1
+            e_handles.append(exp.sync(w_local_rank, self.groups[i], async_op=True))
         print(self.local_rank, 'first sync')
-
-        if self.nb_learn_batch > len(self.groups):
-            self.logger.warn('More learn batches than workers, reducing '
-                             'learn batches to {}'.format(len(self.groups)))
-            self.nb_learn_batch = len(self.groups)
 
         start_time = time()
         while step_count < self.nb_step:
-            # wait for n batches to sync
-                # this needs to run in a thread
             q, q_lookup = deque(), set()
             while len(q) < self.nb_learn_batch:
-                for i, hand in enumerate(handles):
+                for i, r_handles in enumerate(e_handles):
                     if i not in q_lookup:
-                        if all([h.is_completed() for h in hand]):
+                        if all([h.is_completed() for h in r_handles]):
                             q.append(i)
                             q_lookup.add(i)
 
-            print(f'syncing {q}')
+            print(f'HOST syncing {[i+1 for i in q]}')
 
-            self.exp.write_exps([self.exps[i] for i in q])
+            self.exp.write_exps([self.worker_exps[i] for i in q])
 
             # unblock the selected workers
             for i in q:
                 dist.barrier(self.groups[i])
-                handles[i] = self.exps[i].sync(i + 1, self.groups[i],
-                                               async_op=True)
+                print(f'HOST barrier {i + 1}...')
+                e_handles[i] = self.worker_exps[i].sync(i + 1, self.groups[i], async_op=True)
+                print(f'HOST sync {i + 1}...')
+
+            print(f'HOST unblocked {[i+1 for i in q]}')
 
             r = self.exp.read()
             internals = r.internals[0]
@@ -238,7 +246,7 @@ class ActorLearnerHost(Container):
             self.optimizer.step()
 
             self.exp.clear()
-            [exp.clear() for exp in self.exps]  # necessary?
+            [exp.clear() for exp in self.worker_exps]  # necessary?
 
             # write summaries
             cur_step_t = time()
@@ -399,9 +407,13 @@ class ActorLearnerWorker(Container):
                         print(f'complete - exiting worker {self.local_rank}')
                         is_done = True
                         break
-                    if not is_done:
-                        self.exp.sync(self.local_rank, self.group, async_op=True)
+                print(f'WORKER barrier {self.local_rank}')
 
+                if not is_done:
+                    self.exp.sync(self.local_rank, self.group, async_op=True)
+                    print(f'WORKER sync {self.local_rank}')
+
+                self.exp.clear()
 
     def close(self):
         self.env_mgr.close()

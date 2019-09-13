@@ -115,18 +115,16 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
 
     @classmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
-        flat_act_space = 0
-        for k, shape in act_space.items():
-            flat_act_space += reduce(lambda a, b: a * b, shape)
+        act_key_len = len(act_space.keys())
 
         obs_spec = {k: (exp_len + 1, batch_sz, *shape) for k, shape in obs_space.items()}
-        action_spec = {k: (exp_len, batch_sz, *shape) for k, shape in act_space.items()}
+        action_spec = {k: (exp_len, batch_sz) for k in act_space.keys()}
         internal_spec = {
             k: (exp_len, batch_sz, *shape) for k, shape in internal_space.items()
         }
 
         spec = {
-            'log_probs': (exp_len, batch_sz, flat_act_space),
+            'log_probs': (exp_len, batch_sz, act_key_len),
             **obs_spec,
             **action_spec,
             **internal_spec
