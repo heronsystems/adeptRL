@@ -191,7 +191,7 @@ class ActorLearnerHost(Container):
             print(f'HOST unblocked {[i+1 for i in q]}')
 
             r = self.exp.read()
-            internals = r.internals[0]
+            internals = {k: t.unbind(0) for k, t in r.internals[0].items()}
             for obs, rewards, terminals in zip(
                     r.observations,
                     r.rewards,

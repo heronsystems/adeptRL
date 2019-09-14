@@ -17,8 +17,8 @@ An actor observes the environment and decides actions. It also outputs extra
 info necessary for model updates (learning) to occur.
 """
 import abc
+from collections import defaultdict
 
-import torch
 from adept.exp.base.spec_builder import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
 
@@ -55,19 +55,24 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             }
             return {**exp_space, **env_space}
 
-        exp_keys = cls.exp_keys(obs_space, act_space, internal_space)
+        key_types = cls._key_types(obs_space, act_space, internal_space)
+        exp_keys = cls._exp_keys(obs_space, act_space, internal_space)
         return ExpSpecBuilder(obs_space, act_space, internal_space,
-                              exp_keys, build_fn)
-
-    @classmethod
-    def exp_keys(cls, obs_space, act_space, internal_space):
-        dummy_spec = cls._exp_spec(1, 1, obs_space, act_space, internal_space)
-        return dummy_spec.keys()
+                              key_types, exp_keys, build_fn)
 
     @classmethod
     @abc.abstractmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         raise NotImplementedError
+
+    @classmethod
+    def _exp_keys(cls, obs_space, act_space, internal_space):
+        dummy = cls._exp_spec(1, 1, obs_space, act_space, internal_space)
+        return dummy.keys()
+
+    @classmethod
+    def _key_types(cls, obs_space, act_space, internal_space):
+        return defaultdict(lambda: 'float')
 
     @abc.abstractmethod
     def from_args(self, args, action_space):
@@ -104,7 +109,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
         actions, exp = self.compute_action_exp(
             predictions,
-            {k: torch.stack(vs) for k, vs in prev_internals.items()},
+            prev_internals,
             av_actions
         )
         return actions, exp, internal_states

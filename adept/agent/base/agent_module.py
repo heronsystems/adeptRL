@@ -16,6 +16,7 @@
 An Agent interacts with the environment and accumulates experience.
 """
 import abc
+from collections import defaultdict
 
 from adept.exp import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
@@ -71,19 +72,24 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             }
             return {**exp_space, **env_space}
 
-        exp_keys = cls.exp_keys(obs_space, act_space, internal_space)
+        key_types = cls._key_types(obs_space, act_space, internal_space)
+        exp_keys = cls._exp_keys(obs_space, act_space, internal_space)
         return ExpSpecBuilder(obs_space, act_space, internal_space,
-                              exp_keys, build_fn)
-
-    @classmethod
-    def exp_keys(cls, obs_space, act_space, internal_space):
-        dummy_spec = cls._exp_spec(1, 1, obs_space, act_space, internal_space)
-        return dummy_spec.keys()
+                              key_types, exp_keys, build_fn)
 
     @classmethod
     @abc.abstractmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         raise NotImplementedError
+
+    @classmethod
+    def _exp_keys(cls, obs_space, act_space, internal_space):
+        dummy = cls._exp_spec(1, 1, obs_space, act_space, internal_space)
+        return dummy.keys()
+
+    @classmethod
+    def _key_types(cls, obs_space, act_space, internal_space):
+        return defaultdict(lambda: 'float')
 
     @staticmethod
     @abc.abstractmethod

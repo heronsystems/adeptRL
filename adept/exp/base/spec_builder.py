@@ -15,10 +15,14 @@
 
 
 class ExpSpecBuilder:
-    def __init__(self, obs_keys, act_keys, internal_keys, exp_keys, build_fn):
+    def __init__(
+            self, obs_keys, act_keys, internal_keys,
+            key_types, exp_keys, build_fn
+    ):
         self.obs_keys = sorted(obs_keys.keys())
         self.action_keys = sorted(act_keys.keys())
         self.internal_keys = sorted(internal_keys.keys())
+        self.key_types = key_types
         self.exp_keys = sorted(exp_keys)
         self.build_fn = build_fn
 

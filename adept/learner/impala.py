@@ -62,11 +62,14 @@ class ImpalaLearner(LearnerModule):
         # Gather host log_probs
         r_log_probs = []
         for action, log_softs in zip(experiences.actions, experiences.log_softmaxes):
-            b_log_probs = []
+            k_log_probs = []
+            print('log_softs', log_softs.shape)
             for act_tensor, log_soft in zip(action.values(), log_softs.unbind(1)):
+                print('log_soft', log_soft.shape)
                 log_prob = log_soft.gather(1, act_tensor.unsqueeze(1))
-                b_log_probs.append(log_prob)
-            r_log_probs.append(torch.stack(b_log_probs))
+                print('log_prob', log_prob.shape)
+                k_log_probs.append(log_prob)
+            r_log_probs.append(torch.cat(k_log_probs, dim=1))
 
         r_log_probs_learner = torch.stack(r_log_probs)
         r_log_probs_actor = torch.stack(experiences.log_probs)
@@ -103,17 +106,6 @@ class ImpalaLearner(LearnerModule):
         log_prob_diffs, discount_terminal_mask, rewards, values,
         estimated_value, minimum_importance_value, minimum_importance_policy
     ):
-        """
-        :param log_prob_diffs:
-        :param discount_terminal_mask: should be shape [seq, batch] of
-        discount * (1 - terminal)
-        :param rewards:
-        :param values:
-        :param estimated_value:
-        :param minimum_importance_value:
-        :param minimum_importance_policy:
-        :return:
-        """
         importance = torch.exp(log_prob_diffs)
         clamped_importance_value = importance.clamp(
             max=minimum_importance_value
@@ -125,6 +117,11 @@ class ImpalaLearner(LearnerModule):
         # create nstep vtrace return
         # first create d_tV of function 1 in the paper
         values_t_plus_1 = torch.cat((values[1:], estimated_value.unsqueeze(0)))
+        print('clamped_importance_value', clamped_importance_value.shape)
+        print('rewards', rewards.shape)
+        print('discount_terminal_mask', discount_terminal_mask.shape)
+        print('values_t_plus_1', values_t_plus_1.shape)
+        print('values', values.shape)
         diff_value_per_step = clamped_importance_value * (
             rewards + discount_terminal_mask * values_t_plus_1 - values
         )

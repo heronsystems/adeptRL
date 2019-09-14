@@ -1,4 +1,5 @@
 import os
+from itertools import chain
 
 import torch
 import torch.distributed as dist
@@ -34,12 +35,16 @@ if __name__ == '__main__':
     )
 
     print('LOCAL_RANK', LOCAL_RANK, 'initialized.')
-    t = torch.tensor([1., 2., 3.]).to(f'cuda:{LOCAL_RANK}')
+    if on_host():
+        t = torch.tensor([1, 2, 3]).to('cuda:0')
+    if on_worker():
+        t = torch.tensor([1., 2., 3.]).to('cuda:0')
 
     # tags to identify tensors
     # loop thru workers
     dist.barrier()
-    handle = dist.all_reduce(t, async_op=True)
+    handle = dist.broadcast(t, 0, async_op=True)
     handle.wait()
 
-    print(t)
+    print(t.long())
+    print(t.type())

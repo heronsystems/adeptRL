@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import reduce
 
 import torch
@@ -69,13 +69,33 @@ class ImpalaHostActor(ActorModule, ACActorHelperMixin):
             flat_act_space += reduce(lambda a, b: a * b, shape)
         act_key_len = len(act_space.keys())
 
+        obs_spec = {k: (exp_len + 1, batch_sz, *shape) for k, shape in
+                    obs_space.items()}
+        action_spec = {k: (exp_len, batch_sz) for k in act_space.keys()}
+        internal_spec = {
+            k: (exp_len, batch_sz, *shape) for k, shape in
+            internal_space.items()
+        }
+
         spec = {
             'log_softmaxes': (exp_len, batch_sz, act_key_len, flat_act_space),
             'entropies': (exp_len, batch_sz, act_key_len),
-            'values': (exp_len, batch_sz)
+            'values': (exp_len, batch_sz),
+            # From Workers
+            'log_probs': (exp_len, batch_sz, act_key_len),
+            **obs_spec,
+            **action_spec,
+            **internal_spec
         }
 
         return spec
+
+    @classmethod
+    def _key_types(cls, obs_space, act_space, internal_space):
+        d = defaultdict(lambda: 'float')
+        for k in act_space.keys():
+            d[k] = 'long'
+        return d
 
 
 class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
@@ -107,6 +127,8 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
 
         log_probs = torch.cat(log_probs, dim=1)
 
+        internals = {k: torch.stack(vs) for k, vs in internals.items()}
+
         return actions_cpu, {
             'log_probs': log_probs,
             **actions_gpu,
@@ -131,3 +153,10 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
         }
 
         return spec
+
+    @classmethod
+    def _key_types(cls, obs_space, act_space, internal_space):
+        d = defaultdict(lambda: 'float')
+        for k in act_space.keys():
+            d[k] = 'long'
+        return d

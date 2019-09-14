@@ -15,6 +15,7 @@
 from collections import namedtuple
 
 import torch
+from adept.utils import dlist_to_listd
 from torch import distributed as dist
 from adept.exp.base.exp_module import ExpModule
 
@@ -29,6 +30,7 @@ class Rollout(dict, ExpModule):
         self.action_keys = spec_builder.action_keys
         self.internal_keys = spec_builder.internal_keys
         self.exp_keys = spec_builder.exp_keys
+        self.key_types = spec_builder.key_types
         self.reward_normalizer = reward_normalizer
         self.rollout_len = rollout_len
 
@@ -105,12 +107,12 @@ class Rollout(dict, ExpModule):
     def read(self):
         tmp = {}
         if self.has_obs:
-            tmp['observations'] = {k: self[k][:-1] for k in self.obs_keys}
+            tmp['observations'] = dlist_to_listd({k: self[k][:-1] for k in self.obs_keys})
             tmp['next_observation'] = {k: self[k][-1] for k in self.obs_keys}
         if self.has_actions:
-            tmp['actions'] = {k: self[k] for k in self.action_keys}
+            tmp['actions'] = dlist_to_listd({k: self[k] for k in self.action_keys})
         if self.has_internals:
-            tmp['internals'] = {k: self[k] for k in self.internal_keys}
+            tmp['internals'] = dlist_to_listd({k: self[k] for k in self.internal_keys})
         for k in self.exp_keys:
             tmp[k] = self[k]
         tmp['rewards'] = self['rewards']
@@ -136,10 +138,14 @@ class Rollout(dict, ExpModule):
         return self
 
     def _init_key(self, key):
-        return [
-            torch.zeros(*self.spec[key][1:])
-            for _ in range(self.spec[key][0])
-        ]
+        zs = torch.zeros(*self.spec[key][1:])
+        if self.key_types[key] == 'long':
+            zs = zs.long()
+        elif self.key_types[key] == 'float':
+            pass
+        else:
+            raise Exception(f'Unrecognized key_type: {self.key_types[key]}')
+        return [zs for _ in range(self.spec[key][0])]
 
     def sync(self, src, grp, async_op=False):
         handles = []
