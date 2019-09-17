@@ -63,11 +63,8 @@ class ImpalaLearner(LearnerModule):
         r_log_probs = []
         for action, log_softs in zip(experiences.actions, experiences.log_softmaxes):
             k_log_probs = []
-            print('log_softs', log_softs.shape)
             for act_tensor, log_soft in zip(action.values(), log_softs.unbind(1)):
-                print('log_soft', log_soft.shape)
                 log_prob = log_soft.gather(1, act_tensor.unsqueeze(1))
-                print('log_prob', log_prob.shape)
                 k_log_probs.append(log_prob)
             r_log_probs.append(torch.cat(k_log_probs, dim=1))
 
@@ -78,6 +75,14 @@ class ImpalaLearner(LearnerModule):
         r_terminals = torch.stack(experiences.terminals)
         r_entropies = torch.stack(experiences.entropies)
         r_dterminal_masks = self.discount * (1. - r_terminals.float())
+
+        print('r_log_probs_learner', r_log_probs_learner[1])  # nan
+        print('r_log_probs_actor', r_log_probs_actor[1])
+        print('r_rewards', r_rewards[1])
+        print('r_values', r_values[1])  # nan
+        print('r_terminals', r_terminals[1])
+        print('r_entropies', r_entropies[1])  # nan
+        print('r_dterminal_masks', r_dterminal_masks[1])
 
         with torch.no_grad():
             r_log_diffs = r_log_probs_learner - r_log_probs_actor
@@ -117,11 +122,6 @@ class ImpalaLearner(LearnerModule):
         # create nstep vtrace return
         # first create d_tV of function 1 in the paper
         values_t_plus_1 = torch.cat((values[1:], estimated_value.unsqueeze(0)))
-        print('clamped_importance_value', clamped_importance_value.shape)
-        print('rewards', rewards.shape)
-        print('discount_terminal_mask', discount_terminal_mask.shape)
-        print('values_t_plus_1', values_t_plus_1.shape)
-        print('values', values.shape)
         diff_value_per_step = clamped_importance_value * (
             rewards + discount_terminal_mask * values_t_plus_1 - values
         )

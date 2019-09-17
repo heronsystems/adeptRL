@@ -156,26 +156,32 @@ class WorkerContainer:
         self.world_size = world_size
         self.group = group
         self.device = torch.device(
-            'cuda:{}'.format(gpu_id(local_rank, torch.cuda.device_count())))
+            'cuda:{}'.format(gpu_id(local_rank, torch.cuda.device_count()))
+        )
         self.exp = WorkerCache(cache_spec, self.device)
 
     def run(self):
         is_done = False
-        dist.barrier()
-        self.exp.sync(self.local_rank, self.group, is_async=False)
+        first = True
+
         while not is_done:
-            print(f'WORKER barrier {self.local_rank}')
-            future = dist.barrier(self.group, async_op=True)
+            if first:
+                dist.barrier()
+                self.exp.sync(self.local_rank, self.group, is_async=False)
+                first = False
+            else:
+                print(f'WORKER barrier {self.local_rank}')
+                future = dist.barrier(self.group, async_op=True)
 
-            while not future.is_completed():
-                if glob('/tmp/actorlearner/done'):
-                    print(f'complete - exiting worker {self.local_rank}')
-                    is_done = True
-                    break
+                while not future.is_completed():
+                    if glob('/tmp/actorlearner/done'):
+                        print(f'complete - exiting worker {self.local_rank}')
+                        is_done = True
+                        break
 
-            if not is_done:
-                print(f'WORKER sync {self.local_rank}')
-                self.exp.sync(self.local_rank, self.group, is_async=True)
+                if not is_done:
+                    print(f'WORKER sync {self.local_rank}')
+                    self.exp.sync(self.local_rank, self.group, is_async=True)
 
 
 def on_worker():

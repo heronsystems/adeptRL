@@ -38,25 +38,22 @@ class ImpalaHostActor(ActorModule, ACActorHelperMixin):
 
         log_softmaxes = []
         entropies = []
-        actions_gpu = OrderedDict()
-        actions_cpu = OrderedDict()
 
         for key in self.action_keys:
             logit = self.flatten_logits(preds[key])
 
+            # print(logit) NaNs
+
             log_softmax, softmax = self.log_softmax(logit), self.softmax(logit)
             entropy = self.entropy(log_softmax, softmax)
-            action = self.sample_action(softmax)
 
             entropies.append(entropy)
             log_softmaxes.append(log_softmax)
-            actions_gpu[key] = action
-            actions_cpu[key] = action.cpu()
 
         log_softmaxes = torch.stack(log_softmaxes, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
-        return actions_cpu, {
+        return None, {
             'log_softmaxes': log_softmaxes,
             'entropies': entropies,
             'values': values

@@ -169,6 +169,7 @@ class ActorLearnerHost(Container):
 
         start_time = time()
         while step_count < self.nb_step:
+            # check the queue for finished rollouts
             q, q_lookup = deque(), set()
             while len(q) < self.nb_learn_batch:
                 for i, r_handles in enumerate(e_handles):
@@ -180,15 +181,6 @@ class ActorLearnerHost(Container):
             print(f'HOST syncing {[i+1 for i in q]}')
 
             self.exp.write_exps([self.worker_exps[i] for i in q])
-
-            # unblock the selected workers
-            for i in q:
-                dist.barrier(self.groups[i])
-                print(f'HOST barrier {i + 1}...')
-                e_handles[i] = self.worker_exps[i].sync(i + 1, self.groups[i], async_op=True)
-                print(f'HOST sync {i + 1}...')
-
-            print(f'HOST unblocked {[i+1 for i in q]}')
 
             r = self.exp.read()
             internals = {k: t.unbind(0) for k, t in r.internals[0].items()}
@@ -234,6 +226,7 @@ class ActorLearnerHost(Container):
                     )
                     next_save += self.epoch_len
 
+            # Backprop
             loss_dict, metric_dict = self.learner.compute_loss(
                 self.network, self.exp.read(), r.next_observation, internals
             )
@@ -256,6 +249,20 @@ class ActorLearnerHost(Container):
                     loss_dict, metric_dict, self.network.named_parameters()
                 )
                 prev_step_t = cur_step_t
+
+            for i in q:
+                # update worker networks
+                # self.network.sync(i + 1, self.groups[i], async_op=False)
+                # unblock the selected workers
+                dist.barrier(self.groups[i])
+                print(f'HOST barrier {i + 1}...')
+                e_handles[i] = self.worker_exps[i].sync(
+                    i + 1,
+                    self.groups[i],
+                    async_op=True
+                )
+                print(f'HOST sync {i + 1}...')
+
         os.mkdir('/tmp/actorlearner/done')
 
     def close(self):
@@ -346,6 +353,7 @@ class ActorLearnerWorker(Container):
         step_count = self.initial_step_count
         ep_rewards = torch.zeros(self.nb_env)
         is_done = False
+        first = True
 
         obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         internals = listd_to_dlist([
@@ -353,10 +361,6 @@ class ActorLearnerWorker(Container):
             range(self.nb_env)
         ])
         start_time = time()
-        dist.barrier()
-        print(self.local_rank, 'first barrier')
-        self.exp.sync(self.local_rank, self.group)
-        print(self.local_rank, 'first sync')
 
         while not is_done:
             with torch.no_grad():
@@ -401,17 +405,23 @@ class ActorLearnerWorker(Container):
                 )
 
             if self.exp.is_ready():
-                future = dist.barrier(self.group, async_op=True)
-                while not future.is_completed():
-                    if glob('/tmp/actorlearner/done'):
-                        print(f'complete - exiting worker {self.local_rank}')
-                        is_done = True
-                        break
-                print(f'WORKER barrier {self.local_rank}')
+                if first:
+                    dist.barrier()
+                    self.exp.sync(self.local_rank, self.group, async_op=False)
+                    first = False
+                else:
+                    self.exp.write_next_obs(obs)
+                    future = dist.barrier(self.group, async_op=True)
+                    while not future.is_completed():
+                        if glob('/tmp/actorlearner/done'):
+                            print(f'complete - exiting worker {self.local_rank}')
+                            is_done = True
+                            break
+                    print(f'WORKER barrier {self.local_rank}')
 
-                if not is_done:
-                    self.exp.sync(self.local_rank, self.group, async_op=True)
-                    print(f'WORKER sync {self.local_rank}')
+                    if not is_done:
+                        self.exp.sync(self.local_rank, self.group, async_op=True)
+                        print(f'WORKER sync {self.local_rank}')
 
                 self.exp.clear()
 

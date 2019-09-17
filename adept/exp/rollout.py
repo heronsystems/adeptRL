@@ -104,6 +104,11 @@ class Rollout(dict, ExpModule):
                         print(f'write_exps shape mismatch {k} {exp_shape} {write_shape}')
                     self[k][rollout_idx] = cat
 
+    def write_next_obs(self, obs):
+        if self.has_obs:
+            for k in self.obs_keys:
+                self[k][-1] = obs[k]
+
     def read(self):
         tmp = {}
         if self.has_obs:
