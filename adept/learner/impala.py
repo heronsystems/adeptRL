@@ -76,13 +76,13 @@ class ImpalaLearner(LearnerModule):
         r_entropies = torch.stack(experiences.entropies)
         r_dterminal_masks = self.discount * (1. - r_terminals.float())
 
-        print('r_log_probs_learner', r_log_probs_learner[1])  # nan
-        print('r_log_probs_actor', r_log_probs_actor[1])
-        print('r_rewards', r_rewards[1])
-        print('r_values', r_values[1])  # nan
-        print('r_terminals', r_terminals[1])
-        print('r_entropies', r_entropies[1])  # nan
-        print('r_dterminal_masks', r_dterminal_masks[1])
+        # print('r_log_probs_learner', r_log_probs_learner[1])  # nan
+        # print('r_log_probs_actor', r_log_probs_actor[1])
+        # print('r_rewards', r_rewards[1])
+        # print('r_values', r_values[1])  # nan
+        # print('r_terminals', r_terminals[1])
+        # print('r_entropies', r_entropies[1])  # nan
+        # print('r_dterminal_masks', r_dterminal_masks[1])
 
         with torch.no_grad():
             r_log_diffs = r_log_probs_learner - r_log_probs_actor

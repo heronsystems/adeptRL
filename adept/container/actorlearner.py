@@ -160,12 +160,10 @@ class ActorLearnerHost(Container):
         ep_rewards = torch.zeros(self.batch_size)
 
         dist.barrier()
-        print(self.local_rank, 'first barrier')
         e_handles = []
         for i, exp in enumerate(self.worker_exps):
             w_local_rank = i + 1
             e_handles.append(exp.sync(w_local_rank, self.groups[i], async_op=True))
-        print(self.local_rank, 'first sync')
 
         start_time = time()
         while step_count < self.nb_step:
@@ -173,10 +171,11 @@ class ActorLearnerHost(Container):
             q, q_lookup = deque(), set()
             while len(q) < self.nb_learn_batch:
                 for i, r_handles in enumerate(e_handles):
-                    if i not in q_lookup:
-                        if all([h.is_completed() for h in r_handles]):
-                            q.append(i)
-                            q_lookup.add(i)
+                    if len(q) == self.nb_learn_batch:
+                        break
+                    elif i not in q_lookup and all([h.is_completed() for h in r_handles]):
+                        q.append(i)
+                        q_lookup.add(i)
 
             print(f'HOST syncing {[i+1 for i in q]}')
 
@@ -209,13 +208,13 @@ class ActorLearnerHost(Container):
                 if term_rewards:
                     term_reward = np.mean(term_rewards)
                     delta_t = time() - start_time
-                    self.logger.info(
-                        'STEP: {} REWARD: {} STEP/S: {}'.format(
-                            step_count,
-                            term_reward,
-                            (step_count - self.initial_step_count) / delta_t
-                        )
-                    )
+                    # self.logger.info(
+                    #     'STEP: {} REWARD: {} STEP/S: {}'.format(
+                    #         step_count,
+                    #         term_reward,
+                    #         (step_count - self.initial_step_count) / delta_t
+                    #     )
+                    # )
                     self.summary_writer.add_scalar(
                         'reward', term_reward, step_count
                     )
@@ -255,13 +254,12 @@ class ActorLearnerHost(Container):
                 # self.network.sync(i + 1, self.groups[i], async_op=False)
                 # unblock the selected workers
                 dist.barrier(self.groups[i])
-                print(f'HOST barrier {i + 1}...')
                 e_handles[i] = self.worker_exps[i].sync(
                     i + 1,
                     self.groups[i],
                     async_op=True
                 )
-                print(f'HOST sync {i + 1}...')
+                self.network.sync(0, self.groups[i], async_op=True)
 
         os.mkdir('/tmp/actorlearner/done')
 
@@ -417,11 +415,10 @@ class ActorLearnerWorker(Container):
                             print(f'complete - exiting worker {self.local_rank}')
                             is_done = True
                             break
-                    print(f'WORKER barrier {self.local_rank}')
 
                     if not is_done:
                         self.exp.sync(self.local_rank, self.group, async_op=True)
-                        print(f'WORKER sync {self.local_rank}')
+                        self.network.sync(0, self.group, async_op=True)
 
                 self.exp.clear()
 

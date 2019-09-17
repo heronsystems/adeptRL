@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from torch.nn import Conv2d, BatchNorm2d, init, functional as F
+from torch.nn import Conv2d, BatchNorm2d, GroupNorm, init, functional as F
 
 from adept.modules import Identity
 from .submodule_3d import SubModule3D

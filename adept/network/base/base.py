@@ -15,6 +15,7 @@
 import abc
 
 import torch
+from torch import distributed as dist
 
 
 class BaseNetwork(torch.nn.Module):
@@ -43,3 +44,15 @@ class BaseNetwork(torch.nn.Module):
 
     def internal_space(self):
         return {k: t.shape for k, t in self.new_internals('cpu').items()}
+
+    def sync(self, src, grp, async_op=False):
+        handles = []
+        for t in self.state_dict().values():
+            handles.append(
+                dist.broadcast(t, src, grp, True)
+            )
+
+        if not async_op:
+            handles = [h.wait() for h in handles]
+
+        return handles
