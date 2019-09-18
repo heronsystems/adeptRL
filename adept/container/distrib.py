@@ -204,8 +204,8 @@ class DistribHost(Container):
                         dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
-                for param in self.network.parameters():
-                    param.grad.mul_(1. / self.world_size)
+                # for param in self.network.parameters():
+                #     param.grad.mul_(1. / self.world_size)
                 self.optimizer.step()
 
                 self.agent.clear()
@@ -388,8 +388,8 @@ class DistribWorker(Container):
                         dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
-                for param in self.network.parameters():
-                    param.grad.mul_(1. / self.world_size)
+                # for param in self.network.parameters():
+                #     param.grad.mul_(1. / self.world_size)
                 self.optimizer.step()
 
                 self.agent.clear()
