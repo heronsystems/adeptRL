@@ -17,7 +17,6 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
         :param id: str Unique identifier for this instance
         """
         super(SubModule, self).__init__()
-        assert len(input_shape) == self.dim
         self._input_shape = input_shape
         self._id = id
 

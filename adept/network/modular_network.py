@@ -17,8 +17,6 @@ import abc
 import torch
 
 from adept.network.base.base import BaseNetwork
-from collections import defaultdict
-from functools import reduce
 
 
 class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
@@ -39,7 +37,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         """
         :param source_nets: Dict[ObsKey, SubModule]
         :param body_submodule: SubModule
-        :param head_submodules: List[SubModule]
+        :param head_submodules: Dict[Dim, SubModule]
         :param output_space: Dict[OutputKey, Shape]
         :param gpu_preprocessor: ObsPreprocessor
         """
@@ -55,15 +53,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         self.body = body_submodule
 
         # Heads
-        self.heads = torch.nn.ModuleDict(
-            [(str(submod.dim), submod) for submod in head_submodules]
-        )
-
-        # output dims must have a corresponding head of the same dim
-        head_dims = set([submod.dim for submod in self.heads.values()])
-        for shape in output_space.values():
-            assert len(shape) in head_dims, \
-                'No head for output shape: {}'.format(shape)
+        self.heads = torch.nn.ModuleDict(head_submodules)
 
         # Outputs
         self.output_layers = self._build_out_layers(output_space, self.heads)
@@ -71,6 +61,10 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         self._obs_keys = list(source_nets.keys())
         self._output_keys = list(output_space.keys())
         self._output_space = output_space
+        self._output_dims = set(
+            [len(shape) for shape in self._output_space.values()]
+        )
+        self._check_outputs_have_heads()
         self._validate_shapes()
 
     @staticmethod
@@ -91,19 +85,19 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             dim = len(shape)
             if dim == 1:
                 layer = torch.nn.Linear(
-                    heads[str(dim)].output_shape()[0], shape[0]
+                    heads[str(dim)].output_shape(dim)[0], shape[0]
                 )
             elif dim == 2:
                 layer = torch.nn.Conv1d(
-                    heads[str(dim)].output_shape()[0], shape[0], kernel_size=1
+                    heads[str(dim)].output_shape(dim)[0], shape[0], kernel_size=1
                 )
             elif dim == 3:
                 layer = torch.nn.Conv2d(
-                    heads[str(dim)].output_shape()[0], shape[0], kernel_size=1
+                    heads[str(dim)].output_shape(dim)[0], shape[0], kernel_size=1
                 )
             elif dim == 4:
                 layer = torch.nn.Conv3d(
-                    heads[str(dim)].output_shape()[0], shape[0], kernel_size=1
+                    heads[str(dim)].output_shape(dim)[0], shape[0], kernel_size=1
                 )
             else:
                 raise ValueError('Invalid dim {}'.format(dim))
@@ -149,13 +143,17 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             dim = len(shape)
             if dim > 1:
                 submod = self.heads[str(dim)]
-                head_shp = submod.output_shape()
+                head_shp = submod.output_shape(dim)
                 for a, b in zip(shape[1:], head_shp[1:]):
                     assert a == b, \
                         'Head-Output conflict: {}-{}'.format(
                             head_shp,
                             shape
                         )
+
+    def _check_outputs_have_heads(self):
+        for dim in self._output_dims:
+            assert str(dim) in self.heads
 
     @classmethod
     def from_args(
@@ -220,38 +218,29 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         input_shape = [nb_body_feature, ] + list(other_dims)
         body_submod = body_cls.from_args(args, input_shape, 'body')
 
-        # List[SubModule]
+        # Dict[Dim, SubModule]
         # instantiate heads based on output_shapes
-        head_submodules = []
+        head_submodules = {}
         for output_key, shape in output_space.items():
             dim = len(shape)
-            if dim == 1:
-                submod = net_reg.lookup_submodule(args.head1d).from_args(
-                    args,
-                    body_submod.output_shape(dim=dim),
-                    'head' + str(dim) + 'd'
-                )
+            if dim in head_submodules:
+                continue
+            elif dim == 1:
+                submod_cls = net_reg.lookup_submodule(args.head1d)
             elif dim == 2:
-                submod = net_reg.lookup_submodule(args.head2d).from_args(
-                    args,
-                    body_submod.output_shape(dim=dim),
-                    'head' + str(dim) + 'd'
-                )
+                submod_cls = net_reg.lookup_submodule(args.head2d)
             elif dim == 3:
-                submod = net_reg.lookup_submodule(args.head3d).from_args(
-                    args,
-                    body_submod.output_shape(dim=dim),
-                    'head' + str(dim) + 'd'
-                )
+                submod_cls = net_reg.lookup_submodule(args.head3d)
             elif dim == 4:
-                submod = net_reg.lookup_submodule(args.head4d).from_args(
-                    args,
-                    body_submod.output_shape(dim=dim),
-                    'head' + str(dim) + 'd'
-                )
+                submod_cls = net_reg.lookup_submodule(args.head4d)
             else:
                 raise ValueError('Invalid dim: {}'.format(dim))
-            head_submodules.append(submod)
+            submod = submod_cls.from_args(
+                args,
+                body_submod.output_shape(submod_cls.dim),
+                'head' + str(dim) + 'd'
+            )
+            head_submodules[str(dim)] = submod
         return cls(
             obs_key_to_submod, body_submod, head_submodules, output_space,
             gpu_preprocessor
@@ -290,12 +279,14 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
 
         # Process heads
         head_out_by_dim = {}
-        for head_submod in self.heads.values():
-            head_out, nxt_internal = head_submod.forward(
-                self.body.to_dim(body_out, head_submod.dim),
-                internals
+        for dim in self._output_dims:
+            cur_head = self.heads[str(dim)]
+            head_out, next_internal = cur_head.forward(
+                self.body.to_dim(body_out, cur_head.dim),
+                internals,
+                dim=dim
             )
-            head_out_by_dim[head_submod.dim] = head_out
+            head_out_by_dim[dim] = head_out
             nxt_internals.append(nxt_internal)
 
         # Process final outputs

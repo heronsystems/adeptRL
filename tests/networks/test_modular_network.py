@@ -20,11 +20,11 @@ class TestModularNetwork(unittest.TestCase):
         'source_4d': Identity4D((16, 8, 8, 8), 'source_4d')
     }
     body = Identity3D((176, 8, 8), 'body')
-    heads = [
-        Identity1D((11264, ), 'head1d'),
-        Identity2D((176, 64), 'head2d'),
-        Identity3D((176, 8, 8), 'head3d')
-    ]
+    heads = {
+        '1': Identity1D((11264, ), 'head1d'),
+        '2': Identity2D((176, 64), 'head2d'),
+        '3': Identity3D((176, 8, 8), 'head3d')
+    }
     output_space = {
         'output_1d': (16,),
         'output_2d': (16, 8 * 8),
@@ -37,7 +37,7 @@ class TestModularNetwork(unittest.TestCase):
 
         source_nets = {'source': stub_1d}
         body = stub_1d
-        heads = [stub_2d]  # should error
+        heads = {'2': stub_2d}
         output_space = {'output': (32, 32)}
 
         with self.assertRaises(AssertionError):
@@ -49,7 +49,7 @@ class TestModularNetwork(unittest.TestCase):
 
         source_nets = {'source': stub_32}
         body = stub_64  # should error
-        heads = [stub_64]
+        heads = {'2': stub_64}
         output_space = {'output': (32, 64)}
 
         with self.assertRaises(AssertionError):
@@ -61,7 +61,7 @@ class TestModularNetwork(unittest.TestCase):
 
         source_nets = {'source': stub_32}
         body = stub_32
-        heads = [stub_64]  # should error
+        heads = {'2': stub_64}  # should error
         output_space = {'output': (32, 64)}
 
         with self.assertRaises(AssertionError):
@@ -72,7 +72,7 @@ class TestModularNetwork(unittest.TestCase):
 
         source_nets = {'source': stub_2d}
         body = stub_2d
-        heads = [stub_2d]
+        heads = {'2': stub_2d}
         output_space = {'output': (32, 32, 32)}  # should error
         with self.assertRaises(AssertionError):
             ModularNetwork(source_nets, body, heads, output_space, dummy_gpu_preprocessor)
@@ -82,7 +82,7 @@ class TestModularNetwork(unittest.TestCase):
 
         source_nets = {'source': stub_2d}
         body = stub_2d
-        heads = [stub_2d]
+        heads = {'2': stub_2d}
         output_space = {'output': (32, 64)}  # should error
         with self.assertRaises(AssertionError):
             ModularNetwork(source_nets, body, heads, output_space, dummy_gpu_preprocessor)
