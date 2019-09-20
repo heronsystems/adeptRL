@@ -15,6 +15,8 @@
 import os
 from collections import deque
 from glob import glob
+from itertools import chain
+import random
 from time import time
 
 import numpy as np
@@ -149,6 +151,8 @@ class ActorLearnerHost(Container):
         self.network.train()
 
     def run(self):
+        from pyinstrument import Profiler
+
         if self.nb_learn_batch > len(self.groups):
             self.logger.warn('More learn batches than workers, reducing '
                              'learn batches to {}'.format(len(self.groups)))
@@ -159,6 +163,9 @@ class ActorLearnerHost(Container):
         prev_step_t = time()
         ep_rewards = torch.zeros(self.batch_size)
 
+        # dist.barrier()
+        # self.network.sync(0)
+
         dist.barrier()
         e_handles = []
         for i, exp in enumerate(self.worker_exps):
@@ -166,19 +173,22 @@ class ActorLearnerHost(Container):
             e_handles.append(exp.sync(w_local_rank, self.groups[i], async_op=True))
 
         start_time = time()
+        profiler = Profiler()
+        self.nb_step = 10e3
+        profiler.start()
         while step_count < self.nb_step:
             # check the queue for finished rollouts
             q, q_lookup = deque(), set()
             while len(q) < self.nb_learn_batch:
-                for i, r_handles in enumerate(e_handles):
-                    if len(q) == self.nb_learn_batch:
-                        break
-                    elif i not in q_lookup and all([h.is_completed() for h in r_handles]):
-                        q.append(i)
-                        q_lookup.add(i)
+                i = random.randint(0, len(self.groups) - 1)
+                handles = e_handles[i]
+                if i not in q_lookup and all([h.is_completed() for h in handles]):
+                    q.append(i)
+                    q_lookup.add(i)
 
             print(f'HOST syncing {[i+1 for i in q]}')
 
+            # real slow
             self.exp.write_exps([self.worker_exps[i] for i in q])
 
             r = self.exp.read()
@@ -254,13 +264,14 @@ class ActorLearnerHost(Container):
                 # self.network.sync(i + 1, self.groups[i], async_op=False)
                 # unblock the selected workers
                 dist.barrier(self.groups[i])
+                self.network.sync(0, self.groups[i], async_op=True)
                 e_handles[i] = self.worker_exps[i].sync(
                     i + 1,
                     self.groups[i],
                     async_op=True
                 )
-                self.network.sync(0, self.groups[i], async_op=True)
-
+        profiler.stop()
+        print(profiler.output_text(unicode=True, color=True))
         os.mkdir('/tmp/actorlearner/done')
 
     def close(self):
@@ -345,13 +356,15 @@ class ActorLearnerWorker(Container):
             self.optimizer = self.load_optim(self.optimizer, args.load_optim)
             logger.info('Reloaded optimizer from {}'.format(args.load_optim))
 
-        self.network.eval()
+        self.network.train()
 
     def run(self):
         step_count = self.initial_step_count
         ep_rewards = torch.zeros(self.nb_env)
         is_done = False
         first = True
+
+        handles = None
 
         obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         internals = listd_to_dlist([
@@ -360,7 +373,15 @@ class ActorLearnerWorker(Container):
         ])
         start_time = time()
 
+        # dist.barrier()
+        # self.network.sync(0)
+
         while not is_done:
+            # Block until exp and network have been sync'ed
+            if handles:
+                for handle in handles:
+                    handle.wait()
+
             with torch.no_grad():
                 actions, exp, internals = self.actor.act(self.network, obs, internals)
             self.exp.write_actor(exp)
@@ -403,12 +424,13 @@ class ActorLearnerWorker(Container):
                 )
 
             if self.exp.is_ready():
+                self.exp.write_next_obs(obs)
+
                 if first:
                     dist.barrier()
-                    self.exp.sync(self.local_rank, self.group, async_op=False)
+                    handles = self.exp.sync(self.local_rank, self.group, async_op=True)
                     first = False
                 else:
-                    self.exp.write_next_obs(obs)
                     future = dist.barrier(self.group, async_op=True)
                     while not future.is_completed():
                         if glob('/tmp/actorlearner/done'):
@@ -417,8 +439,9 @@ class ActorLearnerWorker(Container):
                             break
 
                     if not is_done:
-                        self.exp.sync(self.local_rank, self.group, async_op=True)
-                        self.network.sync(0, self.group, async_op=True)
+                        n_handles = self.network.sync(0, self.group, async_op=True)
+                        e_handles = self.exp.sync(self.local_rank, self.group, async_op=True)
+                        handles = chain(n_handles, e_handles)
 
                 self.exp.clear()
 

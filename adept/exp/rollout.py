@@ -146,6 +146,8 @@ class Rollout(dict, ExpModule):
         zs = torch.zeros(*self.spec[key][1:])
         if self.key_types[key] == 'long':
             zs = zs.long()
+        elif self.key_types[key] == 'byte':
+            zs = zs.byte()
         elif self.key_types[key] == 'float':
             pass
         else:

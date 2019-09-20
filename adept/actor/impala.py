@@ -92,6 +92,9 @@ class ImpalaHostActor(ActorModule, ACActorHelperMixin):
         d = defaultdict(lambda: 'float')
         for k in act_space.keys():
             d[k] = 'long'
+        # TODO this needs a better solution
+        for k in obs_space.keys():
+            d[k] = 'byte'
         return d
 
 
@@ -156,4 +159,7 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
         d = defaultdict(lambda: 'float')
         for k in act_space.keys():
             d[k] = 'long'
+        # TODO this needs a better solution
+        for k in obs_space.keys():
+            d[k] = 'byte'
         return d
