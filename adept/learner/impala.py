@@ -33,20 +33,23 @@ class ImpalaLearner(LearnerModule):
     }
 
     def __init__(
-        self,
-        discount,
-        minimum_importance_value,
-        minimum_importance_policy,
-        entropy_weight
+            self,
+            reward_normalizer,
+            discount,
+            minimum_importance_value,
+            minimum_importance_policy,
+            entropy_weight
     ):
+        self.reward_normalizer = reward_normalizer
         self.discount = discount
         self.minimum_importance_value = minimum_importance_value
         self.minimum_importance_policy = minimum_importance_policy
         self.entropy_weight = entropy_weight
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, reward_normalizer):
         return cls(
+            reward_normalizer,
             discount=args.discount,
             minimum_importance_value=args.minimum_importance_value,
             minimum_importance_policy=args.minimum_importance_policy,
@@ -70,19 +73,11 @@ class ImpalaLearner(LearnerModule):
 
         r_log_probs_learner = torch.stack(r_log_probs)
         r_log_probs_actor = torch.stack(experiences.log_probs)
-        r_rewards = torch.stack(experiences.rewards)
+        r_rewards = self.reward_normalizer(torch.stack(experiences.rewards))  # normalize rewards
         r_values = torch.stack(experiences.values)
         r_terminals = torch.stack(experiences.terminals)
         r_entropies = torch.stack(experiences.entropies)
         r_dterminal_masks = self.discount * (1. - r_terminals.float())
-
-        # print('r_log_probs_learner', r_log_probs_learner[1])  # nan
-        # print('r_log_probs_actor', r_log_probs_actor[1])
-        # print('r_rewards', r_rewards[1])
-        # print('r_values', r_values[1])  # nan
-        # print('r_terminals', r_terminals[1])
-        # print('r_entropies', r_entropies[1])  # nan
-        # print('r_dterminal_masks', r_dterminal_masks[1])
 
         with torch.no_grad():
             r_log_diffs = r_log_probs_learner - r_log_probs_actor

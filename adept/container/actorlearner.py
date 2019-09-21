@@ -24,7 +24,6 @@ import torch
 from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
-from adept.rewardnorm import Identity
 from adept.utils import listd_to_dlist, dtensor_to_dev
 from adept.utils.logging import SimpleModelSaver
 from torch import distributed as dist
@@ -107,18 +106,20 @@ class ActorLearnerHost(Container):
             args.nb_env
         )
         actor = actor_cls.from_args(args, env.action_space)
-        learner = REGISTRY.lookup_learner(args.learner).from_args(args)
-        exp_cls = REGISTRY.lookup_exp(args.exp).from_args(args, rwd_norm, builder)
+        learner = REGISTRY.lookup_learner(args.learner).from_args(args, rwd_norm)
+        exp_cls = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
 
         self.actor = actor
         self.learner = learner
-        self.exp = exp_cls.from_args(args, rwd_norm, builder).to(device)
+        self.exp = exp_cls.from_args(args, builder).to(device)
         self.worker_exps = [
-            exp_cls.from_args(args, Identity(), w_builder).to(device)
+            exp_cls.from_args(args, w_builder).to(device)
             for _ in range(len(groups))
         ]
         self.batch_size = args.nb_env * args.nb_learn_batch
         self.nb_learn_batch = args.nb_learn_batch
+        self.nb_env = args.nb_env
+        self.nb_worker = len(groups)
         self.nb_step = args.nb_step
         self.network = net.to(device)
         self.optimizer = optim_fn(self.network.parameters())
@@ -153,18 +154,15 @@ class ActorLearnerHost(Container):
     def run(self):
         from pyinstrument import Profiler
 
-        if self.nb_learn_batch > len(self.groups):
+        if self.nb_learn_batch > self.nb_worker:
             self.logger.warn('More learn batches than workers, reducing '
-                             'learn batches to {}'.format(len(self.groups)))
-            self.nb_learn_batch = len(self.groups)
+                             'learn batches to {}'.format(self.nb_worker))
+            self.nb_learn_batch = self.nb_worker
 
         step_count = self.initial_step_count
         next_save = self.init_next_save(self.initial_step_count, self.epoch_len)
         prev_step_t = time()
-        ep_rewards = torch.zeros(self.batch_size)
-
-        # dist.barrier()
-        # self.network.sync(0)
+        ep_rewards = torch.zeros(self.nb_worker, self.nb_env)
 
         dist.barrier()
         e_handles = []
@@ -178,21 +176,21 @@ class ActorLearnerHost(Container):
         # profiler.start()
         while step_count < self.nb_step:
             # check the queue for finished rollouts
-            q, q_lookup = deque(), set()
-            while len(q) < self.nb_learn_batch:
-                i = random.randint(0, len(self.groups) - 1)
+            q_idxs, q_idxs_ = [], set()
+            while len(q_idxs) < self.nb_learn_batch:
+                i = random.randint(0, self.nb_worker - 1)
                 handles = e_handles[i]
-                if i not in q_lookup and all([h.is_completed() for h in handles]):
-                    q.append(i)
-                    q_lookup.add(i)
+                if i not in q_idxs_ and all([h.is_completed() for h in handles]):
+                    q_idxs.append(i)
+                    q_idxs_.add(i)
 
-            print(f'HOST syncing {[i+1 for i in q]}')
+            # print(f'HOST syncing {[i+1 for i in q]}')
 
             # real slow
-            self.exp.write_exps([self.worker_exps[i] for i in q])
+            self.exp.write_exps([self.worker_exps[i] for i in q_idxs])
 
             r = self.exp.read()
-            internals = {k: t.unbind(0) for k, t in r.internals[0].items()}
+            internals = {k: ts[0].unbind(0) for k, ts in r.internals.items()}
             for obs, rewards, terminals in zip(
                     r.observations,
                     r.rewards,
@@ -204,16 +202,22 @@ class ActorLearnerHost(Container):
 
                 # Perform state updates
                 step_count += self.batch_size
-                ep_rewards += rewards.cpu().float()
+                reward_chunks = rewards.cpu().chunk(self.nb_learn_batch)
+                terminal_chunks = terminals.cpu().chunk(self.nb_learn_batch)
 
                 term_rewards = []
-                for i, terminal in enumerate(terminals.cpu()):
-                    if terminal:
-                        for k, v in self.network.new_internals(
-                                self.device).items():
-                            internals[k][i] = v
-                        term_rewards.append(ep_rewards[i].item())
-                        ep_rewards[i].zero_()
+                for chunk_idx, i in enumerate(q_idxs):
+                    rewards = reward_chunks[chunk_idx]
+                    terminals = terminal_chunks[chunk_idx]
+                    ep_rewards[i] += rewards.cpu()
+
+                    for j, terminal in enumerate(terminals):
+                        if terminal:
+                            for k, v in self.network.new_internals(self.device).items():
+                                flat_idx = chunk_idx * self.nb_env + j  # TODO check this
+                                internals[k][flat_idx] = v
+                            term_rewards.append(ep_rewards[i][j].item())
+                            ep_rewards[i][j].zero_()
 
                 if term_rewards:
                     term_reward = np.mean(term_rewards)
@@ -221,11 +225,11 @@ class ActorLearnerHost(Container):
                     self.logger.info(
                         'RANK: {} '
                         'STEP: {} '
-                        # 'REWARD: {} '
+                        'REWARD: {} '
                         'STEP/S: {}'.format(
                             self.local_rank,
                             step_count,
-                            # term_reward,
+                            term_reward,
                             (step_count - self.initial_step_count) / delta_t
                         )
                     )
@@ -263,7 +267,7 @@ class ActorLearnerHost(Container):
                 )
                 prev_step_t = cur_step_t
 
-            for i in q:
+            for i in q_idxs:
                 # update worker networks
                 # self.network.sync(i + 1, self.groups[i], async_op=False)
                 # unblock the selected workers
@@ -335,7 +339,7 @@ class ActorLearnerWorker(Container):
             net.internal_space(),
             env_mgr.nb_env
         )
-        exp = REGISTRY.lookup_exp(args.exp).from_args(args, Identity(), builder)
+        exp = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
 
         self.actor = actor
         self.exp = exp.to(device)
@@ -377,9 +381,6 @@ class ActorLearnerWorker(Container):
         ])
         start_time = time()
 
-        # dist.barrier()
-        # self.network.sync(0)
-
         while not is_done:
             # Block until exp and network have been sync'ed
             if handles:
@@ -394,8 +395,8 @@ class ActorLearnerWorker(Container):
             next_obs = dtensor_to_dev(next_obs, self.device)
             self.exp.write_env(
                 obs,
-                rewards.to(self.device),
-                terminals.to(self.device),
+                rewards.to(self.device).float(),
+                terminals.to(self.device).float(),
                 infos
             )
 
@@ -404,28 +405,10 @@ class ActorLearnerWorker(Container):
             ep_rewards += rewards.float()
             obs = next_obs
 
-            term_rewards = []
             for i, terminal in enumerate(terminals):
                 if terminal:
                     for k, v in self.network.new_internals(self.device).items():
                         internals[k][i] = v
-                    term_rewards.append(ep_rewards[i].item())
-                    ep_rewards[i].zero_()
-
-            if term_rewards:
-                term_reward = np.mean(term_rewards)
-                delta_t = time() - start_time
-                # self.logger.info(
-                #     'RANK: {} '
-                #     'LOCAL STEP: {} '
-                #     'REWARD: {} '
-                    # 'LOCAL STEP/S: {}'.format(
-                    #     self.global_rank,
-                    #     step_count,
-                    #     term_reward,
-                    #     (step_count - self.initial_step_count) / delta_t
-                    # )
-                # )
 
             if self.exp.is_ready():
                 self.exp.write_next_obs(obs)

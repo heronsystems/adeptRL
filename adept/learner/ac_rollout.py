@@ -17,11 +17,13 @@ class ACRolloutLearner(LearnerModule):
 
     def __init__(
             self,
+            reward_normalizer,
             discount,
             normalize_advantage,
             entropy_weight,
             return_scale
     ):
+        self.reward_normalizer = reward_normalizer
         self.discount = discount
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
@@ -30,8 +32,9 @@ class ACRolloutLearner(LearnerModule):
             self.dm_scaler = DeepMindReturnScaler(10. ** -3)
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, reward_normalizer):
         return cls(
+            reward_normalizer,
             args.discount,
             args.normalize_advantage,
             args.entropy_weight,
@@ -39,6 +42,9 @@ class ACRolloutLearner(LearnerModule):
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):
+        # normalize rewards
+        rewards = self.reward_normalizer(torch.stack(experiences.rewards))
+
         # estimate value of next state
         with torch.no_grad():
             results, _ = network(next_obs, internals)
@@ -47,7 +53,7 @@ class ACRolloutLearner(LearnerModule):
         # compute nstep return and advantage over batch
         batch_values = torch.stack(experiences.values)
         batch_tgt_returns = self.compute_returns(
-            last_values, experiences.rewards, experiences.terminals
+            last_values, rewards, experiences.terminals
         )
         batch_advantages = batch_tgt_returns - batch_values.data
 
@@ -62,7 +68,7 @@ class ACRolloutLearner(LearnerModule):
         policy_loss = 0.
         entropy_loss = 0.
 
-        rollout_len = len(experiences.rewards)
+        rollout_len = len(rewards)
         for i in range(rollout_len):
             log_probs = experiences.log_probs[i]
             entropies = experiences.entropies[i]

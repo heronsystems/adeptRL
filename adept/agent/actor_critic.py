@@ -44,9 +44,10 @@ class ActorCritic(AgentModule):
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
 
-        self._exp_cache = Rollout(reward_normalizer, spec_builder, rollout_len)
+        self._exp_cache = Rollout(spec_builder, rollout_len)
         self._actor = ACRolloutActorTrain(action_space)
         self._learner = ACRolloutLearner(
+            reward_normalizer,
             discount,
             normalize_advantage,
             entropy_weight,

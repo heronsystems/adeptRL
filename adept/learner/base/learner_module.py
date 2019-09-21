@@ -27,7 +27,7 @@ class LearnerModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     @classmethod
     @abc.abstractmethod
-    def from_args(self, args):
+    def from_args(self, args, reward_normalizer):
         raise NotImplementedError
 
     @abc.abstractmethod

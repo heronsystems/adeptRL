@@ -137,8 +137,8 @@ class DistribHost(Container):
 
             self.agent.observe(
                 obs,
-                rewards.to(self.device),
-                terminals.to(self.device),
+                rewards.to(self.device).float(),
+                terminals.to(self.device).float(),
                 infos
             )
             for i, terminal in enumerate(terminals):
@@ -330,8 +330,8 @@ class DistribWorker(Container):
 
             self.agent.observe(
                 obs,
-                rewards.to(self.device),
-                terminals.to(self.device),
+                rewards.to(self.device).float(),
+                terminals.to(self.device).float(),
                 infos
             )
             for i, terminal in enumerate(terminals):

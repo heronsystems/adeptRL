@@ -23,7 +23,7 @@ from adept.exp.base.exp_module import ExpModule
 class Rollout(dict, ExpModule):
     args = {'rollout_len': 20}
 
-    def __init__(self, reward_normalizer, spec_builder, rollout_len):
+    def __init__(self, spec_builder, rollout_len):
         super(Rollout, self).__init__()
         self.spec = spec_builder(rollout_len)
         self.obs_keys = spec_builder.obs_keys
@@ -31,7 +31,6 @@ class Rollout(dict, ExpModule):
         self.internal_keys = spec_builder.internal_keys
         self.exp_keys = spec_builder.exp_keys
         self.key_types = spec_builder.key_types
-        self.reward_normalizer = reward_normalizer
         self.rollout_len = rollout_len
 
         self.has_obs = all([
@@ -51,9 +50,9 @@ class Rollout(dict, ExpModule):
         self.sorted_keys = sorted(self.keys())
 
     @classmethod
-    def from_args(cls, args, reward_normalizer, spec_builder):
+    def from_args(cls, args, spec_builder):
         return cls(
-            reward_normalizer, spec_builder, args.rollout_len
+            spec_builder, args.rollout_len
         )
 
     def write_actor(self, experience, no_env=False):
@@ -68,7 +67,6 @@ class Rollout(dict, ExpModule):
             self.cur_idx += 1
 
     def write_env(self, obs, rewards, terminals, infos):
-        rewards = self.reward_normalizer(rewards)
         if self.has_obs:
             for k in self.obs_keys:
                 # exp_shape = self[k][self.cur_idx].shape
@@ -117,7 +115,7 @@ class Rollout(dict, ExpModule):
         if self.has_actions:
             tmp['actions'] = dlist_to_listd({k: self[k] for k in self.action_keys})
         if self.has_internals:
-            tmp['internals'] = dlist_to_listd({k: self[k] for k in self.internal_keys})
+            tmp['internals'] = {k: self[k] for k in self.internal_keys}
         for k in self.exp_keys:
             tmp[k] = self[k]
         tmp['rewards'] = self['rewards']
@@ -158,8 +156,6 @@ class Rollout(dict, ExpModule):
         handles = []
         for k in self.sorted_keys:
             for t in self[k]:
-                if t.dtype == torch.bool:
-                    t = t.float()  # cast terminals
                 handles.append(
                     dist.broadcast(t, src=src, group=grp, async_op=True)
                 )
