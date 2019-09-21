@@ -173,9 +173,9 @@ class ActorLearnerHost(Container):
             e_handles.append(exp.sync(w_local_rank, self.groups[i], async_op=True))
 
         start_time = time()
-        profiler = Profiler()
-        self.nb_step = 10e3
-        profiler.start()
+        # profiler = Profiler()
+        # self.nb_step = 10e3
+        # profiler.start()
         while step_count < self.nb_step:
             # check the queue for finished rollouts
             q, q_lookup = deque(), set()
@@ -218,13 +218,17 @@ class ActorLearnerHost(Container):
                 if term_rewards:
                     term_reward = np.mean(term_rewards)
                     delta_t = time() - start_time
-                    # self.logger.info(
-                    #     'STEP: {} REWARD: {} STEP/S: {}'.format(
-                    #         step_count,
-                    #         term_reward,
-                    #         (step_count - self.initial_step_count) / delta_t
-                    #     )
-                    # )
+                    self.logger.info(
+                        'RANK: {} '
+                        'STEP: {} '
+                        # 'REWARD: {} '
+                        'STEP/S: {}'.format(
+                            self.local_rank,
+                            step_count,
+                            # term_reward,
+                            (step_count - self.initial_step_count) / delta_t
+                        )
+                    )
                     self.summary_writer.add_scalar(
                         'reward', term_reward, step_count
                     )
@@ -263,15 +267,15 @@ class ActorLearnerHost(Container):
                 # update worker networks
                 # self.network.sync(i + 1, self.groups[i], async_op=False)
                 # unblock the selected workers
-                dist.barrier(self.groups[i])
+                dist.barrier(self.groups[i], async_op=True)
                 self.network.sync(0, self.groups[i], async_op=True)
                 e_handles[i] = self.worker_exps[i].sync(
                     i + 1,
                     self.groups[i],
                     async_op=True
                 )
-        profiler.stop()
-        print(profiler.output_text(unicode=True, color=True))
+        # profiler.stop()
+        # print(profiler.output_text(unicode=True, color=True))
         os.mkdir('/tmp/actorlearner/done')
 
     def close(self):
@@ -411,17 +415,17 @@ class ActorLearnerWorker(Container):
             if term_rewards:
                 term_reward = np.mean(term_rewards)
                 delta_t = time() - start_time
-                self.logger.info(
-                    'RANK: {} '
-                    'LOCAL STEP: {} '
-                    'REWARD: {} '
-                    'LOCAL STEP/S: {}'.format(
-                        self.global_rank,
-                        step_count,
-                        term_reward,
-                        (step_count - self.initial_step_count) / delta_t
-                    )
-                )
+                # self.logger.info(
+                #     'RANK: {} '
+                #     'LOCAL STEP: {} '
+                #     'REWARD: {} '
+                    # 'LOCAL STEP/S: {}'.format(
+                    #     self.global_rank,
+                    #     step_count,
+                    #     term_reward,
+                    #     (step_count - self.initial_step_count) / delta_t
+                    # )
+                # )
 
             if self.exp.is_ready():
                 self.exp.write_next_obs(obs)

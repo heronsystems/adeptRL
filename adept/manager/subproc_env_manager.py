@@ -60,7 +60,9 @@ class SubProcEnvManager(EnvManager):
             pipe, w_pipe = mp.Pipe()
             socket, port = zmq_robust_bind_socket(self._zmq_context)
 
-            process = mp.Process(target=worker, args=(w_pipe, pipe, port, CloudpickleWrapper(env_fns[w_ind])))
+            process = mp.Process(target=worker, args=(
+                w_pipe, pipe, port, CloudpickleWrapper(env_fns[w_ind])
+            ))
             process.daemon = True
             process.start()
             self.processes.append(process)
