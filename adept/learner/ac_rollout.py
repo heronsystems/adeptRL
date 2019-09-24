@@ -51,20 +51,20 @@ class ACRolloutLearner(LearnerModule):
             last_values = results['critic'].squeeze(1).data
 
         # compute nstep return and advantage over batch
-        batch_values = torch.stack(experiences.values)
-        batch_tgt_returns = self.compute_returns(
+        r_values = torch.stack(experiences.values)
+        r_tgt_returns = self.compute_returns(
             last_values, rewards, experiences.terminals
         )
-        batch_advantages = batch_tgt_returns - batch_values.data
+        r_advantages = r_tgt_returns - r_values.data
 
         # batched value loss
-        value_loss = 0.5 * torch.mean((batch_tgt_returns - batch_values).pow(2))
+        value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
 
         # normalize advantage so that an even number
         # of actions are reinforced and penalized
         if self.normalize_advantage:
-            batch_advantages = (batch_advantages - batch_advantages.mean()) \
-                               / (batch_advantages.std() + 1e-5)
+            r_advantages = (r_advantages - r_advantages.mean()) \
+                               / (r_advantages.std() + 1e-5)
         policy_loss = 0.
         entropy_loss = 0.
 
@@ -74,7 +74,7 @@ class ACRolloutLearner(LearnerModule):
             entropies = experiences.entropies[i]
 
             policy_loss = policy_loss - (
-                    log_probs * batch_advantages[i].unsqueeze(1).data
+                    log_probs * r_advantages[i].unsqueeze(1).data
             ).sum(1)
             entropy_loss = entropy_loss - (
                     self.entropy_weight * entropies
@@ -95,11 +95,12 @@ class ACRolloutLearner(LearnerModule):
         metrics = {}
         return losses, metrics
 
-    def compute_returns(self, estimated_value, rewards, terminals):
+    def compute_returns(self, bootstrap_value, rewards, terminals):
         # First step of nstep reward target is estimated value of t+1
-        target_return = estimated_value
+        target_return = bootstrap_value
+        rollout_len = len(rewards)
         nstep_target_returns = []
-        for i in reversed(range(len(rewards))):
+        for i in reversed(range(rollout_len)):
             reward = rewards[i]
             terminal_mask = 1. - terminals[i].float()
 

@@ -64,9 +64,9 @@ class ImpalaLearner(LearnerModule):
 
         # Gather host log_probs
         r_log_probs = []
-        for action, log_softs in zip(experiences.actions, experiences.log_softmaxes):
+        for b_action, b_log_softs in zip(experiences.actions, experiences.log_softmaxes):
             k_log_probs = []
-            for act_tensor, log_soft in zip(action.values(), log_softs.unbind(1)):
+            for act_tensor, log_soft in zip(b_action.values(), b_log_softs.unbind(1)):
                 log_prob = log_soft.gather(1, act_tensor.unsqueeze(1))
                 k_log_probs.append(log_prob)
             r_log_probs.append(torch.cat(k_log_probs, dim=1))
@@ -79,6 +79,15 @@ class ImpalaLearner(LearnerModule):
         r_entropies = torch.stack(experiences.entropies)
         r_dterminal_masks = self.discount * (1. - r_terminals.float())
 
+        # print('r_log_probs_learner', r_log_probs_learner.shape)
+        # print('r_log_probs_actor', r_log_probs_actor.shape)
+        # print('r_rewards', r_rewards.shape)
+        # print('r_values', r_values.shape, r_values.dtype)
+        # print(r_values[0][0])
+        # print('r_entropies', r_entropies.shape)
+        # print('r_dterminal_masks', r_dterminal_masks.shape)
+        # print('b_last_values', b_last_values.shape)
+
         with torch.no_grad():
             r_log_diffs = r_log_probs_learner - r_log_probs_actor
             vtrace_target, pg_advantage, importance = self._vtrace_returns(
@@ -87,9 +96,7 @@ class ImpalaLearner(LearnerModule):
                 self.minimum_importance_policy
             )
 
-        value_loss = 0.5 * torch.mean(
-            (vtrace_target - r_values).pow(2)
-        )
+        value_loss = 0.5 * (vtrace_target - r_values).pow(2).mean()
         policy_loss = torch.mean(-r_log_probs_learner * pg_advantage)
         entropy_loss = torch.mean(-r_entropies) * self.entropy_weight
 
@@ -103,22 +110,22 @@ class ImpalaLearner(LearnerModule):
 
     @staticmethod
     def _vtrace_returns(
-        log_prob_diffs, discount_terminal_mask, rewards, values,
-        estimated_value, minimum_importance_value, minimum_importance_policy
+        log_prob_diffs, discount_terminal_mask, r_rewards, r_values,
+        bootstrap_value, min_importance_value, min_importance_policy
     ):
+        rollout_len = log_prob_diffs.shape[0]
+
         importance = torch.exp(log_prob_diffs)
-        clamped_importance_value = importance.clamp(
-            max=minimum_importance_value
-        )
+        clamped_importance_value = importance.clamp(max=min_importance_value)
         # if multiple actions take the average, (dim 3 is seq, batch, # actions)
         if clamped_importance_value.dim() == 3:
             clamped_importance_value = clamped_importance_value.mean(-1)
 
         # create nstep vtrace return
         # first create d_tV of function 1 in the paper
-        values_t_plus_1 = torch.cat((values[1:], estimated_value.unsqueeze(0)))
+        values_t_plus_1 = torch.cat((r_values[1:], bootstrap_value.unsqueeze(0)))
         diff_value_per_step = clamped_importance_value * (
-            rewards + discount_terminal_mask * values_t_plus_1 - values
+                r_rewards + discount_terminal_mask * values_t_plus_1 - r_values
         )
 
         # reverse over the values to create the summed importance weighted
@@ -127,10 +134,10 @@ class ImpalaLearner(LearnerModule):
         vs_minus_v_xs = []
         nstep_v = 0.0
         # TODO: this uses a different clamping if != 1
-        if minimum_importance_policy != 1 or minimum_importance_value != 1:
+        if min_importance_policy != 1 or min_importance_value != 1:
             raise NotImplementedError()
 
-        for i in reversed(range(diff_value_per_step.shape[0])):
+        for i in reversed(range(rollout_len)):
             nstep_v = diff_value_per_step[i] + discount_terminal_mask[
                 i] * clamped_importance_value[i] * nstep_v
             vs_minus_v_xs.append(nstep_v)
@@ -138,13 +145,13 @@ class ImpalaLearner(LearnerModule):
         vs_minus_v_xs = torch.stack(list(reversed(vs_minus_v_xs)))
 
         # Add V(s) to finish computation of v_s
-        v_s = values + vs_minus_v_xs
+        v_s = r_values + vs_minus_v_xs
 
         # advantage is pg_importance * (v_s of t+1 - values)
-        clamped_importance_pg = importance.clamp(max=minimum_importance_policy)
+        clamped_importance_pg = importance.clamp(max=min_importance_policy)
 
-        v_s_tp1 = torch.cat((v_s[1:], estimated_value.unsqueeze(0)))
-        advantage = rewards + discount_terminal_mask * v_s_tp1 - values
+        v_s_tp1 = torch.cat((v_s[1:], bootstrap_value.unsqueeze(0)))
+        advantage = r_rewards + discount_terminal_mask * v_s_tp1 - r_values
 
         # if multiple actions broadcast the advantage to be weighted by the
         # different actions importance

@@ -140,7 +140,7 @@ class FrameStack(Operation):
         self.frames = deque([], maxlen=nb_frame)
 
     def update_shape(self, old_shape):
-        return (old_shape.shape[0] * self.nb_frame,) + old_shape.shape[1:]
+        return (old_shape[0] * self.nb_frame,) + old_shape[1:]
 
     def update_dtype(self, old_dtype):
         return old_dtype

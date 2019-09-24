@@ -165,6 +165,7 @@ class ActorLearnerHost(Container):
         ep_rewards = torch.zeros(self.nb_worker, self.nb_env)
 
         dist.barrier()
+        self.network.sync(0)
         e_handles = []
         for i, exp in enumerate(self.worker_exps):
             w_local_rank = i + 1
@@ -268,7 +269,7 @@ class ActorLearnerHost(Container):
                 prev_step_t = cur_step_t
 
             for i in q_idxs:
-                # update worker networks
+                # update worker network
                 # self.network.sync(i + 1, self.groups[i], async_op=False)
                 # unblock the selected workers
                 dist.barrier(self.groups[i], async_op=True)
@@ -381,6 +382,9 @@ class ActorLearnerWorker(Container):
         ])
         start_time = time()
 
+        dist.barrier()
+        self.network.sync(0)
+
         while not is_done:
             # Block until exp and network have been sync'ed
             if handles:
@@ -414,7 +418,6 @@ class ActorLearnerWorker(Container):
                 self.exp.write_next_obs(obs)
 
                 if first:
-                    dist.barrier()
                     handles = self.exp.sync(self.local_rank, self.group, async_op=True)
                     first = False
                 else:
