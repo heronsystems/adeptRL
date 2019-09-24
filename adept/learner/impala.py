@@ -23,7 +23,7 @@ from .base.dm_return_scale import DeepMindReturnScaler
 class ImpalaLearner(LearnerModule):
     """
     Reference implementation:
-    Use https://github.com/deepmind/scalable_agent/blob/master/vtrace.py
+    https://github.com/deepmind/scalable_agent/blob/master/vtrace.py
     """
     args = {
         'discount': 0.99,
@@ -78,15 +78,6 @@ class ImpalaLearner(LearnerModule):
         r_terminals = torch.stack(experiences.terminals)
         r_entropies = torch.stack(experiences.entropies)
         r_dterminal_masks = self.discount * (1. - r_terminals.float())
-
-        # print('r_log_probs_learner', r_log_probs_learner.shape)
-        # print('r_log_probs_actor', r_log_probs_actor.shape)
-        # print('r_rewards', r_rewards.shape)
-        # print('r_values', r_values.shape, r_values.dtype)
-        # print(r_values[0][0])
-        # print('r_entropies', r_entropies.shape)
-        # print('r_dterminal_masks', r_dterminal_masks.shape)
-        # print('b_last_values', b_last_values.shape)
 
         with torch.no_grad():
             r_log_diffs = r_log_probs_learner - r_log_probs_actor

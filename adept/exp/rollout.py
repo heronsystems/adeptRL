@@ -102,6 +102,15 @@ class Rollout(dict, ExpModule):
                     #     print(f'write_exps shape mismatch {k} {exp_shape} {write_shape}')
                     self[k][rollout_idx] = cat
 
+        # copy next observation (for bootstrapping)
+        if self.has_obs:
+            for k in self.obs_keys:
+                tensors_to_cat = []
+                for exp in exps:
+                    tensors_to_cat.append(exp[k][-1])
+                cat = torch.cat(tensors_to_cat)
+                self[k][-1] = cat
+
     def write_next_obs(self, obs):
         if self.has_obs:
             for k in self.obs_keys:

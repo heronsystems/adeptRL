@@ -57,9 +57,6 @@ class ACRolloutLearner(LearnerModule):
         )
         r_advantages = r_tgt_returns - r_values.data
 
-        # batched value loss
-        value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
-
         # normalize advantage so that an even number
         # of actions are reinforced and penalized
         if self.normalize_advantage:
@@ -83,6 +80,7 @@ class ACRolloutLearner(LearnerModule):
         batch_size = policy_loss.shape[0]
         nb_action = log_probs.shape[1]
 
+        value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
         denom = batch_size * rollout_len * nb_action
         policy_loss = policy_loss.sum(0) / denom
         entropy_loss = entropy_loss.sum(0) / denom

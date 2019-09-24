@@ -48,11 +48,14 @@ class EvalContainer:
             seed=seed,
             nb_env=nb_episode
         )
-
+        if train_args.agent:
+            agent = train_args.agent
+        else:
+            agent = train_args.actor_host
         output_space = REGISTRY.lookup_output_space(
-            train_args.agent, env_mgr.action_space
+            agent, env_mgr.action_space
         )
-        eval_actor_cls = REGISTRY.lookup_eval_actor(train_args.agent)
+        eval_actor_cls = REGISTRY.lookup_eval_actor(agent)
         self.actor = eval_actor_cls.from_args(
             eval_actor_cls.prompt(),
             env_mgr.action_space
