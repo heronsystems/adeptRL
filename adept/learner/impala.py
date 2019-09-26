@@ -173,9 +173,9 @@ class ImpalaLearner(LearnerModule):
         return log_probs, entropies
 
     def compute_loss(self, network, rollouts):
-        rewards = rollouts['rewards'].to(network.device)
+        rewards = rollouts['rewards'].to(network.device).half()
         terminals_mask = rollouts['terminals'].cpu()  # cpu is faster
-        discount_terminal_mask = (self.discount * (1 - terminals_mask.float())).to(network.device)
+        discount_terminal_mask = (self.discount * (1 - terminals_mask.float())).to(network.device).half()
         states = {k: v.to(network.device) for k, v in rollouts['states'].items()}
         behavior_log_prob_of_action = rollouts['log_probs'].to(network.device)
         # actions must be list[dict]

@@ -59,7 +59,6 @@ class NCCLOptimizer:
         # sync params every once in a while to reduce numerical errors
         if self._opt_count % self.param_sync_rate == 0:
             self.sync_parameters()
-            self.sync_buffers()
 
     def sync_parameters(self):
         for param in self.network.parameters():
@@ -148,6 +147,7 @@ class RayContainer(Container):
         # TODO: this is a hack, remove once queuer puts rollouts on the correct device
         self.network.device = device
         self.device = device
+        self.network.half()
         self.network.train()
 
         # OPTIMIZER
@@ -263,15 +263,16 @@ class RayContainer(Container):
                         'reward', np.mean(terminal_rewards), global_step_count
                     )
 
-                # write summaries
-                cur_step_t = time()
-                if cur_step_t - prev_step_t > self.summary_freq:
-                    print('Metrics:', self.rollout_queuer.metrics())
+            # write summaries
+            cur_step_t = time()
+            if cur_step_t - prev_step_t > self.summary_freq:
+                print('Metrics:', self.rollout_queuer.metrics())
+                if self.rank == 0:
                     self.write_summaries(
                         self.summary_writer, global_step_count, total_loss,
                         loss_dict, metric_dict, self.network.named_parameters()
                     )
-                    prev_step_t = cur_step_t
+                prev_step_t = cur_step_t
         print('{} stopped training'.format(self.rank))
 
     def done(self, global_step_count):
@@ -325,9 +326,9 @@ class RayContainer(Container):
                 resources = {"Agent{}_Colocate".format(p_ind + 1): 0.1}
             else:
                 resources = {}
-            remote_cls = RayPeerLearnerContainer.as_remote(num_cpus=1,
+            remote_cls = RayPeerLearnerContainer.as_remote(num_cpus=4,
                                                            # TODO: learner GPU alloc from args
-                                                           num_gpus=0.25,
+                                                           num_gpus=0.7,
                                                            resources=resources)
             # init
             remote = remote_cls.remote(self._args, self.initial_step_count, rank=p_ind + 1,

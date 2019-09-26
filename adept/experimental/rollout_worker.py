@@ -95,6 +95,7 @@ class RolloutWorker(Container):
         self.rollout_len = int(args.worker_rollout_len)
 
         # TODO: this should be set to eval after some number of training steps
+        self.network.half()
         self.network.train()
 
         # SETUP state variables for run

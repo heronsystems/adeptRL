@@ -60,6 +60,6 @@ class LSTM(SubModule1D):
 
     def _new_internals(self):
         return {
-            'hx': torch.zeros(self._nb_hidden),
-            'cx': torch.zeros(self._nb_hidden)
+            'hx': torch.zeros(self._nb_hidden).half(),
+            'cx': torch.zeros(self._nb_hidden).half()
         }
