@@ -165,7 +165,6 @@ class ActorLearnerHost(Container):
         ep_rewards = torch.zeros(self.nb_worker, self.nb_env)
 
         dist.barrier()
-        self.network.sync(0)
         e_handles = []
         for i, exp in enumerate(self.worker_exps):
             w_local_rank = i + 1
@@ -185,9 +184,6 @@ class ActorLearnerHost(Container):
                     q_idxs.append(i)
                     q_idxs_.add(i)
 
-            # print(f'HOST syncing {[i+1 for i in q]}')
-
-            # real slow
             self.exp.write_exps([self.worker_exps[i] for i in q_idxs])
 
             r = self.exp.read()
@@ -382,9 +378,6 @@ class ActorLearnerWorker(Container):
         ])
         start_time = time()
 
-        dist.barrier()
-        self.network.sync(0)
-
         while not is_done:
             # Block until exp and network have been sync'ed
             if handles:
@@ -418,6 +411,7 @@ class ActorLearnerWorker(Container):
                 self.exp.write_next_obs(obs)
 
                 if first:
+                    dist.barrier()
                     handles = self.exp.sync(self.local_rank, self.group, async_op=True)
                     first = False
                 else:
