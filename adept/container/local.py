@@ -49,7 +49,10 @@ class Local(Container):
         logger.info('Network parameters: ' + str(self.count_parameters(net)))
 
         def optim_fn(x):
-            return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
+            if args.optim == 'RMSprop':
+                return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
+            elif args.optim == 'Adam':
+                return torch.optim.Adam(x, lr=args.lr)
 
         # AGENT
         rwd_norm = REGISTRY.lookup_reward_normalizer(

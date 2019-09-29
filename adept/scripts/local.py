@@ -62,6 +62,7 @@ Network Options:
     --custom-network <str>  Name of custom network class
 
 Optimizer Options:
+    --optim <str>           Name of optimizer [default: RMSProp]
     --lr <float>            Learning rate [default: 0.0007]
 
 Logging Options:
@@ -151,24 +152,15 @@ def main(args):
         container.close()
 
     if args.eval:
-        import subprocess
-        command = [
-            'python',
-            '-m',
-            'adept.scripts.evaluate',
-            '--log-id-dir',
-            container.log_id_dir,
-            '--gpu-id',
-            str(args.gpu_id),
-            '--nb-episode',
-            str(30)
-        ]
+        from adept.scripts.evaluate import main
+        eval_args = {
+            'log_id_dir': log_id_dir,
+            'gpu_id': 0,
+            'nb_episode': 30,
+        }
         if args.custom_network:
-            command += [
-                '--custom-network',
-                args.custom_network
-            ]
-        exit(subprocess.call(command, env=os.environ))
+            eval_args['custom_network'] = args.custom_network
+        main(eval_args)
 
 
 if __name__ == '__main__':

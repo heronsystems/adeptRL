@@ -20,7 +20,7 @@ from .submodule_3d import SubModule3D
 
 class FourConv(SubModule3D):
     args = {
-        'normalize': True
+        'fourconv_norm': 'bn'
     }
 
     def __init__(self, in_shape, id, normalize):
@@ -33,11 +33,16 @@ class FourConv(SubModule3D):
         self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
         self.conv4 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
 
-        if normalize:
+        if normalize == 'bn':
             self.bn1 = BatchNorm2d(32)
             self.bn2 = BatchNorm2d(32)
             self.bn3 = BatchNorm2d(32)
             self.bn4 = BatchNorm2d(32)
+        elif normalize == 'gn':
+            self.bn1 = GroupNorm(8, 32)
+            self.bn2 = GroupNorm(8, 32)
+            self.bn3 = GroupNorm(8, 32)
+            self.bn4 = GroupNorm(8, 32)
         else:
             self.bn1 = Identity()
             self.bn2 = Identity()
@@ -52,7 +57,7 @@ class FourConv(SubModule3D):
 
     @classmethod
     def from_args(cls, args, in_shape, id):
-        return cls(in_shape, id, args.normalize)
+        return cls(in_shape, id, args.fourconv_norm)
 
     @property
     def _output_shape(self):
