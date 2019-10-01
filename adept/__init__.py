@@ -19,9 +19,9 @@ def register_learner(learner_cls):
     REGISTRY.register_learner(learner_cls)
 
 
-def register_env(env_cls, env_ids):
+def register_env(env_cls):
     from adept.registry import REGISTRY
-    REGISTRY.register_env(env_cls, env_ids)
+    REGISTRY.register_env(env_cls)
 
 
 def register_reward_norm(rwd_norm_cls):

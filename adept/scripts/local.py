@@ -62,7 +62,7 @@ Network Options:
     --custom-network <str>  Name of custom network class
 
 Optimizer Options:
-    --optim <str>           Name of optimizer [default: RMSProp]
+    --optim <str>           Name of optimizer [default: RMSprop]
     --lr <float>            Learning rate [default: 0.0007]
 
 Logging Options:
