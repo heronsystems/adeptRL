@@ -47,7 +47,7 @@ class Init:
         Init.print_ascii_logo()
         Init.make_log_dirs(log_id_dir)
         Init.write_args_file(log_id_dir, args)
-        logger = Init.setup_logger(mode, log_id_dir)
+        logger = Init.setup_logger(log_id_dir)
         Init.log_args(logger, args)
         return args, log_id_dir, initial_step, logger
 
@@ -157,8 +157,8 @@ class Init:
         return os.makedirs(log_id_dir, exist_ok=True)
 
     @staticmethod
-    def setup_logger(mode, log_id_dir, log_name='train'):
-        logger = logging.getLogger(mode)
+    def setup_logger(log_id_dir, log_name='train'):
+        logger = logging.getLogger(log_id_dir)
         logger.setLevel(logging.INFO)
         logger.propagate = False
 

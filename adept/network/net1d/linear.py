@@ -26,7 +26,7 @@ class Linear(SubModule1D):
     args = {
         'linear_normalize': True,
         'linear_nb_hidden': 512,
-        'nb_layer': 1
+        'nb_layer': 3
     }
 
     def __init__(self, input_shape, id, normalize, nb_hidden, nb_layer):
