@@ -42,7 +42,8 @@ setup(
         'cloudpickle>=0.5',
         'opencv-python-headless>=3.4',
         'pyzmq>=17.1.2',
-        'docopt>=0.6'
+        'docopt>=0.6',
+        'ray>=0.7.5'
     ],
     test_requires=test_deps,
     extras_require=extras,

@@ -8,7 +8,6 @@ import time
 from itertools import chain
 
 
-@ray.remote(num_gpus=0.25)
 class Learner:
 
     def __init__(self, rank, learner_ranks, worker_ranks, ip, port):
@@ -37,24 +36,20 @@ class Learner:
             w_rank: torch.zeros(2).to(self.device)
             for w_rank in worker_ranks
         }
-        self.network = torch.ones(3).to(self.device)
+        self.network = torch.zeros(3).to(self.device)
         self.network_grads = [torch.ones(3).to(self.device)]
         self.exp_handles = None
-
-    def sync_exp(self, worker_rank):
-        handle = dist.broadcast(
-            self.exps[worker_rank],
-            worker_rank,
-            self.groups[worker_rank],
-            async_op=True
-        )
-        return handle
 
     def sync_exps(self, worker_ranks):
         print(f'learner {self.rank} syncing exps from {worker_ranks}')
         handles = []
         for worker_rank in worker_ranks:
-            h = self.sync_exp(worker_rank)
+            h = dist.broadcast(
+                self.exps[worker_rank],
+                worker_rank,
+                self.groups[worker_rank],
+                async_op=True
+            )
             handles.append(h)
         self.exp_handles = handles
         return self.rank
@@ -83,12 +78,12 @@ class Learner:
         # update with other learners
         dist.barrier(self.learner_group)
         for p in self.network_grads:
-            dist.all_reduce(p, group=self.learner_group)
+            dist.all_reduce(p, group=self.learner_group)  # blocking call
         print(f'learner {self.rank} shared gradients')
+        self.network += 1
         return True
 
 
-@ray.remote(num_gpus=0.25)
 class Worker:
 
     def __init__(self, rank, learner_ranks, worker_ranks, ip, port):
@@ -116,7 +111,7 @@ class Worker:
 
     def step(self):
         print(f'worker {self.rank} stepping')
-        # block if a network is copied
+        # block to receive a network
         if self.network_handle:
             self.network_handle.wait()
         print(f'worker {self.rank} network {self.network}')
@@ -126,7 +121,7 @@ class Worker:
         return self.rank
 
     def sync_exp(self, host_rank):
-        handle = dist.broadcast(
+        dist.broadcast(
             self.exp,
             self.rank,
             self.groups[host_rank],
@@ -135,7 +130,7 @@ class Worker:
         return self.rank
 
     def sync_network(self, host_rank):
-        handle = dist.broadcast(
+        dist.broadcast(
             self.network,
             host_rank,
             self.groups[host_rank],
@@ -150,7 +145,8 @@ def flatten(items):
 
 if __name__ == '__main__':
     nb_host = 2
-    nb_worker = 2
+    nb_worker = 4
+    nb_learn_batch = 2
     ip = "127.0.0.1"
     port = 6009
     nb_step = 5
@@ -162,11 +158,11 @@ if __name__ == '__main__':
 
     # instantiate as many hosts/workers as requested
     learners = [
-        Learner.remote(rank, learner_ranks, worker_ranks, ip, port)
+        ray.remote(num_gpus=0.1)(Learner).remote(rank, learner_ranks, worker_ranks, ip, port)
         for rank in learner_ranks
     ]
     workers = {
-        rank: Worker.remote(rank, learner_ranks, worker_ranks, ip, port)
+        rank: ray.remote(num_gpus=0.1)(Worker).remote(rank, learner_ranks, worker_ranks, ip, port)
         for rank in worker_ranks
     }
 
@@ -175,15 +171,14 @@ if __name__ == '__main__':
 
     for step in range(nb_step):
         l_steps = []
-
         all_w_ranks = []
         for l_rank, learner in enumerate(learners):
             # host wait for n to be ready
-            w_ranks, undone_ranks = ray.wait(undone_ranks, num_returns=1)
+            w_ranks, undone_ranks = ray.wait(undone_ranks, num_returns=nb_learn_batch)
             w_ranks = [ray.get(rank) for rank in w_ranks]
-            learner_sync = learner.sync_exps.remote(w_ranks)
+            learner.sync_exps.remote(w_ranks)
             for rank in w_ranks:
-                worker_sync = workers[rank].sync_exp.remote(l_rank)
+                workers[rank].sync_exp.remote(l_rank)
             # when ready, merge batch and learn
             l_steps.append(learner.step.remote())
             all_w_ranks.append(w_ranks)
@@ -198,9 +193,9 @@ if __name__ == '__main__':
                 range(len(learners)),
                 learners
         ):
-            learner_sync = learner.sync_network.remote(w_ranks)
+            learner.sync_network.remote(w_ranks)
             for rank in w_ranks:
-                worker_sync = workers[rank].sync_network.remote(l_rank)
+                workers[rank].sync_network.remote(l_rank)
 
         # unblock workers
         for rank in flatten(all_w_ranks):
