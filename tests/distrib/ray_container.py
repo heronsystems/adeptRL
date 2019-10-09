@@ -130,12 +130,13 @@ class Worker:
         return self.rank
 
     def sync_network(self, host_rank):
-        dist.broadcast(
+        handle = dist.broadcast(
             self.network,
             host_rank,
             self.groups[host_rank],
             async_op=True
         )
+        self.network_handle = handle
         return self.rank
 
 

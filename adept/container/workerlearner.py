@@ -13,23 +13,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
-from collections import deque
 from glob import glob
 from itertools import chain
-import random
 from time import time
 
-import numpy as np
 import ray
 import torch
+from torch import distributed as dist
+from torch.utils.tensorboard import SummaryWriter
+
 from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.utils import listd_to_dlist, dtensor_to_dev
 from adept.utils.logging import SimpleModelSaver
-from torch import distributed as dist
-from torch.utils.tensorboard import SummaryWriter
-
 from adept.utils.util import DotDict
 from .base import Container
 
@@ -46,11 +43,6 @@ def gpu_id(local_rank, gpu_ids):
 
 
 class Learner(Container):
-
-    class State:
-        def __init__(self):
-            ep_rewards = None
-
 
     def __init__(
             self,
@@ -86,7 +78,9 @@ class Learner(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device("cuda:{}".format(ray.get_gpu_ids()[0]))
+        gpu_id = ray.get_gpu_ids()[0]
+        print(f'Learner {rank} assigned to {gpu_id}')
+        device = torch.device("cuda")
         output_space = REGISTRY.lookup_output_space(
             args.actor_host, env.action_space
         )
@@ -101,7 +95,8 @@ class Learner(Container):
             env.gpu_preprocessor,
             REGISTRY
         )
-        logger.info('Network parameters: ' + str(self.count_parameters(net)))
+        if rank == 0:
+            print('Network parameters: ' + str(self.count_parameters(net)))
 
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
@@ -123,7 +118,9 @@ class Learner(Container):
             args.nb_env
         )
         actor = actor_cls.from_args(args, env.action_space)
-        learner = REGISTRY.lookup_learner(args.learner).from_args(args, rwd_norm)
+        learner_cls = REGISTRY.lookup_learner(args.learner)
+
+        learner = learner_cls.from_args(args, rwd_norm)
         exp_cls = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
 
         self.actor = actor
@@ -170,6 +167,8 @@ class Learner(Container):
 
         self.network.train()
         self.start_time = time()
+        self.next_save = self.init_next_save(initial_step_count, self.epoch_len)
+        self.prev_step_t = time()
 
     def step(self, step_count, worker_ranks):
 
@@ -189,49 +188,11 @@ class Learner(Container):
             _, h_exp, internals = self.actor.act(self.network, obs, internals)
             self.exp.write_actor(h_exp, no_env=True)
 
-            # Perform state updates
-            step_count += self.batch_size
-            reward_chunks = rewards.cpu().chunk(self.nb_learn_batch)
-            terminal_chunks = terminals.cpu().chunk(self.nb_learn_batch)
-
-            term_rewards = []
-            for chunk_idx, i in enumerate(worker_ranks):
-                rewards = reward_chunks[chunk_idx]
-                terminals = terminal_chunks[chunk_idx]
-                ep_rewards[i] += rewards.cpu()
-
-                for j, terminal in enumerate(terminals):
-                    if terminal:
-                        for k, v in self.network.new_internals(
-                                self.device).items():
-                            flat_idx = chunk_idx * self.nb_env + j  # TODO check this
-                            internals[k][flat_idx] = v
-                        term_rewards.append(ep_rewards[i][j].item())
-                        ep_rewards[i][j].zero_()
-
-            if term_rewards:
-                term_reward = np.mean(term_rewards)
-                delta_t = time() - start_time
-                self.logger.info(
-                    'RANK: {} '
-                    'STEP: {} '
-                    'REWARD: {} '
-                    'STEP/S: {}'.format(
-                        self.rank,
-                        step_count,
-                        term_reward,
-                        (step_count - self.initial_step_count) / delta_t
-                    )
-                )
-                self.summary_writer.add_scalar(
-                    'reward', term_reward, step_count
-                )
-
-            if step_count >= next_save:
+            if step_count >= self.next_save and self.rank == 0:
                 self.saver.save_state_dicts(
                     self.network, step_count, self.optimizer
                 )
-                next_save += self.epoch_len
+                self.next_save += self.epoch_len
 
         # Backprop
         loss_dict, metric_dict = self.learner.compute_loss(
@@ -250,15 +211,18 @@ class Learner(Container):
 
         # write summaries
         cur_step_t = time()
-        if cur_step_t - prev_step_t > self.summary_freq:
+        if cur_step_t - self.prev_step_t > self.summary_freq:
             self.write_summaries(
                 self.summary_writer, step_count, total_loss,
                 loss_dict, metric_dict, self.network.named_parameters()
             )
-            prev_step_t = cur_step_t
+            self.prev_step_t = cur_step_t
+        return self.rank
+        # return r.rewards, r.terminals
 
     def sync_exps(self, worker_ranks):
         handles = []
+        print(worker_ranks)
         for i, worker_rank in enumerate(worker_ranks):
             handles.append(self.worker_exps[i].sync(
                 worker_rank,
@@ -278,122 +242,6 @@ class Learner(Container):
             ))
         return self.rank
 
-    def run(self):
-        step_count = self.initial_step_count
-        next_save = self.init_next_save(self.initial_step_count, self.epoch_len)
-        prev_step_t = time()
-        ep_rewards = torch.zeros(self.nb_worker, self.nb_env)
-
-        dist.barrier()
-        start_time = time()
-        # profiler = Profiler()
-        # self.nb_step = 10e3
-        # profiler.start()
-        while step_count < self.nb_step:
-            # check the queue for finished rollouts
-            q_idxs, q_idxs_ = [], set()
-            while len(q_idxs) < self.nb_learn_batch:
-                i = random.randint(0, self.nb_worker - 1)
-                handles = e_handles[i]
-                if i not in q_idxs_ and all([h.is_completed() for h in handles]):
-                    q_idxs.append(i)
-                    q_idxs_.add(i)
-
-            self.exp.write_exps([self.worker_exps[i] for i in q_idxs])
-
-            r = self.exp.read()
-            internals = {k: ts[0].unbind(0) for k, ts in r.internals.items()}
-            for obs, rewards, terminals in zip(
-                    r.observations,
-                    r.rewards,
-                    r.terminals
-            ):
-                _, h_exp, internals = self.actor.act(self.network, obs,
-                                                     internals)
-                self.exp.write_actor(h_exp, no_env=True)
-
-                # Perform state updates
-                step_count += self.batch_size
-                reward_chunks = rewards.cpu().chunk(self.nb_learn_batch)
-                terminal_chunks = terminals.cpu().chunk(self.nb_learn_batch)
-
-                term_rewards = []
-                for chunk_idx, i in enumerate(q_idxs):
-                    rewards = reward_chunks[chunk_idx]
-                    terminals = terminal_chunks[chunk_idx]
-                    ep_rewards[i] += rewards.cpu()
-
-                    for j, terminal in enumerate(terminals):
-                        if terminal:
-                            for k, v in self.network.new_internals(self.device).items():
-                                flat_idx = chunk_idx * self.nb_env + j  # TODO check this
-                                internals[k][flat_idx] = v
-                            term_rewards.append(ep_rewards[i][j].item())
-                            ep_rewards[i][j].zero_()
-
-                if term_rewards:
-                    term_reward = np.mean(term_rewards)
-                    delta_t = time() - start_time
-                    self.logger.info(
-                        'RANK: {} '
-                        'STEP: {} '
-                        'REWARD: {} '
-                        'STEP/S: {}'.format(
-                            self.local_rank,
-                            step_count,
-                            term_reward,
-                            (step_count - self.initial_step_count) / delta_t
-                        )
-                    )
-                    self.summary_writer.add_scalar(
-                        'reward', term_reward, step_count
-                    )
-
-                if step_count >= next_save:
-                    self.saver.save_state_dicts(
-                        self.network, step_count, self.optimizer
-                    )
-                    next_save += self.epoch_len
-
-            # Backprop
-            loss_dict, metric_dict = self.learner.compute_loss(
-                self.network, self.exp.read(), r.next_observation, internals
-            )
-            total_loss = torch.sum(
-                torch.stack(tuple(loss for loss in loss_dict.values()))
-            )
-
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
-
-            self.exp.clear()
-            [exp.clear() for exp in self.worker_exps]  # necessary?
-
-            # write summaries
-            cur_step_t = time()
-            if cur_step_t - prev_step_t > self.summary_freq:
-                self.write_summaries(
-                    self.summary_writer, step_count, total_loss,
-                    loss_dict, metric_dict, self.network.named_parameters()
-                )
-                prev_step_t = cur_step_t
-
-            for i in q_idxs:
-                # update worker network
-                # self.network.sync(i + 1, self.groups[i], async_op=False)
-                # unblock the selected workers
-                dist.barrier(self.groups[i], async_op=True)
-                self.network.sync(0, self.groups[i], async_op=True)
-                e_handles[i] = self.worker_exps[i].sync(
-                    i + 1,
-                    self.groups[i],
-                    async_op=True
-                )
-        # profiler.stop()
-        # print(profiler.output_text(unicode=True, color=True))
-        os.mkdir('/tmp/actorlearner/done')
-
     def close(self):
         return None
 
@@ -409,16 +257,29 @@ class Worker(Container):
             logger,
             log_id_dir,
             initial_step_count,
-            local_rank,
-            global_rank,
-            world_size,
-            group
+            rank,
+            learner_ranks,
+            worker_ranks
     ):
         args = DotDict(args)
-        seed = args.seed \
-            if global_rank == 0 \
-            else args.seed + args.nb_env * global_rank
-        logger.info('Using {} for rank {} seed.'.format(seed, global_rank))
+        world_size = len(learner_ranks) + len(worker_ranks)
+
+        dist.init_process_group(
+            'nccl',
+            init_method='tcp://{}:{}'.format(args.nccl_addr, args.nccl_port),
+            rank=rank,
+            world_size=world_size
+        )
+        groups = {}
+        for learner_rank in learner_ranks:
+            for worker_rank in worker_ranks:
+                g = dist.new_group([learner_rank, worker_rank])
+                if worker_rank == rank:
+                    groups[learner_rank] = g
+        dist.new_group(learner_ranks)
+
+        seed = args.seed + args.nb_env * (rank - len(learner_ranks))
+        print('Using {} for rank {} seed.'.format(seed, rank))
 
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
@@ -427,9 +288,9 @@ class Worker(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device("cuda:{}".format(
-            gpu_id(local_rank, args.gpu_ids))
-        )
+        gpu_id = ray.get_gpu_ids()[0]
+        print(f'Worker {rank} assigned to {gpu_id}')
+        device = torch.device("cuda")
         output_space = REGISTRY.lookup_output_space(
             args.actor_host, env_mgr.action_space
         )
@@ -454,6 +315,7 @@ class Worker(Container):
         )
         exp = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
 
+        # Properties
         self.actor = actor
         self.exp = exp.to(device)
         self.nb_step = args.nb_step
@@ -465,11 +327,18 @@ class Worker(Container):
         self.log_id_dir = log_id_dir
         self.epoch_len = args.epoch_len
         self.logger = logger
-        self.local_rank = local_rank
-        self.global_rank = global_rank
-        self.world_size = world_size
-        self.group = group
+        self.groups = groups
+        self.rank = rank
 
+        # State
+        self.network_handles = None
+        self.obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
+        self.internals = listd_to_dlist([
+            self.network.new_internals(self.device) for _ in
+            range(self.nb_env)
+        ])
+
+        # Initialization
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
             logger.info('Reloaded network from {}'.format(args.load_network))
@@ -479,71 +348,55 @@ class Worker(Container):
 
         self.network.train()
 
-    def run(self):
-        step_count = self.initial_step_count
-        ep_rewards = torch.zeros(self.nb_env)
-        is_done = False
-        first = True
+    def step(self):
 
-        handles = None
+        self.exp.clear()
+        # don't step until network has been sync'ed
+        if self.network_handles:
+            for h in self.network_handles:
+                h.wait()
 
-        obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
-        internals = listd_to_dlist([
-            self.network.new_internals(self.device) for _ in
-            range(self.nb_env)
-        ])
-        start_time = time()
-
-        while not is_done:
-            # Block until exp and network have been sync'ed
-            if handles:
-                for handle in handles:
-                    handle.wait()
-
+        for _ in range(len(self.exp)):
             with torch.no_grad():
-                actions, exp, internals = self.actor.act(self.network, obs, internals)
+                actions, exp, self.internals = self.actor.act(
+                    self.network, self.obs, self.internals)
             self.exp.write_actor(exp)
 
             next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
-            next_obs = dtensor_to_dev(next_obs, self.device)
+
             self.exp.write_env(
-                obs,
+                self.obs,
                 rewards.to(self.device).float(),
                 terminals.to(self.device).float(),
                 infos
             )
 
-            # Perform state updates
-            step_count += self.nb_env
-            ep_rewards += rewards.float()
-            obs = next_obs
-
             for i, terminal in enumerate(terminals):
                 if terminal:
                     for k, v in self.network.new_internals(self.device).items():
-                        internals[k][i] = v
+                        self.internals[k][i] = v
+            self.obs = dtensor_to_dev(next_obs, self.device)
 
-            if self.exp.is_ready():
-                self.exp.write_next_obs(obs)
+        self.exp.write_next_obs(self.obs)
+        return self.rank
 
-                if first:
-                    dist.barrier()
-                    handles = self.exp.sync(self.local_rank, self.group, async_op=True)
-                    first = False
-                else:
-                    future = dist.barrier(self.group, async_op=True)
-                    while not future.is_completed():
-                        if glob('/tmp/actorlearner/done'):
-                            print(f'complete - exiting worker {self.local_rank}')
-                            is_done = True
-                            break
+    def sync_exp(self, learner_rank):
+        self.exp.sync(
+            self.rank,
+            self.groups[learner_rank],
+            async_op=True
+        )
+        return self.rank
 
-                    if not is_done:
-                        n_handles = self.network.sync(0, self.group, async_op=True)
-                        e_handles = self.exp.sync(self.local_rank, self.group, async_op=True)
-                        handles = chain(n_handles, e_handles)
-
-                self.exp.clear()
+    def sync_network(self, learner_rank):
+        handles = self.network.sync(
+            learner_rank,
+            self.groups[learner_rank],
+            async_op=True
+        )
+        self.network_handles = handles
+        return self.rank
 
     def close(self):
         self.env_mgr.close()
+        return self.rank

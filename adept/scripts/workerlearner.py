@@ -84,20 +84,17 @@ Logging Options:
 Troubleshooting Options:
     --profile                 Profile this script
 """
-import os
-import subprocess
-import sys
 from itertools import chain
 
 import ray
 
 from adept.container import Init
+from adept.container import Worker, Learner
+from adept.registry import REGISTRY as R
 from adept.utils.script_helpers import (
-    parse_list_str, parse_path, parse_none, LogDirHelper
+    parse_list_str, parse_path, parse_none
 )
 from adept.utils.util import DotDict
-from adept.registry import REGISTRY as R
-from adept.container import Worker, Learner
 
 MODE = 'WorkerLearner'
 
@@ -148,8 +145,6 @@ def flatten(items):
 
 def main(args):
     """
-    Run impala training.
-
     :param args: Dict[str, Any]
     :return:
     """
@@ -167,14 +162,14 @@ def main(args):
     # instantiate as many hosts/workers as requested
     learners = [
         ray.remote(num_gpus=1)(Learner).remote(
-            actor_args,
+            actor_args, logger, log_id_dir, initial_step,
             rank, learner_ranks, worker_ranks
         )
         for rank in learner_ranks
     ]
     workers = {
         rank: ray.remote(num_gpus=0.25)(Worker).remote(
-            actor_args,
+            actor_args, logger, log_id_dir, initial_step,
             rank, learner_ranks, worker_ranks
         )
         for rank in worker_ranks
@@ -191,6 +186,7 @@ def main(args):
             w_ranks, undone_ranks = ray.wait(undone_ranks, num_returns=args.nb_learn_batch)
             w_ranks = [ray.get(rank) for rank in w_ranks]
             learner.sync_exps.remote(w_ranks)
+            print(w_ranks)
             for rank in w_ranks:
                 workers[rank].sync_exp.remote(l_rank)
             # when ready, merge batch and learn
@@ -199,7 +195,11 @@ def main(args):
 
         # sync learns
         # wait for all learners to step and sync
-        [ray.get(l_step) for l_step in l_steps]
+        reward_terms = [ray.get(l_step) for l_step in l_steps]
+
+        # for reward_term, w_ranks in zip(reward_terms, all_w_ranks):
+        #     rewards, terminals = reward_term
+        #     print(rewards, terminals)
 
         # sync networks
         for w_ranks, l_rank, learner in zip(
