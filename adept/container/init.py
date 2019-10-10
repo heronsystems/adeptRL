@@ -25,6 +25,13 @@ class Init:
     def main(mode, args):
         args = DotDict(args)
 
+        if not args.prompt:
+            args = Init.from_defaults(args)
+        if args.config:
+            args = Init.from_config(args)
+        if args.prompt:
+            args = Init.from_prompt(args)
+
         if args.agent:
             name = args.agent
         else:
@@ -35,14 +42,7 @@ class Init:
         initial_step = 0
 
         if args.resume:
-            args, log_id_dir, initial_step = Init.from_resume(mode, args, name)
-        else:
-            if not args.prompt:
-                args = Init.from_defaults(args)
-            if args.config:
-                args = Init.from_config(args)
-            if args.prompt:
-                args = Init.from_prompt(args)
+            args, log_id_dir, initial_step = Init.from_resume(mode, args)
 
         Init.print_ascii_logo()
         Init.make_log_dirs(log_id_dir)
@@ -52,7 +52,7 @@ class Init:
         return args, log_id_dir, initial_step, logger
 
     @staticmethod
-    def from_resume(mode, args, name):
+    def from_resume(mode, args):
         """
         :param mode: Script name
         :param args: Dict[str, Any], static args
@@ -67,6 +67,12 @@ class Init:
         args.load_network = log_dir_helper.latest_network_path()
         args.load_optim = log_dir_helper.latest_optim_path()
         initial_step_count = log_dir_helper.latest_epoch()
+
+        if args.agent:
+            name = args.agent
+        else:
+            name = args.actor_host
+
         log_id = Init.make_log_id(
             args.tag, mode, name, args.netbody,
             timestamp=log_dir_helper.timestamp()
