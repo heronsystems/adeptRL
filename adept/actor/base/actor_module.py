@@ -85,7 +85,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
         :param preds: Dict[str, torch.Tensor]
         :return:
-            actions: Dict[ActionKey, LongTensor (B)]
+            actions: Dict[ActionKey, Tensor (B)]
             experience: Dict[str, Tensor (B, X)]
         """
         raise NotImplementedError
@@ -95,7 +95,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         :param obs: Dict[str, Tensor]
         :param prev_internals: previous interal states. Dict[str, Tensor]
         :return:
-            actions: Dict[ActionKey, LongTensor (B)]
+            actions: Dict[ActionKey, Tensor (B)]
             experience: Dict[str, Tensor (B, X)]
             internal_states: Dict[str, Tensor]
         """
