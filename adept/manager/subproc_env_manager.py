@@ -103,7 +103,7 @@ class SubProcEnvManager(EnvManager):
         action_dicts = dlist_to_listd(actions)
         # zmq send
         for socket, action in zip(self._zmq_sockets, action_dicts):
-            msg = json.dumps({k: int(v) for k, v in action.items()})
+            msg = json.dumps({k: v.item() for k, v in action.items()})
             socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
 
         self.waiting = True
