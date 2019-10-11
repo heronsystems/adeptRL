@@ -55,7 +55,7 @@ class Linear(SubModule1D):
     @classmethod
     def from_args(cls, args, input_shape, id):
         return cls(
-            input_shape, id, args.linear_nb_hidden, args.linear_nb_hidden,
+            input_shape, id, args.linear_normalize, args.linear_nb_hidden,
             args.nb_layer
         )
 
