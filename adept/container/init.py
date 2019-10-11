@@ -164,7 +164,7 @@ class Init:
 
     @staticmethod
     def setup_logger(log_id_dir, log_name='train'):
-        logger = logging.getLogger(log_id_dir)
+        logger = logging.getLogger(log_id_dir + '_' + log_name)
         logger.setLevel(logging.INFO)
         logger.propagate = False
 

@@ -31,7 +31,7 @@ Commands:
     distrib             Train an agent on multiple machines and/or GPUs.
     actorlearner        Train an agent on multiple machines and/or GPUs.
     evaluate            Evaluate a trained agent.
-    render_atari        Visualize an agent playing an Atari game.
+    render        Visualize an agent playing an Atari game.
     replay_gen_sc2      Generate SC2 replay files of an agent playing SC2.
 
 See 'adept.app help <command>' for more information on a specific command.
@@ -67,9 +67,9 @@ def parse_args():
           ] + argv, env=env))
     elif args['<command>'] == 'evaluate':
         exit(call(['python', '-m', 'adept.scripts.evaluate'] + argv, env=env))
-    elif args['<command>'] == 'render_atari':
+    elif args['<command>'] == 'render':
         exit(call([
-            'python', '-m', 'adept.scripts.render_atari'
+            'python', '-m', 'adept.scripts.render'
         ] + argv, env=env))
     elif args['<command>'] == 'replay_gen_sc2':
         exit(call([
@@ -84,8 +84,8 @@ def parse_args():
             exit(call(['python', '-m', 'adept.scripts.actorlearner', '-h']))
         elif 'evaluate' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.evaluate', '-h']))
-        elif 'render_atari' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.render_atari', '-h']))
+        elif 'render' in args['<args>']:
+            exit(call(['python', '-m', 'adept.scripts.render', '-h']))
         elif 'replay_gen_sc2' in args['<args>']:
             exit(call(['python', '-m', 'adept.scripts.replay_gen_sc2', '-h']))
     else:
