@@ -42,7 +42,7 @@ class Linear(SubModule1D):
                 nb_hidden,
                 bias
             )
-            for i in range(nb_layer - 1)
+            for i in range(nb_layer)
         ])
         if normalize == 'bn':
             self.norms = nn.ModuleList([
