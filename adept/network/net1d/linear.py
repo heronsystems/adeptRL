@@ -24,7 +24,7 @@ from .submodule_1d import SubModule1D
 
 class Linear(SubModule1D):
     args = {
-        'linear_normalize': True,
+        'linear_normalize': 'bn',
         'linear_nb_hidden': 512,
         'nb_layer': 3
     }
@@ -36,16 +36,23 @@ class Linear(SubModule1D):
         nb_input_channel = input_shape[0]
 
         bias = not normalize
-        self.linear = nn.Linear(
-            nb_input_channel, nb_hidden, bias=bias
-        )
         self.linears = nn.ModuleList([
-            nn.Linear(nb_hidden, nb_hidden, bias)
-            for _ in range(nb_layer - 1)
+            nn.Linear(
+                nb_input_channel if i == 0 else nb_hidden,
+                nb_hidden,
+                bias
+            )
+            for i in range(nb_layer - 1)
         ])
-        if normalize:
+        if normalize == 'bn':
             self.norms = nn.ModuleList([
                 nn.BatchNorm1d(nb_hidden) for _ in range(nb_layer)
+            ])
+        elif normalize == 'gn':
+            if nb_hidden % 16 != 0:
+                raise Exception('linear_nb_hidden must be divisible by 16 for Group Norm')
+            self.norms = nn.ModuleList([
+                nn.GroupNorm(nb_hidden // 16, nb_hidden) for _ in range(nb_layer)
             ])
         else:
             self.norms = nn.ModuleList([
@@ -60,8 +67,7 @@ class Linear(SubModule1D):
         )
 
     def _forward(self, xs, internals, **kwargs):
-        xs = F.relu(self.norms[0](self.linear(xs)))
-        for linear, norm in zip(self.linears, self.norms[1:]):
+        for linear, norm in zip(self.linears, self.norms):
             xs = F.relu(norm(linear(xs)))
         return xs, {}
 
