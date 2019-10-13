@@ -263,15 +263,16 @@ class RayContainer(Container):
                         'reward', np.mean(terminal_rewards), global_step_count
                     )
 
-                # write summaries
-                cur_step_t = time()
-                if cur_step_t - prev_step_t > self.summary_freq:
-                    print('Metrics:', self.rollout_queuer.metrics())
+            # write summaries
+            cur_step_t = time()
+            if cur_step_t - prev_step_t > self.summary_freq:
+                print('Metrics:', self.rollout_queuer.metrics())
+                if self.rank == 0:
                     self.write_summaries(
                         self.summary_writer, global_step_count, total_loss,
                         loss_dict, metric_dict, self.network.named_parameters()
                     )
-                    prev_step_t = cur_step_t
+                prev_step_t = cur_step_t
         print('{} stopped training'.format(self.rank))
 
     def done(self, global_step_count):
