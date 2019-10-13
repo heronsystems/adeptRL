@@ -7,7 +7,7 @@ import torch
 
 
 class RolloutQueuerAsync:
-    def __init__(self, workers, num_rollouts, queue_max_size, timeout=30.0):
+    def __init__(self, workers, num_rollouts, queue_max_size, timeout=15.0):
         self.workers = workers
         self.num_rollouts = num_rollouts
         self.queue_max_size = queue_max_size

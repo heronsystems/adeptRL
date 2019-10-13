@@ -62,10 +62,10 @@ class CastToFloat(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return torch.float16
+        return torch.float32
 
     def update_obs(self, obs):
-        return obs.half()
+        return obs.float()
 
 
 class GrayScaleAndMoveChannel(Operation):
@@ -125,10 +125,10 @@ class Divide255(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return torch.float16
+        return torch.float32
 
     def update_obs(self, obs):
-        obs = obs.half()
+        obs = obs.float()
         obs *= (1. / 255.)
         return obs
 
