@@ -191,12 +191,9 @@ def main(args):
         # have all sync parameters
         [f._sync_peer_parameters.remote() for f in peer_learners]
         main_learner._sync_peer_parameters.remote()
-
-        # main_learner must be first index
-        learners = [main_learner] + peer_learners
     # else just 1 learner
     else:
-        learners = [main_learner]
+        peer_learners = []
 
     # create workers
     # TODO: actually lookup from registry
@@ -206,24 +203,18 @@ def main(args):
                     for w_ind in range(args.nb_workers)]
 
     # synchronize worker variables
-    main_learner.synchronize_worker_parameters.remote(workers, initial_step, blocking=True)
-
-    if args.profile:
-        # TODO: for profiling main learner shouldn't be remote
-        # or run method must implement pyinstrument profiling
-        raise NotImplementedError('TODO')
+    ray.get(main_learner.synchronize_worker_parameters.remote(workers, initial_step, blocking=True))
 
     try:
         # startup the run method of all containers
-        runs = [f.run.remote(workers) for f in learners]
+        runs = [main_learner.run.remote(workers, args.profile)]
+        runs.extend([f.run.remote(workers) for f in peer_learners])
         done_training = ray.wait(runs)
 
     finally:
-        # if args.profile:
-            # profiler.stop()
-            # print(profiler.output_text(unicode=True, color=True))
-
-        closes = [f.close.remote() for f in learners]
+        closes = [main_learner.close.remote()]
+        closes.extend([f.close.remote() for f in peer_learners])
+        done_closing = ray.wait(closes)
 
     if args.eval:
         import subprocess

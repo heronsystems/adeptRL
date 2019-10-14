@@ -197,7 +197,15 @@ class RayContainer(Container):
             self.summary_writer = SummaryWriter(log_id_dir)
             self.saver = SimpleModelSaver(log_id_dir)
 
-    def run(self, workers):
+    def run(self, workers, profile=False):
+        if profile:
+            try:
+                from pyinstrument import Profiler
+            except:
+                raise ImportError('You must install pyinstrument to use profiling.')
+            profiler = Profiler()
+            profiler.start()
+
         # setup queuer
         self.rollout_queuer = RolloutQueuerAsync(workers, self.nb_learn_batch, self.rollout_queue_size)
         self.rollout_queuer.start()
@@ -218,22 +226,24 @@ class RayContainer(Container):
 
             # Iterate forward on batch
             self.exp.write_exps(rollouts)
+            # keep a copy of terminals on the cpu it's faster
+            rollout_terminals = torch.stack(self.exp['terminals']).numpy()
             self.exp.to(self.device)
             r = self.exp.read()
             internals = {k: ts[0].unbind(0) for k, ts in r.internals.items()}
             for obs, rewards, terminals in zip(
                     r.observations,
                     r.rewards,
-                    r.terminals
+                    rollout_terminals
             ):
                 _, h_exp, internals = self.actor.act(self.network, obs,
                                                      internals)
                 self.exp.write_actor(h_exp, no_env=True)
 
-                for i, terminal in enumerate(terminals):
-                    if terminal:
-                        for k, v in self.network.new_internals(self.device).items():
-                            internals[k][i] = v
+                actual_terminals = np.where(terminals)[0]
+                for i in actual_terminals:
+                    for k, v in self.network.new_internals(self.device).items():
+                        internals[k][i] = v
 
 
             # compute loss
@@ -282,6 +292,9 @@ class RayContainer(Container):
                     )
                 prev_step_t = cur_step_t
         print('{} stopped training'.format(self.rank))
+        if profile:
+            profiler.stop()
+            print(profiler.output_text(unicode=True, color=True))
 
     def done(self, global_step_count):
         return global_step_count >= self.nb_step
@@ -291,7 +304,6 @@ class RayContainer(Container):
 
     def get_parameters(self):
         params = [p.cpu() for p in self.network.parameters()]
-        params.extend([b.cpu() for b in self.network.buffers()])
         return params
 
     def synchronize_worker_parameters(self, workers, global_step_count=0, blocking=False):
