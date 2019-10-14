@@ -78,21 +78,21 @@ class RolloutQueuerAsync:
             terminal_rewards.append(t)
 
         # aggregate into batch
-        batch = {}
-        # TODO: this assumes all rollouts have the same keys, and send torch.Tensors
-        for k in rollouts[0].keys():
-            # cat over batch dimension
-            if isinstance(rollouts[0][k], torch.Tensor):
-                v_list = [r[k] for r in rollouts]
-                agg = torch.cat(v_list, dim=1)
-            elif isinstance(rollouts[0][k], dict):
-                # cat all elements of dict
-                agg = {}
-                for r_key in rollouts[0][k].keys():
-                    agg[r_key] = torch.cat([r[k][r_key] for r in rollouts], dim=1)
-            batch[k] = agg
+#         batch = {}
+        # # TODO: this assumes all rollouts have the same keys, and send torch.Tensors
+        # for k in rollouts[0].keys():
+            # # cat over batch dimension
+            # if isinstance(rollouts[0][k], torch.Tensor):
+                # v_list = [r[k] for r in rollouts]
+                # agg = torch.cat(v_list, dim=1)
+            # elif isinstance(rollouts[0][k], dict):
+                # # cat all elements of dict
+                # agg = {}
+                # for r_key in rollouts[0][k].keys():
+                    # agg[r_key] = torch.cat([r[k][r_key] for r in rollouts], dim=1)
+            # batch[k] = agg
 
-        return batch, terminal_rewards
+        return rollouts, terminal_rewards
 
     def stop(self):
         self._should_stop = True

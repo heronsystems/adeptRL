@@ -23,7 +23,7 @@
 
 Ray Mode
 
-Train an agent with rollout workers distributed and run by ray.
+Train an agent with learners and rollout workers distributed by ray.
 
 Usage:
     ray [options]
@@ -32,23 +32,19 @@ Usage:
 
 Distributed Options:
     --nb-learners <int>         Number of distributed learners [default: 2]
-    --nb-workers <int>          Number of distributed workers per learner [default: 2]
-    --colocate-workers <bool>   Colocate workers with actors [default: False]
+    --nb-workers <int>          Number of distributed workers [default: 4]
     --ray-addr <str>            Ray head node address, None for local [default: None]
-    --nccl-timeout <int>        Seconds to wait for any NCCL op before timeout [default: 30]
 
 Topology Options:
-    --worker-type <str>          Name of distributed workers [default: RolloutWorker]
-    --actor-worker <str>         Name of worker actor [default: ImpalaWorkerActor]
-    --learner <str>              Name of learner [default: ImpalaLearner]
-    --exp-worker <str>           Name of worker experience cache [default: ImpalaRollout]
-    --nb-env <int>               Number of env per worker [default: 32]
-    --worker-rollout-len <int>   Number of steps to include in a worker rollout [default: 20]
+    --actor-host <str>        Name of host actor [default: ImpalaHostActor]
+    --actor-worker <str>      Name of worker actor [default: ImpalaWorkerActor]
+    --learner <str>           Name of learner [default: ImpalaLearner]
+    --exp <str>               Name of host experience cache [default: Rollout]
+    --nb-learn-batch <int>    Number of worker batches to learn on (per learner) [default: 2]
     --worker-cpu-alloc <int>     Number of cpus for each rollout worker [default: 32]
     --worker-gpu-alloc <float>   Number of gpus for each rollout worker [default: 0.25]
     --learner-cpu-alloc <int>     Number of cpus for each learner [default: 1]
     --learner-gpu-alloc <float>   Number of gpus for each learner [default: 1]
-    --nb-rollouts-in-batch <int>  Number of rollouts per batch [default: 2]
     --rollout-queue-size <int>   Max length of rollout queue before blocking [default: 4]
 
 Environment Options:
@@ -56,6 +52,7 @@ Environment Options:
     --rwd-norm <str>        Reward normalizer name [default: Clip]
 
 Script Options:
+    --nb-env <int>          Number of env per worker [default: 16]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
@@ -132,20 +129,17 @@ def parse_args():
     args.ray_addr = parse_none(args.ray_addr)
     args.nb_learners = int(args.nb_learners)
     args.nb_workers = int(args.nb_workers)
-    args.colocate_workers = parse_bool_str(args.colocate_workers)
     args.learner_cpu_alloc = int(args.learner_cpu_alloc)
     args.learner_gpu_alloc = float(args.learner_gpu_alloc)
     args.worker_cpu_alloc = int(args.worker_cpu_alloc)
     args.worker_gpu_alloc = float(args.worker_gpu_alloc)
-    args.worker_rollout_len = int(args.worker_rollout_len)
-    args.nccl_timeout = int(args.nccl_timeout)
 
-    args.nb_rollouts_in_batch = int(args.nb_rollouts_in_batch)
+    args.nb_learn_batch = int(args.nb_learn_batch)
     args.rollout_queue_size = int(args.rollout_queue_size)
 
     # arg checking
-    assert args.nb_rollouts_in_batch <= args.nb_workers, 'WARNING: nb_rollouts_in_batch must be <= nb_workers. Got {} <= {}' \
-           .format(args.nb_rollouts_in_batch, args.nb_workers)
+    assert args.nb_learn_batch <= args.nb_workers, 'WARNING: nb_learn_batch must be <= nb_workers. Got {} <= {}' \
+           .format(args.nb_learn_batch, args.nb_workers)
     return args
 
 
@@ -200,6 +194,9 @@ def main(args):
 
         # main_learner must be first index
         learners = [main_learner] + peer_learners
+    # else just 1 learner
+    else:
+        learners = [main_learner]
 
     # create workers
     # TODO: actually lookup from registry

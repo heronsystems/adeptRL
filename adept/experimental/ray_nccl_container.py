@@ -27,7 +27,6 @@ from adept.container.base import Container
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.experimental.rollout_queuer import RolloutQueuerAsync
-from adept.experimental.rollout_worker import RolloutWorker
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
 
@@ -110,25 +109,21 @@ class RayContainer(Container):
         self._args = args
         self.nb_learners = args.nb_learners
         self.nb_workers = args.nb_workers
-        self.colocate_workers = args.colocate_workers
         self.rank = rank
         self.nb_step = args.nb_step
         self.nb_env = args.nb_env
         self.initial_step_count = initial_step_count
         self.epoch_len = args.epoch_len
         self.summary_freq = args.summary_freq
-        self.nb_rollouts_in_batch = args.nb_rollouts_in_batch
+        self.nb_learn_batch = args.nb_learn_batch
         self.rollout_queue_size = args.rollout_queue_size
-        self.worker_rollout_len = args.worker_rollout_len
-        self.worker_cpu_alloc = args.worker_cpu_alloc
-        self.worker_gpu_alloc = args.worker_gpu_alloc
         # can be none if rank != 0
         self.logger = logger
         self.log_id_dir = log_id_dir
 
-        # ENV
+        # ENV (temporary)
         env_cls = REGISTRY.lookup_env(args.env)
-        env = env_cls.from_args_curry(args, 0)()
+        env = env_cls.from_args(args, 0)
         env_action_space, env_observation_space, env_gpu_preprocessor = \
             env.action_space, env.observation_space, env.gpu_preprocessor
         env.close()
@@ -164,9 +159,30 @@ class RayContainer(Container):
         else:
             self.optimizer = optim_fn(self.network.parameters())
 
-        # LEARNER
-        learner = REGISTRY.lookup_learner(args.learner).from_args(args)
+        # LEARNER / EXP
+        rwd_norm = REGISTRY.lookup_reward_normalizer(
+            args.rwd_norm).from_args(args)
+        actor_cls = REGISTRY.lookup_actor(args.actor_host)
+        builder = actor_cls.exp_spec_builder(
+            env.observation_space,
+            env.action_space,
+            net.internal_space(),
+            args.nb_env * args.nb_learn_batch
+        )
+        w_builder = REGISTRY.lookup_actor(args.actor_worker).exp_spec_builder(
+            env.observation_space,
+            env.action_space,
+            net.internal_space(),
+            args.nb_env
+        )
+        actor = actor_cls.from_args(args, env.action_space)
+        learner = REGISTRY.lookup_learner(args.learner).from_args(args, rwd_norm)
+
+        exp_cls = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
+
+        self.actor = actor
         self.learner = learner
+        self.exp = exp_cls.from_args(args, builder).to(device)
 
         # Rank 0 setup, load network/optimizer and create SummaryWriter/Saver
         if rank == 0:
@@ -183,7 +199,7 @@ class RayContainer(Container):
 
     def run(self, workers):
         # setup queuer
-        self.rollout_queuer = RolloutQueuerAsync(workers, self.nb_rollouts_in_batch, self.rollout_queue_size)
+        self.rollout_queuer = RolloutQueuerAsync(workers, self.nb_learn_batch, self.rollout_queue_size)
         self.rollout_queuer.start()
 
         # initial setup
@@ -196,11 +212,33 @@ class RayContainer(Container):
         # loop until total number steps
         print('{} starting training'.format(self.rank))
         while not self.done(global_step_count):
-            # Learn
-            batch, terminal_rewards = self.rollout_queuer.get()
+            self.exp.clear()
+            # Get batch from queue
+            rollouts, terminal_rewards = self.rollout_queuer.get()
 
+            # Iterate forward on batch
+            self.exp.write_exps(rollouts)
+            self.exp.to(self.device)
+            r = self.exp.read()
+            internals = {k: ts[0].unbind(0) for k, ts in r.internals.items()}
+            for obs, rewards, terminals in zip(
+                    r.observations,
+                    r.rewards,
+                    r.terminals
+            ):
+                _, h_exp, internals = self.actor.act(self.network, obs,
+                                                     internals)
+                self.exp.write_actor(h_exp, no_env=True)
+
+                for i, terminal in enumerate(terminals):
+                    if terminal:
+                        for k, v in self.network.new_internals(self.device).items():
+                            internals[k][i] = v
+
+
+            # compute loss
             loss_dict, metric_dict = self.learner.compute_loss(
-                self.network, batch
+                self.network, self.exp.read(), r.next_observation, internals
             )
             total_loss = torch.sum(
                 torch.stack(tuple(loss for loss in loss_dict.values()))
@@ -211,15 +249,14 @@ class RayContainer(Container):
             self.optimizer.step()
 
             # Perform state updates
-            global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len * self.nb_learners
-
-            # send parameters to workers async
-            # TODO: this could be parallelized, chunk by nb learners
-            if self.rank == 0:
-                self.synchronize_worker_parameters(workers, global_step_count)
+            global_step_count += self.nb_env * self.nb_learn_batch * len(r.terminals) * self.nb_learners
 
             # if rank 0 write summaries and save
+            # and send parameters to workers async
             if self.rank == 0:
+                # TODO: this could be parallelized, chunk by nb learners
+                self.synchronize_worker_parameters(workers, global_step_count)
+
                 # possible save
                 if global_step_count >= next_save:
                     self.saver.save_state_dicts(

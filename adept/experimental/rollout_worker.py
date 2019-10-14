@@ -65,7 +65,8 @@ class RolloutWorker(Container):
             else "cpu"
         )
         output_space = REGISTRY.lookup_output_space(
-            args.actor_worker, env_mgr.action_space)
+            args.actor_worker, env_mgr.action_space
+        )
         if args.custom_network:
             net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
@@ -77,22 +78,24 @@ class RolloutWorker(Container):
             env_mgr.gpu_preprocessor,
             REGISTRY
         )
-        rwd_norm = REGISTRY.lookup_reward_normalizer(
-            args.rwd_norm).from_args(args)
-        actor = REGISTRY.lookup_actor(args.actor_worker).from_args(
-            args, env_mgr.action_space
+        actor_cls = REGISTRY.lookup_actor(args.actor_worker)
+        actor = actor_cls.from_args(args, env_mgr.action_space)
+        builder = actor_cls.exp_spec_builder(
+            env_mgr.observation_space,
+            env_mgr.action_space,
+            net.internal_space(),
+            env_mgr.nb_env
         )
-        exp = REGISTRY.lookup_exp(args.exp_worker).from_args(args, rwd_norm)
+        exp = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
 
         self.actor = actor
-        self.exp = exp
+        self.exp = exp.to(device)
         self.nb_step = args.nb_step
         self.env_mgr = env_mgr
         self.nb_env = args.nb_env
         self.network = net.to(device)
         self.device = device
         self.initial_step_count = initial_step_count
-        self.rollout_len = int(args.worker_rollout_len)
 
         # TODO: this should be set to eval after some number of training steps
         self.network.train()
@@ -120,13 +123,11 @@ class RolloutWorker(Container):
             raise Exception("Must set weights before calling run")
 
         self.exp.clear()
-        self.exp.write_internals(self.internals)
-
         all_terminal_rewards = []
 
         # loop to generate a rollout
         with torch.no_grad():
-            for _ in range(self.rollout_len):
+            while not self.exp.is_ready():
                 actions, exp, self.internals = self.actor.act(self.network, self.obs, self.internals)
 
                 self.exp.write_actor(exp)
