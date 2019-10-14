@@ -102,7 +102,7 @@ class Init:
         else:
             net_args = R.lookup_modular_args(args)
         args = DotDict({
-            **args, **agent_actor_args, **env_args, **rwdnorm_args, **net_args
+            **args, **agent_args, **env_args, **rwdnorm_args, **net_args
         })
 
         return args

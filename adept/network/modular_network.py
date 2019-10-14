@@ -259,31 +259,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         obs_key_to_obs = self.gpu_preprocessor(obs_key_to_obs)
         # Process input network
         nxt_internals = []
-
-        # Source nets
-        processed_inputs, source_internals = self._source_nets_forward(obs_key_to_obs, internals)
-        nxt_internals.extend(source_internals)
-
-        # Body
-        body_out, body_internals = self._body_forward(processed_inputs, internals)
-        nxt_internals.extend(body_internals)
-
-        # Head and output
-        output_by_key, head_internals = self._head_forward(body_out, internals)
-        nxt_internals.extend(head_internals)
-
-        return output_by_key, self._merge_internals(nxt_internals)
-
-    def _merge_internals(self, nxt_internals):
-        merged_internals = {}
-        for internal in nxt_internals:
-            for k, v in internal.items():
-                merged_internals[k] = v
-        return merged_internals
-
-    def _source_nets_forward(self, obs_key_to_obs, internals):
         processed_inputs = []
-        nxt_internals = []
         for key in self._obs_keys:
             result, nxt_internal = self.source_nets[key].forward(
                 obs_key_to_obs[key],
@@ -292,20 +268,16 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             )
             processed_inputs.append(result)
             nxt_internals.append(nxt_internal)
-        return processed_inputs, nxt_internals
 
-    def _body_forward(self, processed_inputs, internals):
         # Process body
         processed_inputs = self._expand_dims(processed_inputs)
         body_out, nxt_internal = self.body.forward(
             torch.cat(processed_inputs, dim=1),
             internals
         )
-        return body_out, [nxt_internal]
+        nxt_internals.append(nxt_internal)
 
-    def _head_forward(self, body_out, internals):
         # Process heads
-        nxt_internals = []
         head_out_by_dim = {}
         for dim in self._output_dims:
             cur_head = self.heads[str(dim)]
@@ -324,7 +296,12 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                 head_out_by_dim[len(self._output_space[key])]
             )
             output_by_key[key] = output
-        return output_by_key, nxt_internals
+
+        merged_internals = {}
+        for internal in nxt_internals:
+            for k, v in internal.items():
+                merged_internals[k] = v
+        return output_by_key, merged_internals
 
     @staticmethod
     def _expand_dims(inputs):
@@ -368,3 +345,5 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             for k, v in internal.items():
                 merged_internals[k] = v
         return merged_internals
+
+
