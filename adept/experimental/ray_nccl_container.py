@@ -59,7 +59,8 @@ class NCCLOptimizer:
         # sync params every once in a while to reduce numerical errors
         if self._opt_count % self.param_sync_rate == 0:
             self.sync_parameters()
-            self.sync_buffers()
+            # can't just sync buffers, some are int and don't mean well
+            # self.sync_buffers()
 
     def sync_parameters(self):
         for param in self.network.parameters():
@@ -83,6 +84,20 @@ class NCCLOptimizer:
 
 
 class RayContainer(Container):
+    @classmethod
+    def as_remote(cls,
+                  num_cpus=None,
+                  num_gpus=None,
+                  memory=None,
+                  object_store_memory=None,
+                  resources=None):
+        return ray.remote(
+            num_cpus=num_cpus,
+            num_gpus=num_gpus,
+            memory=memory,
+            object_store_memory=object_store_memory,
+            resources=resources)(cls)
+
     def __init__(
             self,
             args,
@@ -91,15 +106,6 @@ class RayContainer(Container):
             initial_step_count,
             rank=0,
     ):
-        # Ray can only be started once 
-        if rank == 0:
-            if args.ray_addr is not None:
-                ray.init(address=args.ray_addr)
-                print('Using Ray on a cluster. Head node address: {}'.format(args.ray_addr))
-            else:
-                print('Using Ray on a single machine.')
-                ray.init()
-
         # ARGS TO STATE VARS
         self._args = args
         self.nb_learners = args.nb_learners
@@ -175,46 +181,9 @@ class RayContainer(Container):
             self.summary_writer = SummaryWriter(log_id_dir)
             self.saver = SimpleModelSaver(log_id_dir)
 
-    def run(self):
-        # setup peers
-        if self.rank == 0 and self.nb_learners > 1:
-            # create peer containers
-            self.peer_learners = self._init_peer_learners()
-
-            # tell them to connect to nccl and sync parameters
-            self._init_peer_nccl(self.peer_learners)
-            print('All NCCL peers initialized')
-
-            # sync nccl, must start others first otherwise deadlock
-            [f._sync_peer_parameters.remote() for f in self.peer_learners]
-            self._sync_peer_parameters()
-
-            # startup the run method of peer containers
-            [f.run.remote() for f in self.peer_learners]
-
-        if self.nb_learners > 1:
-            # set optimizer process_group
-            self.optimizer.set_process_group(self.process_group)
-
-        # peers are all synced, now create workers
-        # TODO: this is a hack, probably a better way to do it
-        if self.colocate_workers:
-            resources = {"Agent{}_Colocate".format(self.rank): (1/self.nb_workers) - 0.1}
-        else:
-            resources = {}
-
-        # TODO: actually lookup from registry
-        self.workers = [RolloutWorker.as_remote(num_cpus=self.worker_cpu_alloc,
-                                                num_gpus=self.worker_gpu_alloc,
-                                                resources=resources)
-                        .remote(self._args, self.initial_step_count, w_ind + (self.rank * self.nb_workers))
-                        for w_ind in range(self.nb_workers)]
-
-        # synchronize worker variables
-        self.synchronize_worker_parameters(self.initial_step_count, blocking=True)
-
+    def run(self, workers):
         # setup queuer
-        self.rollout_queuer = RolloutQueuerAsync(self.workers, self.nb_rollouts_in_batch, self.rollout_queue_size)
+        self.rollout_queuer = RolloutQueuerAsync(workers, self.nb_rollouts_in_batch, self.rollout_queue_size)
         self.rollout_queuer.start()
 
         # initial setup
@@ -245,7 +214,9 @@ class RayContainer(Container):
             global_step_count += self.nb_env * self.nb_rollouts_in_batch * self.worker_rollout_len * self.nb_learners
 
             # send parameters to workers async
-            self.synchronize_worker_parameters(global_step_count)
+            # TODO: this could be parallelized, chunk by nb learners
+            if self.rank == 0:
+                self.synchronize_worker_parameters(workers, global_step_count)
 
             # if rank 0 write summaries and save
             if self.rank == 0:
@@ -280,21 +251,18 @@ class RayContainer(Container):
 
     def close(self):
         self.rollout_queuer.stop()
-        if self.rank == 0 and self.nb_learners > 1:
-            for l in self.peer_learners:
-                ray.get(l.close.remote())
 
     def get_parameters(self):
         params = [p.cpu() for p in self.network.parameters()]
         params.extend([b.cpu() for b in self.network.buffers()])
         return params
 
-    def synchronize_worker_parameters(self, global_step_count=0, blocking=False):
+    def synchronize_worker_parameters(self, workers, global_step_count=0, blocking=False):
         parameters = self.get_parameters()
-        futures = [w.set_weights.remote(parameters) for w in self.workers]
+        futures = [w.set_weights.remote(parameters) for w in workers]
 
         if global_step_count != 0:
-            futures.extend([w.set_global_step.remote(global_step_count) for w in self.workers])
+            futures.extend([w.set_global_step.remote(global_step_count) for w in workers])
 
         if blocking:
             ray.get(futures)
@@ -305,8 +273,9 @@ class RayContainer(Container):
         nccl_addr = "tcp://{ip}:{port}".format(ip=ip, port=port)
         return nccl_addr, ip, port
 
-    def _nccl_init(self):
-        print('Rank {} calling init_process_group.'.format(self.rank))
+    def _nccl_init(self, nccl_addr, nccl_ip, nccl_port):
+        self.nccl_ip, self.nccl_addr, self.nccl_port = nccl_ip, nccl_addr, nccl_port
+        print('Rank {} calling init_process_group. Addr: {}'.format(self.rank, nccl_addr))
         # from https://github.com/pytorch/pytorch/blob/master/test/simulate_nccl_errors.py
         store = dist.TCPStore(self.nccl_ip, self.nccl_port, self.nb_learners, self.rank == 0)
         process_group = dist.ProcessGroupNCCL(store, self.rank, self.nb_learners)
@@ -314,37 +283,8 @@ class RayContainer(Container):
         process_group.barrier()
         print('Rank {} process group barrier finished.'.format(self.rank))
         self.process_group = process_group
-
-    def _init_peer_learners(self):
-        # create N peer learners
-        self.nccl_addr, self.nccl_ip, self.nccl_port = self._rank0_nccl_port_init()
-
-        peer_learners = []
-        for p_ind in range(self.nb_learners - 1):
-            # TODO: this is a hack
-            if self.colocate_workers:
-                resources = {"Agent{}_Colocate".format(p_ind + 1): 0.1}
-            else:
-                resources = {}
-            remote_cls = RayPeerLearnerContainer.as_remote(num_cpus=1,
-                                                           # TODO: learner GPU alloc from args
-                                                           num_gpus=0.25,
-                                                           resources=resources)
-            # init
-            remote = remote_cls.remote(self._args, self.initial_step_count, rank=p_ind + 1,
-                                       nccl_addr=self.nccl_addr, nccl_ip=self.nccl_ip, nccl_port=self.nccl_port)
-            peer_learners.append(remote)
-
-        # wait for all peer learners to initialize?
-        return peer_learners
-
-    def _init_peer_nccl(self, peers):
-        # start init for all peers
-        nccl_inits = [p._nccl_init.remote() for p in peers]
-        # join nccl
-        self._nccl_init()
-        # wait for all
-        ray.get(nccl_inits)
+        # set optimizer process_group
+        self.optimizer.set_process_group(self.process_group)
 
     def _sync_peer_parameters(self):
         print('Rank {} syncing parameters.'.format(self.rank))
@@ -356,40 +296,12 @@ class RayContainer(Container):
 
 
 class RayPeerLearnerContainer(RayContainer):
-    @classmethod
-    def as_remote(cls,
-                  num_cpus=None,
-                  num_gpus=None,
-                  memory=None,
-                  object_store_memory=None,
-                  resources=None):
-        return ray.remote(
-            num_cpus=num_cpus,
-            num_gpus=num_gpus,
-            memory=memory,
-            object_store_memory=object_store_memory,
-            resources=resources)(cls)
-
     def __init__(
             self,
             args,
             initial_step_count,
-            rank,
-            nccl_addr,
-            nccl_ip,
-            nccl_port,
+            rank
     ):
         # no logger for peer learners
         super().__init__(args, None, None, initial_step_count, rank)
-        self.nccl_addr = nccl_addr
-        self.nccl_ip = nccl_ip
-        self.nccl_port = nccl_port
-        self._should_stop = False
-
-    def done(self, global_step_count):
-        return self._should_stop
-
-    def close(self):
-        # This is called from the host so it's run in a ray thread
-        self._should_stop = True
 

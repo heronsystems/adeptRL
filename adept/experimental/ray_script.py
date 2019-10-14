@@ -46,6 +46,8 @@ Topology Options:
     --worker-rollout-len <int>   Number of steps to include in a worker rollout [default: 20]
     --worker-cpu-alloc <int>     Number of cpus for each rollout worker [default: 32]
     --worker-gpu-alloc <float>   Number of gpus for each rollout worker [default: 0.25]
+    --learner-cpu-alloc <int>     Number of cpus for each learner [default: 1]
+    --learner-gpu-alloc <float>   Number of gpus for each learner [default: 1]
     --nb-rollouts-in-batch <int>  Number of rollouts per batch [default: 2]
     --rollout-queue-size <int>   Max length of rollout queue before blocking [default: 4]
 
@@ -54,7 +56,6 @@ Environment Options:
     --rwd-norm <str>        Reward normalizer name [default: Clip]
 
 Script Options:
-    --host-gpu-ids <ids>    Comma-separated CUDA IDs to use for the host [default: 0,1]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
@@ -89,10 +90,11 @@ Troubleshooting Options:
     --profile                 Profile this script
 """
 import os
-
+import ray
 
 from adept.container import Init
-from adept.experimental.ray_nccl_container import RayContainer
+from adept.experimental.ray_nccl_container import RayContainer, RayPeerLearnerContainer
+from adept.experimental.rollout_worker import RolloutWorker
 from adept.utils.script_helpers import (
     parse_list_str, parse_path, parse_none, LogDirHelper, parse_bool_str
 )
@@ -131,6 +133,8 @@ def parse_args():
     args.nb_learners = int(args.nb_learners)
     args.nb_workers = int(args.nb_workers)
     args.colocate_workers = parse_bool_str(args.colocate_workers)
+    args.learner_cpu_alloc = int(args.learner_cpu_alloc)
+    args.learner_gpu_alloc = float(args.learner_gpu_alloc)
     args.worker_cpu_alloc = int(args.worker_cpu_alloc)
     args.worker_gpu_alloc = float(args.worker_gpu_alloc)
     args.worker_rollout_len = int(args.worker_rollout_len)
@@ -153,24 +157,76 @@ def main(args):
     """
     args, log_id_dir, initial_step, logger = Init.main(MODE, args)
 
-    container = RayContainer(args, logger, log_id_dir, initial_step)
+    # start ray
+    if args.ray_addr is not None:
+        ray.init(address=args.ray_addr)
+        print('Using Ray on a cluster. Head node address: {}'.format(args.ray_addr))
+    else:
+        print('Using Ray on a single machine.')
+        ray.init()
+
+    # create a main learner which logs summaries and saves weights
+    main_learner_cls = RayContainer.as_remote(num_cpus=args.learner_cpu_alloc,
+                                              num_gpus=args.learner_gpu_alloc)
+    main_learner = main_learner_cls.remote(
+        args, logger, log_id_dir, initial_step, rank=0
+    )
+
+    # if multiple learners setup nccl
+    if args.nb_learners > 1:
+        # create N peer learners
+        peer_learners = []
+        for p_ind in range(args.nb_learners - 1):
+            # TODO: learner GPU alloc from args
+            remote_cls = RayPeerLearnerContainer.as_remote(num_cpus=args.learner_cpu_alloc,
+                                                           num_gpus=args.learner_gpu_alloc)
+            # init
+            remote = remote_cls.remote(args, initial_step, rank=p_ind + 1)
+            peer_learners.append(remote)
+
+        # figure out main learner node ip
+        nccl_addr, nccl_ip, nccl_port = ray.get(main_learner._rank0_nccl_port_init.remote())
+
+        # setup all nccls
+        nccl_inits = [main_learner._nccl_init.remote(nccl_addr, nccl_ip, nccl_port)]
+        nccl_inits.extend([p._nccl_init.remote(nccl_addr, nccl_ip, nccl_port) for p in peer_learners])
+        # wait for all
+        ray.get(nccl_inits)
+        print('NCCL initialized')
+
+        # have all sync parameters
+        [f._sync_peer_parameters.remote() for f in peer_learners]
+        main_learner._sync_peer_parameters.remote()
+
+        # main_learner must be first index
+        learners = [main_learner] + peer_learners
+
+    # create workers
+    # TODO: actually lookup from registry
+    workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
+                                       num_gpus=args.worker_gpu_alloc)
+                    .remote(args, initial_step, w_ind)
+                    for w_ind in range(args.nb_workers)]
+
+    # synchronize worker variables
+    main_learner.synchronize_worker_parameters.remote(workers, initial_step, blocking=True)
 
     if args.profile:
-        try:
-            from pyinstrument import Profiler
-        except:
-            raise ImportError('You must install pyinstrument to use profiling.')
-        container.nb_step = 10e4
-        profiler = Profiler()
-        profiler.start()
+        # TODO: for profiling main learner shouldn't be remote
+        # or run method must implement pyinstrument profiling
+        raise NotImplementedError('TODO')
 
     try:
-        container.run()
+        # startup the run method of all containers
+        runs = [f.run.remote(workers) for f in learners]
+        done_training = ray.wait(runs)
+
     finally:
-        if args.profile:
-            profiler.stop()
-            print(profiler.output_text(unicode=True, color=True))
-        container.close()
+        # if args.profile:
+            # profiler.stop()
+            # print(profiler.output_text(unicode=True, color=True))
+
+        closes = [f.close.remote() for f in learners]
 
     if args.eval:
         import subprocess
@@ -179,7 +235,7 @@ def main(args):
             '-m',
             'adept.scripts.evaluate',
             '--log-id-dir',
-            container.log_id_dir,
+            log_id_dir,
             '--gpu-id',
             str(args.gpu_id),
             '--nb-episode',
