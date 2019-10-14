@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import OrderedDict
-from functools import reduce
 
 import torch
 
@@ -33,7 +32,7 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
         head_dict = {'critic': (1,), **action_space}
         return head_dict
 
-    def process_predictions(self, preds, available_actions):
+    def compute_action_exp(self, preds, internals, available_actions):
         values = preds['critic'].squeeze(1)
 
         actions = OrderedDict()
@@ -60,17 +59,13 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
             'values': values
         }
 
-    @staticmethod
-    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
-        flat_act_space = 0
-        for k, shape in act_space.items():
-            flat_act_space += reduce(lambda a, b: a * b, shape)
+    @classmethod
+    def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
+        act_key_len = len(act_space.keys())
 
         spec = {
-            'rewards': (exp_len, batch_sz),
-            'terminals': (exp_len, batch_sz),
-            'log_probs': (exp_len, batch_sz, flat_act_space),
-            'entropies': (exp_len, batch_sz, flat_act_space),
+            'log_probs': (exp_len, batch_sz, act_key_len),
+            'entropies': (exp_len, batch_sz, act_key_len),
             'values': (exp_len, batch_sz)
         }
 

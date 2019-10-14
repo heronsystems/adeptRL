@@ -22,9 +22,10 @@ def agent_eval_lookup():
 
 
 def actor_eval_lookup():
-    from adept.actor import ImpalaWorkerActor
+    from adept.actor import ImpalaWorkerActor, ImpalaHostActor
     return {
-        ImpalaWorkerActor.__name__: ACActorEval.__name__
+        ImpalaWorkerActor.__name__: ACActorEval.__name__,
+        ImpalaHostActor.__name__: ACActorEval.__name__
     }
 
 

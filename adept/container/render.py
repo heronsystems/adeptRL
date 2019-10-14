@@ -12,27 +12,23 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import abc
-import os
-import time
-
 import torch
 
-from adept.registry import REGISTRY
-from adept.manager import SubProcEnvManager
+from adept.manager import SimpleEnvManager
 from adept.network import ModularNetwork
+from adept.registry import REGISTRY
+from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.script_helpers import LogDirHelper
-from adept.utils.util import listd_to_dlist, dtensor_to_dev
 
 
-class EvalContainer:
+class RenderContainer:
     def __init__(
             self,
-            eval_actor,
+            actor,
+            epoch_id,
             logger,
             log_id_dir,
             gpu_id,
-            nb_episode,
             seed
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
@@ -40,32 +36,38 @@ class EvalContainer:
         self.device = device = self._device_from_gpu_id(gpu_id)
         self.logger = logger
 
+        if epoch_id is None:
+            epoch_ids = self.log_dir_helper.epochs()
+        else:
+            epoch_ids = [epoch_id]
+        self.epoch_ids = epoch_ids
+
         engine = REGISTRY.lookup_engine(train_args.env)
         env_cls = REGISTRY.lookup_env(train_args.env)
-        self.env_mgr = env_mgr = SubProcEnvManager.from_args(
+        self.env_mgr = SimpleEnvManager.from_args(
             self.train_args,
             engine,
             env_cls,
             seed=seed,
-            nb_env=nb_episode
+            nb_env=1
         )
         if train_args.agent:
             agent = train_args.agent
         else:
             agent = train_args.actor_host
         output_space = REGISTRY.lookup_output_space(
-            agent, env_mgr.action_space
+            agent, self.env_mgr.action_space
         )
-        actor_cls = REGISTRY.lookup_actor(eval_actor)
+        actor_cls = REGISTRY.lookup_actor(actor)
         self.actor = actor_cls.from_args(
             actor_cls.prompt(),
-            env_mgr.action_space
+            self.env_mgr.action_space
         )
 
         self.network = self._init_network(
             train_args,
-            env_mgr.observation_space,
-            env_mgr.gpu_preprocessor,
+            self.env_mgr.observation_space,
+            self.env_mgr.gpu_preprocessor,
             output_space,
             REGISTRY
         ).to(device)
@@ -100,15 +102,10 @@ class EvalContainer:
         )
 
     def run(self):
-        nb_env = self.env_mgr.nb_env
-        best_epoch_id = None
-        overall_mean = -float('inf')
-        for epoch_id in self.log_dir_helper.epochs():
-            best_mean = -float('inf')
-            best_std = None
-            selected_model = None
-            reward_buf = torch.zeros(nb_env)
-            for net_path in self.log_dir_helper.network_paths_at_epoch(epoch_id):
+        for epoch_id in self.epoch_ids:
+            reward_buf = 0
+            for net_path in self.log_dir_helper.network_paths_at_epoch(
+                    epoch_id):
                 self.network.load_state_dict(
                     torch.load(
                         net_path,
@@ -117,53 +114,25 @@ class EvalContainer:
                 )
                 self.network.eval()
 
-                internals = listd_to_dlist([
-                    self.network.new_internals(self.device) for _ in
-                    range(nb_env)
-                ])
-                episode_completes = [False for _ in range(nb_env)]
+                internals = listd_to_dlist([self.network.new_internals(self.device)])
                 next_obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
+                self.env_mgr.render()
 
-                while not all(episode_completes):
+                episode_complete = False
+                while not episode_complete:
                     obs = next_obs
                     with torch.no_grad():
                         actions, _, internals = self.actor.act(self.network, obs, internals)
                     next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
+                    self.env_mgr.render()
                     next_obs = dtensor_to_dev(next_obs, self.device)
 
-                    for i in range(self.env_mgr.nb_env):
-                        if episode_completes[i]:
-                            continue
-                        elif terminals[i]:
-                            reward_buf[i] += rewards[i]
-                            episode_completes[i] = True
-                        else:
-                            reward_buf[i] += rewards[i]
+                    reward_buf += rewards[0]
 
-                mean = reward_buf.mean().item()
-                std = reward_buf.std().item()
+                    if terminals[0]:
+                        episode_complete = True
 
-                if mean >= best_mean:
-                    best_mean = mean
-                    best_std = std
-                    selected_model = os.path.split(net_path)[-1]
-
-            self.logger.info(
-                f'EPOCH_ID: {epoch_id} '
-                f'MEAN_REWARD: {best_mean} '
-                f'STD_DEV: {best_std} '
-                f'SELECTED_MODEL: {selected_model}'
-            )
-            with open(self.log_dir_helper.eval_path(), 'a') as eval_f:
-                eval_f.write(f'{epoch_id},'
-                             f'{best_mean},'
-                             f'{best_std},'
-                             f'{selected_model}\n')
-
-            if best_mean >= overall_mean:
-                best_epoch_id = epoch_id
-                overall_mean = best_mean
-        self.logger.info(f'*** EPOCH_ID: {best_epoch_id} MEAN_REWARD: {overall_mean} ***')
+                print(f'EPOCH_ID: {epoch_id} REWARD: {reward_buf}')
 
     def close(self):
         self.env_mgr.close()

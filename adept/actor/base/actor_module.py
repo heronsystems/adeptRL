@@ -17,24 +17,18 @@ An actor observes the environment and decides actions. It also outputs extra
 info necessary for model updates (learning) to occur.
 """
 import abc
+from collections import defaultdict
 
+from adept.exp.base.spec_builder import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
-
-
-class ExpSpecBuilder:
-    def __init__(self, obs_space, act_space, internal_space, build_fn):
-        self.obs_keys = sorted(obs_space.keys())
-        self.action_keys = sorted(act_space.keys())
-        self.internal_keys = sorted(internal_space.keys())
-        self.build_fn = build_fn
-
-    def __call__(self, exp_len, batch_sz):
-        return self.build_fn(exp_len, batch_sz)
 
 
 class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
-    def __init__(self, action_space):
+    def __init__(
+            self,
+            action_space
+    ):
         self._action_space = action_space
 
     @property
@@ -43,37 +37,55 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     @property
     def action_keys(self):
-        return list(sorted(self.action_space.keys()))
+        return sorted(self.action_space.keys())
 
     @staticmethod
     @abc.abstractmethod
     def output_space(action_space):
         raise NotImplementedError
 
-    @staticmethod
-    def exp_spec_builder(self, obs_space, act_space, internal_space):
-        def build_fn(exp_len, batch_sz):
-            return self._exp_spec(
+    @classmethod
+    def exp_spec_builder(cls, obs_space, act_space, internal_space, batch_sz):
+        def build_fn(exp_len):
+            exp_space = cls._exp_spec(
                 exp_len, batch_sz, obs_space, act_space, internal_space)
-        return ExpSpecBuilder(obs_space, act_space, internal_space, build_fn)
+            env_space = {
+                'rewards': (exp_len, batch_sz),
+                'terminals': (exp_len, batch_sz)
+            }
+            return {**exp_space, **env_space}
 
-    @staticmethod
+        key_types = cls._key_types(obs_space, act_space, internal_space)
+        exp_keys = cls._exp_keys(obs_space, act_space, internal_space)
+        return ExpSpecBuilder(obs_space, act_space, internal_space,
+                              key_types, exp_keys, build_fn)
+
+    @classmethod
     @abc.abstractmethod
-    def _exp_spec(exp_len, batch_sz, obs_space, act_space, internal_space):
+    def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         raise NotImplementedError
+
+    @classmethod
+    def _exp_keys(cls, obs_space, act_space, internal_space):
+        dummy = cls._exp_spec(1, 1, obs_space, act_space, internal_space)
+        return dummy.keys()
+
+    @classmethod
+    def _key_types(cls, obs_space, act_space, internal_space):
+        return defaultdict(lambda: 'float')
 
     @abc.abstractmethod
     def from_args(self, args, action_space):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def process_predictions(self, preds, available_actions):
+    def compute_action_exp(self, preds, internals, available_actions):
         """
         B = Batch Size
 
         :param preds: Dict[str, torch.Tensor]
         :return:
-            actions: Dict[ActionKey, LongTensor (B)]
+            actions: Dict[ActionKey, Tensor (B)]
             experience: Dict[str, Tensor (B, X)]
         """
         raise NotImplementedError
@@ -83,7 +95,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         :param obs: Dict[str, Tensor]
         :param prev_internals: previous interal states. Dict[str, Tensor]
         :return:
-            actions: Dict[ActionKey, LongTensor (B)]
+            actions: Dict[ActionKey, Tensor (B)]
             experience: Dict[str, Tensor (B, X)]
             internal_states: Dict[str, Tensor]
         """
@@ -95,5 +107,9 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         else:
             av_actions = None
 
-        actions, exp = self.process_predictions(predictions, av_actions)
+        actions, exp = self.compute_action_exp(
+            predictions,
+            prev_internals,
+            av_actions
+        )
         return actions, exp, internal_states

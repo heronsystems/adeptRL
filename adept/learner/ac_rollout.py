@@ -17,11 +17,13 @@ class ACRolloutLearner(LearnerModule):
 
     def __init__(
             self,
+            reward_normalizer,
             discount,
             normalize_advantage,
             entropy_weight,
             return_scale
     ):
+        self.reward_normalizer = reward_normalizer
         self.discount = discount
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
@@ -30,8 +32,9 @@ class ACRolloutLearner(LearnerModule):
             self.dm_scaler = DeepMindReturnScaler(10. ** -3)
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, reward_normalizer):
         return cls(
+            reward_normalizer,
             args.discount,
             args.normalize_advantage,
             args.entropy_weight,
@@ -39,35 +42,36 @@ class ACRolloutLearner(LearnerModule):
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):
+        # normalize rewards
+        rewards = self.reward_normalizer(torch.stack(experiences.rewards))
+
         # estimate value of next state
         with torch.no_grad():
             results, _ = network(next_obs, internals)
             last_values = results['critic'].squeeze(1).data
 
         # compute nstep return and advantage over batch
-        batch_values = torch.stack(experiences.values)
-        value_targets, batch_advantages = self._compute_returns_advantages(
-            batch_values, last_values, experiences.rewards, experiences.terminals
+        r_values = torch.stack(experiences.values)
+        r_tgt_returns = self.compute_returns(
+            last_values, rewards, experiences.terminals
         )
-
-        # batched value loss
-        value_loss = 0.5 * torch.mean((value_targets - batch_values).pow(2))
+        r_advantages = r_tgt_returns - r_values.data
 
         # normalize advantage so that an even number
         # of actions are reinforced and penalized
         if self.normalize_advantage:
-            batch_advantages = (batch_advantages - batch_advantages.mean()) \
-                               / (batch_advantages.std() + 1e-5)
+            r_advantages = (r_advantages - r_advantages.mean()) \
+                               / (r_advantages.std() + 1e-5)
         policy_loss = 0.
         entropy_loss = 0.
 
-        rollout_len = len(experiences.rewards)
+        rollout_len = len(rewards)
         for i in range(rollout_len):
             log_probs = experiences.log_probs[i]
             entropies = experiences.entropies[i]
 
             policy_loss = policy_loss - (
-                    log_probs * batch_advantages[i].unsqueeze(1).data
+                    log_probs * r_advantages[i].unsqueeze(1).data
             ).sum(1)
             entropy_loss = entropy_loss - (
                     self.entropy_weight * entropies
@@ -76,6 +80,7 @@ class ACRolloutLearner(LearnerModule):
         batch_size = policy_loss.shape[0]
         nb_action = log_probs.shape[1]
 
+        value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
         denom = batch_size * rollout_len * nb_action
         policy_loss = policy_loss.sum(0) / denom
         entropy_loss = entropy_loss.sum(0) / denom
@@ -88,13 +93,12 @@ class ACRolloutLearner(LearnerModule):
         metrics = {}
         return losses, metrics
 
-    def _compute_returns_advantages(
-            self, values, estimated_value, rewards, terminals
-    ):
+    def compute_returns(self, bootstrap_value, rewards, terminals):
         # First step of nstep reward target is estimated value of t+1
-        target_return = estimated_value
+        target_return = bootstrap_value
+        rollout_len = len(rewards)
         nstep_target_returns = []
-        for i in reversed(range(len(rewards))):
+        for i in reversed(range(rollout_len)):
             reward = rewards[i]
             terminal_mask = 1. - terminals[i].float()
 
@@ -115,6 +119,5 @@ class ACRolloutLearner(LearnerModule):
         nstep_target_returns = torch.stack(
             list(reversed(nstep_target_returns))
         ).data
-        advantages = nstep_target_returns - values.data
 
-        return nstep_target_returns, advantages
+        return nstep_target_returns

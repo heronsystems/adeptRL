@@ -17,16 +17,11 @@ import argparse
 import json
 import os
 
-import torch
 import torch.distributed as dist
 
 from adept.container import Init, ActorLearnerHost, ActorLearnerWorker
 from adept.registry import REGISTRY as R
-from adept.manager.subproc_env_manager import SubProcEnvManager
-from adept.network.modular_network import ModularNetwork
-from adept.utils.script_helpers import (
-    LogDirHelper
-)
+from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import DotDict
 
 MODE = 'ActorLearner'
@@ -77,8 +72,7 @@ def main(local_args):
 
     R.load_extern_classes(log_id_dir)
     logger = Init.setup_logger(
-        MODE + str(LOCAL_RANK),
-        log_id_dir,
+        log_id_dir + '_' + str(LOCAL_RANK),
         'train{}'.format(GLOBAL_RANK)
     )
 

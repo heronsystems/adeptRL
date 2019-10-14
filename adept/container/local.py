@@ -2,6 +2,7 @@ from time import time
 
 import numpy as np
 import torch
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
 from adept.manager import SubProcEnvManager
@@ -49,23 +50,41 @@ class Local(Container):
         logger.info('Network parameters: ' + str(self.count_parameters(net)))
 
         def optim_fn(x):
-            return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
+            if args.optim == 'RMSprop':
+                return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
+            elif args.optim == 'Adam':
+                return torch.optim.Adam(x, lr=args.lr)
+
+        def warmup_schedule(epoch):
+            if epoch < 100:
+                return epoch / 100.
+            else:
+                return 1.
 
         # AGENT
         rwd_norm = REGISTRY.lookup_reward_normalizer(
             args.rwd_norm).from_args(args)
-        agent = REGISTRY.lookup_agent(args.agent).from_args(
+        agent_cls = REGISTRY.lookup_agent(args.agent)
+        builder = agent_cls.exp_spec_builder(
+            env_mgr.observation_space,
+            env_mgr.action_space,
+            net.internal_space(),
+            env_mgr.nb_env
+        )
+        agent = agent_cls.from_args(
             args,
             rwd_norm,
-            env_mgr.action_space
+            env_mgr.action_space,
+            builder
         )
 
-        self.agent = agent
+        self.agent = agent.to(device)
         self.nb_step = args.nb_step
         self.env_mgr = env_mgr
         self.nb_env = args.nb_env
         self.network = net.to(device)
         self.optimizer = optim_fn(self.network.parameters())
+        self.scheduler = LambdaLR(self.optimizer, warmup_schedule)
         self.device = device
         self.initial_step_count = initial_step_count
         self.log_id_dir = log_id_dir
@@ -103,8 +122,8 @@ class Local(Container):
 
             self.agent.observe(
                 obs,
-                rewards.to(self.device),
-                terminals.to(self.device),
+                rewards.to(self.device).float(),
+                terminals.to(self.device).float(),
                 infos
             )
 
@@ -113,12 +132,14 @@ class Local(Container):
             ep_rewards += rewards.float()
             obs = next_obs
 
-            term_rewards = []
+            term_rewards, term_infos = [], []
             for i, terminal in enumerate(terminals):
                 if terminal:
                     for k, v in self.network.new_internals(self.device).items():
                         internals[k][i] = v
                     term_rewards.append(ep_rewards[i].item())
+                    if infos[i]:
+                        term_infos.append(infos[i])
                     ep_rewards[i].zero_()
 
             if term_rewards:
@@ -128,12 +149,23 @@ class Local(Container):
                     'STEP: {} REWARD: {} STEP/S: {}'.format(
                         step_count,
                         term_reward,
-                        (step_count - self.initial_step_count) / delta_t
+                        (step_count - self.initial_step_count) / delta_t,
                     )
                 )
                 self.summary_writer.add_scalar(
                     'reward', term_reward, step_count
                 )
+                if term_infos:
+                    float_keys = [
+                        k for k, v in term_infos[0].items() if type(v) == float
+                    ]
+                    term_infos_dlist = listd_to_dlist(term_infos)
+                    for k in float_keys:
+                        self.summary_writer.add_scalar(
+                            f'info/{k}',
+                            np.mean(term_infos_dlist[k]),
+                            step_count
+                        )
 
             if step_count >= next_save:
                 self.saver.save_state_dicts(
@@ -153,6 +185,8 @@ class Local(Container):
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 self.optimizer.step()
+                epoch = step_count / self.nb_env
+                self.scheduler.step(epoch)
 
                 self.agent.clear()
                 for k, vs in internals.items():

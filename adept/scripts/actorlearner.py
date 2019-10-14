@@ -32,22 +32,21 @@ Usage:
 Distributed Options:
     --nb-node <int>         Number of distributed nodes [default: 1]
     --node-rank <int>       ID of the node for multi-node training [default: 0]
-    --nb-proc <int>         Number of processes per node [default: 2]
+    --nb-proc <int>         Number of processes per node [default: 3]
     --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
     --master-port <int>     Master node (rank 0's) comm port [default: 29500]
     --init-method <str>     torch.distrib init [default: file:///tmp/adept_init]
 
 Topology Options:
-    --actor-host <str>        Name of host actor [default: ImpalaWorkerActor]
+    --actor-host <str>        Name of host actor [default: ImpalaHostActor]
     --actor-worker <str>      Name of worker actor [default: ImpalaWorkerActor]
     --learner <str>           Name of learner [default: ImpalaLearner]
-    --exp-host <str>          Name of host experience cache [default: ImpalaRollout]
-    --exp-worker <str>        Name of worker experience cache [default: ImpalaRollout]
-    --worker-rollout-len <int>   Number of steps to include in a worker rollout [default: 20]
+    --exp <str>               Name of host experience cache [default: Rollout]
+    --nb-learn-batch <int>    Number of worker batches to learn on [default: 2]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
-    --rwd-norm <str>        Reward normalizer name [default: Clip]
+    --rwd-norm <str>          Reward normalizer name [default: Clip]
 
 Script Options:
     --gpu-ids <ids>         Comma-separated CUDA IDs [default: 0,1]
@@ -126,6 +125,7 @@ def parse_args():
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
     args.nb_step = int(float(args.nb_step))
+    args.nb_learn_batch = int(args.nb_learn_batch)
 
     # Logging Options
     args.tag = parse_none(args.tag)

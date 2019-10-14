@@ -12,24 +12,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""
-A Learner receives agent-environment interactions which are used to compute
-loss.
-"""
-import abc
-from adept.utils.requires_args import RequiresArgsMixin
 
 
-class LearnerModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
-    """
-    This one of the modules to use for custom Actor-Learner code.
-    """
+class ExpSpecBuilder:
+    def __init__(
+            self, obs_keys, act_keys, internal_keys,
+            key_types, exp_keys, build_fn
+    ):
+        self.obs_keys = sorted(obs_keys.keys())
+        self.action_keys = sorted(act_keys.keys())
+        self.internal_keys = sorted(internal_keys.keys())
+        self.key_types = key_types
+        self.exp_keys = sorted(exp_keys)
+        self.build_fn = build_fn
 
-    @classmethod
-    @abc.abstractmethod
-    def from_args(self, args, reward_normalizer):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def compute_loss(self, network, experiences, next_obs, internals):
-        raise NotImplementedError
+    def __call__(self, rollout_len):
+        return self.build_fn(rollout_len)

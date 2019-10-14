@@ -1,4 +1,5 @@
 import os
+import time
 from itertools import chain
 from collections import deque
 from glob import glob
@@ -110,19 +111,17 @@ class HostContainer:
                             q.append(i)
                             q_lookup.add(i)
 
-            learn_indices = q
-
-            print('synced', [i + 1 for i in learn_indices], 'merging...')
+            print('synced', [i + 1 for i in q], 'merging...')
             # merge tensors along batch dimension
             # need to pick a data structure for experiences
             # Dict[str,List[Tensor]]
             merged_exp = {}
-            keys = self.exps[learn_indices[0]].sorted_keys  # cache these or from spec
-            lens = [len(self.exps[learn_indices[0]][k]) for k in keys]  # cache these
+            keys = self.exps[q[0]].sorted_keys  # cache these or from spec
+            lens = [len(self.exps[q[0]][k]) for k in keys]  # cache these
             for k, l in zip(keys, lens):
                 for j in range(l):
                     tensors_to_cat = []
-                    for i in learn_indices:
+                    for i in q:
                         exp = self.exps[i]
                         tensors_to_cat.append(exp[k][j])
 
@@ -134,7 +133,7 @@ class HostContainer:
 
             # unblock the selected workers
             # resync
-            for i in learn_indices:
+            for i in q:
                 print(f'HOST barrier {i+1}...')
                 dist.barrier(self.groups[i])
                 print(f'HOST sync {i + 1}...')
@@ -157,26 +156,32 @@ class WorkerContainer:
         self.world_size = world_size
         self.group = group
         self.device = torch.device(
-            'cuda:{}'.format(gpu_id(local_rank, torch.cuda.device_count())))
+            'cuda:{}'.format(gpu_id(local_rank, torch.cuda.device_count()))
+        )
         self.exp = WorkerCache(cache_spec, self.device)
 
     def run(self):
         is_done = False
-        dist.barrier()
-        self.exp.sync(self.local_rank, self.group, is_async=False)
+        first = True
+
         while not is_done:
-            print(f'WORKER barrier {self.local_rank}')
-            future = dist.barrier(self.group, async_op=True)
+            if first:
+                dist.barrier()
+                self.exp.sync(self.local_rank, self.group, is_async=False)
+                first = False
+            else:
+                print(f'WORKER barrier {self.local_rank}')
+                future = dist.barrier(self.group, async_op=True)
 
-            while not future.is_completed():
-                if glob('/tmp/actorlearner/done'):
-                    print(f'complete - exiting worker {self.local_rank}')
-                    is_done = True
-                    break
+                while not future.is_completed():
+                    if glob('/tmp/actorlearner/done'):
+                        print(f'complete - exiting worker {self.local_rank}')
+                        is_done = True
+                        break
 
-            if not is_done:
-                print(f'WORKER sync {self.local_rank}')
-                self.exp.sync(self.local_rank, self.group, is_async=True)
+                if not is_done:
+                    print(f'WORKER sync {self.local_rank}')
+                    self.exp.sync(self.local_rank, self.group, is_async=True)
 
 
 def on_worker():

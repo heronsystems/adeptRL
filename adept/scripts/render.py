@@ -20,37 +20,30 @@
 / /_/ / /_/ /  __/ /_/ / /_
 \__,_/\__,_/\___/ .___/\__/
                /_/
-Evaluate
 
-Evaluates an agent after training. Computes N-episode average reward by
-loading a saved model from each epoch. N-episode averages are computed by
-running N env in parallel.
+Render Atari
+
+Renders an agent interacting with an Atari environment.
 
 Usage:
-    evaluate (--log-id-dir <path>) [options]
-    evaluate (-h | --help)
+    render --log-id-dir <path> [options]
+    render (-h | --help)
 
 Required:
     --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
 
 Options:
-    --eval-actor <str>      Name of the Evaluation Actor [default: ACActorEval]
+    --epoch <int>           Epoch number to load [default: None]
+    --actor <str>           Name of the Actor [default: ACActorEval]
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
-    --nb-episode <int>      Number of episodes to average [default: 30]
     --seed <int>            Seed for random variables [default: 512]
-    --custom-network <str>  Name of custom network class
 """
-from absl import flags
 
-from adept.container import EvalContainer
+from adept.container import Init
+from adept.container.render import RenderContainer
+from adept.registry import REGISTRY as R
 from adept.utils.script_helpers import parse_path
 from adept.utils.util import DotDict
-from adept.container import Init
-from adept.registry import REGISTRY as R
-
-# hack to use argparse for SC2
-FLAGS = flags.FLAGS
-FLAGS(['local.py'])
 
 
 def parse_args():
@@ -60,25 +53,26 @@ def parse_args():
     del args['h']
     del args['help']
     args = DotDict(args)
+
     args.log_id_dir = parse_path(args.log_id_dir)
+
+    if args.epoch == 'None':
+        args.epoch = None
+    else:
+        args.epoch = int(float(args.epoch))
     args.gpu_id = int(args.gpu_id)
-    args.nb_episode = int(args.nb_episode)
     args.seed = int(args.seed)
     return args
 
 
-MODE = 'Eval'
-
-
 def main(args):
     """
-    Run an evaluation.
+    Run an evaluation training.
+
     :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
     :return:
     """
+    # construct logging objects
     args = DotDict(args)
 
     Init.print_ascii_logo()
@@ -86,18 +80,18 @@ def main(args):
     Init.log_args(logger, args)
     R.load_extern_classes(args.log_id_dir)
 
-    eval_container = EvalContainer(
-        args.eval_actor,
+    container = RenderContainer(
+        args.actor,
+        args.epoch,
         logger,
         args.log_id_dir,
         args.gpu_id,
-        args.nb_episode,
         args.seed
     )
     try:
-        eval_container.run()
+        container.run()
     finally:
-        eval_container.close()
+        container.close()
 
 
 if __name__ == '__main__':

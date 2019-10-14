@@ -75,10 +75,18 @@ class DistribHost(Container):
         # AGENT
         rwd_norm = REGISTRY.lookup_reward_normalizer(
             args.rwd_norm).from_args(args)
-        agent = REGISTRY.lookup_agent(args.agent).from_args(
+        agent_cls = REGISTRY.lookup_agent(args.agent)
+        builder = agent_cls.exp_spec_builder(
+            env_mgr.observation_space,
+            env_mgr.action_space,
+            net.internal_space(),
+            env_mgr.nb_env
+        )
+        agent = agent_cls.from_args(
             args,
             rwd_norm,
-            env_mgr.action_space
+            env_mgr.action_space,
+            builder
         )
 
         self.agent = agent
@@ -129,8 +137,8 @@ class DistribHost(Container):
 
             self.agent.observe(
                 obs,
-                rewards.to(self.device),
-                terminals.to(self.device),
+                rewards.to(self.device).float(),
+                terminals.to(self.device).float(),
                 infos
             )
             for i, terminal in enumerate(terminals):
@@ -196,8 +204,8 @@ class DistribHost(Container):
                         dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
-                for param in self.network.parameters():
-                    param.grad.mul_(1. / self.world_size)
+                # for param in self.network.parameters():
+                #     param.grad.mul_(1. / self.world_size)
                 self.optimizer.step()
 
                 self.agent.clear()
@@ -266,10 +274,18 @@ class DistribWorker(Container):
         # AGENT
         rwd_norm = REGISTRY.lookup_reward_normalizer(
             args.rwd_norm).from_args(args)
-        agent = REGISTRY.lookup_agent(args.agent).from_args(
+        agent_cls = REGISTRY.lookup_agent(args.agent)
+        builder = agent_cls.exp_spec_builder(
+            env_mgr.observation_space,
+            env_mgr.action_space,
+            net.internal_space(),
+            env_mgr.nb_env
+        )
+        agent = agent_cls.from_args(
             args,
             rwd_norm,
-            env_mgr.action_space
+            env_mgr.action_space,
+            builder
         )
 
         self.agent = agent
@@ -314,8 +330,8 @@ class DistribWorker(Container):
 
             self.agent.observe(
                 obs,
-                rewards.to(self.device),
-                terminals.to(self.device),
+                rewards.to(self.device).float(),
+                terminals.to(self.device).float(),
                 infos
             )
             for i, terminal in enumerate(terminals):
@@ -372,8 +388,8 @@ class DistribWorker(Container):
                         dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
-                for param in self.network.parameters():
-                    param.grad.mul_(1. / self.world_size)
+                # for param in self.network.parameters():
+                #     param.grad.mul_(1. / self.world_size)
                 self.optimizer.step()
 
                 self.agent.clear()

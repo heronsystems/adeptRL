@@ -16,7 +16,9 @@
 An Agent interacts with the environment and accumulates experience.
 """
 import abc
+from collections import defaultdict
 
+from adept.exp import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
 
 
@@ -30,9 +32,9 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
 
     def __init__(
-        self,
-        reward_normalizer,
-        action_space
+            self,
+            reward_normalizer,
+            action_space
     ):
         self._reward_normalizer = reward_normalizer
         self._action_space = action_space
@@ -59,13 +61,43 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def action_keys(self):
         return list(sorted(self.action_space.keys()))
 
+    @classmethod
+    def exp_spec_builder(cls, obs_space, act_space, internal_space, batch_sz):
+        def build_fn(exp_len):
+            exp_space = cls._exp_spec(
+                exp_len, batch_sz, obs_space, act_space, internal_space)
+            env_space = {
+                'rewards': (exp_len, batch_sz),
+                'terminals': (exp_len, batch_sz)
+            }
+            return {**exp_space, **env_space}
+
+        key_types = cls._key_types(obs_space, act_space, internal_space)
+        exp_keys = cls._exp_keys(obs_space, act_space, internal_space)
+        return ExpSpecBuilder(obs_space, act_space, internal_space,
+                              key_types, exp_keys, build_fn)
+
+    @classmethod
+    @abc.abstractmethod
+    def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
+        raise NotImplementedError
+
+    @classmethod
+    def _exp_keys(cls, obs_space, act_space, internal_space):
+        dummy = cls._exp_spec(1, 1, obs_space, act_space, internal_space)
+        return dummy.keys()
+
+    @classmethod
+    def _key_types(cls, obs_space, act_space, internal_space):
+        return defaultdict(lambda: 'float')
+
     @staticmethod
     @abc.abstractmethod
     def output_space(action_space):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def process_predictions(self, predictions, available_actions):
+    def compute_action_exp(self, predictions, internals, available_actions):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -94,10 +126,15 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         else:
             av_actions = None
 
-        actions, experience = self.process_predictions(predictions, av_actions)
+        actions, experience = self.compute_action_exp(
+            predictions, prev_internals, av_actions)
         self.exp_cache.write_actor(experience)
         return actions, internal_states
 
     def observe(self, obs, rewards, terminals, infos):
         self.exp_cache.write_env(obs, rewards, terminals, infos)
         return rewards, terminals, infos
+
+    def to(self, device):
+        self.exp_cache.to(device)
+        return self

@@ -45,10 +45,20 @@ class ACActorHelperMixin(metaclass=abc.ABCMeta):
 
     @staticmethod
     def log_probability(log_softmax, action):
+        """
+        :param log_softmax: Tensor (N, X)
+        :param action: LongTensor (N)
+        :return: Tensor (N, 1)
+        """
         return log_softmax.gather(1, action.unsqueeze(1))
 
     @staticmethod
     def entropy(log_softmax, softmax):
+        """
+        :param log_softmax: Tensor (N, X)
+        :param softmax: Tensor (N, X)
+        :return: Tensor (N, 1)
+        """
         return -(
             log_softmax * softmax
         ).sum(1, keepdim=True)

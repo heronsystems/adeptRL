@@ -1,8 +1,8 @@
-from .base.exp_module import ExpModule
-from .impala_rollout import ImpalaRollout
+from .base import ExpModule
+from .base import ExpSpecBuilder
 from .replay import ExperienceReplay, PrioritizedExperienceReplay
-from .rollout import ACRollout
+from .rollout import Rollout
 
 EXP_REG = [
-    ACRollout, ImpalaRollout  # , ExperienceReplay, PrioritizedExperienceReplay
+    Rollout,  # , ExperienceReplay, PrioritizedExperienceReplay
 ]

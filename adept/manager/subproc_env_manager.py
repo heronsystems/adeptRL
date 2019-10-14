@@ -60,7 +60,9 @@ class SubProcEnvManager(EnvManager):
             pipe, w_pipe = mp.Pipe()
             socket, port = zmq_robust_bind_socket(self._zmq_context)
 
-            process = mp.Process(target=worker, args=(w_pipe, pipe, port, CloudpickleWrapper(env_fns[w_ind])))
+            process = mp.Process(target=worker, args=(
+                w_pipe, pipe, port, CloudpickleWrapper(env_fns[w_ind])
+            ))
             process.daemon = True
             process.start()
             self.processes.append(process)
@@ -101,7 +103,7 @@ class SubProcEnvManager(EnvManager):
         action_dicts = dlist_to_listd(actions)
         # zmq send
         for socket, action in zip(self._zmq_sockets, action_dicts):
-            msg = json.dumps({k: int(v) for k, v in action.items()})
+            msg = json.dumps({k: v.item() for k, v in action.items()})
             socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
 
         self.waiting = True

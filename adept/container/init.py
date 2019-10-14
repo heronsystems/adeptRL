@@ -24,29 +24,30 @@ class Init:
     @staticmethod
     def main(mode, args):
         args = DotDict(args)
-        if hasattr(args, 'agent') and args.agent is not None:
-            agent_log_str = args.agent
-        else:
-            agent_log_str = args.learner
 
-        log_id = Init.make_log_id(args.tag, mode, agent_log_str, args.netbody)
+        if not args.prompt:
+            args = Init.from_defaults(args)
+        if args.config:
+            args = Init.from_config(args)
+        if args.prompt:
+            args = Init.from_prompt(args)
+
+        if args.agent:
+            name = args.agent
+        else:
+            name = args.actor_host
+
+        log_id = Init.make_log_id(args.tag, mode, name, args.netbody)
         log_id_dir = Init.log_id_dir(args.logdir, args.env, log_id)
         initial_step = 0
 
         if args.resume:
             args, log_id_dir, initial_step = Init.from_resume(mode, args)
-        else:
-            if not args.prompt:
-                args = Init.from_defaults(args)
-            if args.config:
-                args = Init.from_config(args)
-            if args.prompt:
-                args = Init.from_prompt(args)
 
         Init.print_ascii_logo()
         Init.make_log_dirs(log_id_dir)
         Init.write_args_file(log_id_dir, args)
-        logger = Init.setup_logger(mode, log_id_dir)
+        logger = Init.setup_logger(log_id_dir)
         Init.log_args(logger, args)
         return args, log_id_dir, initial_step, logger
 
@@ -66,8 +67,14 @@ class Init:
         args.load_network = log_dir_helper.latest_network_path()
         args.load_optim = log_dir_helper.latest_optim_path()
         initial_step_count = log_dir_helper.latest_epoch()
+
+        if args.agent:
+            name = args.agent
+        else:
+            name = args.actor_host
+
         log_id = Init.make_log_id(
-            args.tag, mode, args.agent, args.netbody,
+            args.tag, mode, name, args.netbody,
             timestamp=log_dir_helper.timestamp()
         )
         log_id_path = Init.log_id_dir(args.logdir, args.env, log_id)
@@ -75,13 +82,16 @@ class Init:
 
     @staticmethod
     def from_defaults(args):
-        if hasattr(args, 'agent') and args.agent is not None:
+        if args.agent:
             agent_cls = R.lookup_agent(args.agent)
-            agent_actor_args = agent_cls.args
+            agent_args = agent_cls.args
         else:
-            actor_cls = R.lookup_actor(args.actor_worker)
-            learner_cls = R.lookup_learner(args.learner)
-            agent_actor_args = {**actor_cls.args, **learner_cls.args}
+            h = R.lookup_actor(args.actor_host)
+            w = R.lookup_actor(args.actor_worker)
+            l = R.lookup_learner(args.learner)
+            e = R.lookup_exp(args.exp)
+            agent_args = {**h.args, **w.args, **l.args, **e.args}
+
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
 
@@ -106,11 +116,22 @@ class Init:
 
     @staticmethod
     def from_prompt(args):
-        agent_cls = R.lookup_agent(args.agent)
+        if args.agent:
+            agent_cls = R.lookup_agent(args.agent)
+            agent_args = agent_cls.prompt(provided=args)
+        else:
+            h = R.lookup_actor(args.actor_host)
+            w = R.lookup_actor(args.actor_worker)
+            l = R.lookup_learner(args.learner)
+            e = R.lookup_exp(args.exp)
+            agent_args = {
+                **h.prompt(args), **w.prompt(args),
+                **l.prompt(args), **e.prompt(args)
+            }
+
         env_cls = R.lookup_env(args.env)
         rwdnorm_cls = R.lookup_reward_normalizer(args.rwd_norm)
 
-        agent_args = agent_cls.prompt(provided=args)
         env_args = env_cls.prompt(provided=args)
         rwdnorm_args = rwdnorm_cls.prompt(provided=args)
         if args.custom_network:
@@ -142,8 +163,8 @@ class Init:
         return os.makedirs(log_id_dir, exist_ok=True)
 
     @staticmethod
-    def setup_logger(mode, log_id_dir, log_name='train'):
-        logger = logging.getLogger(mode)
+    def setup_logger(log_id_dir, log_name='train'):
+        logger = logging.getLogger(log_id_dir + '_' + log_name)
         logger.setLevel(logging.INFO)
         logger.propagate = False
 
