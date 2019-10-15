@@ -45,7 +45,7 @@ Topology Options:
     --worker-gpu-alloc <float>   Number of gpus for each rollout worker [default: 0.25]
     --learner-cpu-alloc <int>     Number of cpus for each learner [default: 1]
     --learner-gpu-alloc <float>   Number of gpus for each learner [default: 1]
-    --rollout-queue-size <int>   Max length of rollout queue before blocking [default: 4]
+    --rollout-queue-size <int>   Max length of rollout queue before blocking (per learner) [default: 4]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
@@ -96,6 +96,7 @@ from adept.utils.script_helpers import (
     parse_list_str, parse_path, parse_none, LogDirHelper, parse_bool_str
 )
 from adept.utils.util import DotDict
+from adept.registry import REGISTRY as R
 
 MODE = 'Ray'
 
@@ -150,6 +151,7 @@ def main(args):
     :return:
     """
     args, log_id_dir, initial_step, logger = Init.main(MODE, args)
+    R.save_extern_classes(log_id_dir)
 
     # start ray
     if args.ray_addr is not None:
@@ -175,7 +177,7 @@ def main(args):
             remote_cls = RayPeerLearnerContainer.as_remote(num_cpus=args.learner_cpu_alloc,
                                                            num_gpus=args.learner_gpu_alloc)
             # init
-            remote = remote_cls.remote(args, initial_step, rank=p_ind + 1)
+            remote = remote_cls.remote(args, log_id_dir, initial_step, rank=p_ind + 1)
             peer_learners.append(remote)
 
         # figure out main learner node ip
@@ -199,7 +201,7 @@ def main(args):
     # TODO: actually lookup from registry
     workers = [RolloutWorker.as_remote(num_cpus=args.worker_cpu_alloc,
                                        num_gpus=args.worker_gpu_alloc)
-                    .remote(args, initial_step, w_ind)
+                    .remote(args, log_id_dir, initial_step, w_ind)
                     for w_ind in range(args.nb_workers)]
 
     # synchronize worker variables

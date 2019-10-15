@@ -44,6 +44,7 @@ class RolloutWorker(Container):
     def __init__(
             self,
             args,
+            log_id_dir,
             initial_step_count,
             global_rank
     ):
@@ -51,6 +52,9 @@ class RolloutWorker(Container):
             if global_rank == 0 \
             else args.seed + args.nb_env * global_rank
         print('Worker {} using seed {}'.format(global_rank, seed))
+
+        # load saved registry classes
+        REGISTRY.load_extern_classes(log_id_dir)
 
         # ENV
         engine = REGISTRY.lookup_engine(args.env)

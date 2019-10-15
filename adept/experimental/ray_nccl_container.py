@@ -121,6 +121,9 @@ class RayContainer(Container):
         self.logger = logger
         self.log_id_dir = log_id_dir
 
+        # load saved registry classes
+        REGISTRY.load_extern_classes(log_id_dir)
+
         # ENV (temporary)
         env_cls = REGISTRY.lookup_env(args.env)
         env = env_cls.from_args(args, 0)
@@ -284,7 +287,7 @@ class RayContainer(Container):
             # write summaries
             cur_step_t = time()
             if cur_step_t - prev_step_t > self.summary_freq:
-                print('Metrics:', self.rollout_queuer.metrics())
+                print('Rank {} Metrics:'.format(self.rank), self.rollout_queuer.metrics())
                 if self.rank == 0:
                     self.write_summaries(
                         self.summary_writer, global_step_count, total_loss,
@@ -348,9 +351,10 @@ class RayPeerLearnerContainer(RayContainer):
     def __init__(
             self,
             args,
+            log_id_dir,
             initial_step_count,
             rank
     ):
         # no logger for peer learners
-        super().__init__(args, None, None, initial_step_count, rank)
+        super().__init__(args, None, log_id_dir, initial_step_count, rank)
 
