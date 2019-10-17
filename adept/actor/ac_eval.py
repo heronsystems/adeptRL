@@ -23,7 +23,7 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
             logit = self.flatten_logits(preds[key])
 
             softmax = self.softmax(logit)
-            action = self.sample_action(softmax)
+            action = self.select_action(softmax)
 
             actions[key] = action.cpu()
         return actions, {}

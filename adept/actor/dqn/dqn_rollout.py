@@ -50,7 +50,7 @@ class DQNRolloutActor(ActorModule):
             action[rand_mask] = rand_act
             actions[key] = action.squeeze(1).cpu()
 
-            values.append(self._get_rollout_values(q_vals[key], action, batch_size))
+            values.append(self._get_action_values(q_vals[key], action, batch_size))
 
         values = self._values_to_tensor(values)
 
@@ -64,7 +64,7 @@ class DQNRolloutActor(ActorModule):
     def _action_from_q_vals(self, q_vals):
         return q_vals.argmax(dim=-1, keepdim=True)
 
-    def _get_rollout_values(self, q_vals, action, batch_size=0):
+    def _get_action_values(self, q_vals, action, batch_size=0):
         return q_vals.gather(1, action)
 
     def _values_to_tensor(self, values):

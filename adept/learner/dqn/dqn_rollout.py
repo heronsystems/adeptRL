@@ -1,7 +1,7 @@
 import torch
 
-from .base.learner_module import LearnerModule
-from .base.dm_return_scale import DeepMindReturnScaler
+from adept.learner.base.learner_module import LearnerModule
+from adept.learner.base.dm_return_scale import DeepMindReturnScaler
 
 
 class DQNRolloutLearner(LearnerModule):
@@ -60,17 +60,24 @@ class DQNRolloutLearner(LearnerModule):
         # estimate value of next state
         with torch.no_grad():
             results, _ = target_network(next_obs, internals)
-            # TODO: hack, where can this class get action keys?
-            self.action_keys = list(results.keys())
+            # TODO: HACK for QR and DDQN, where can this class get action keys?
+            self.action_keys = list(filter(lambda x: x != 'value', results.keys()))
             target_q = self._get_qvals_from_pred(results)
+            batch_size = target_q[self.action_keys[0]].shape[0]
 
             # if double dqn estimate get target val for current estimated action
             if self.double_dqn:
                 current_results, _ = network(next_obs, internals)
                 current_q = self._get_qvals_from_pred(current_results)
                 last_actions = [self._action_from_q_vals(current_q[k]) for k in self.action_keys]
-                last_values = torch.stack([target_q[k].gather(1, a)[:, 0].data for k, a in zip(self.action_keys, last_actions)], dim=1)
+                last_values = []
+                for k, a in zip(self.action_keys, last_actions):
+                    last_values.append(self._get_action_values(target_q[k], a, batch_size))
+                last_values = torch.stack(last_values, dim=1)
+                # remove last dim of size 1
+                last_values = last_values.squeeze(-1)
             else:
+                # TODO: this should be a function so it can be overridden 
                 last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self.action_keys], dim=1)
 
         return last_values
@@ -102,6 +109,11 @@ class DQNRolloutLearner(LearnerModule):
     def _get_qvals_from_pred(self, preds):
         return preds
 
+    # TODO: this is duplicated from rollout actor
     def _action_from_q_vals(self, q_vals):
         return q_vals.argmax(dim=-1, keepdim=True)
+
+    # TODO: this is duplicated from rollout actor
+    def _get_action_values(self, q_vals, action, batch_size=0):
+        return q_vals.gather(1, action)
 
