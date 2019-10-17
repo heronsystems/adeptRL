@@ -232,7 +232,6 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
                 action_dictionary = json.loads(socket_parsed)
                 ob, reward, done, info = env.step(action_dictionary)
                 if done:
-                    raise ValueError('blah')
                     ob = env.reset()
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
