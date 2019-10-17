@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 from adept.container.base import Container
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
-from adept.experimental.rollout_queuer import RolloutQueuerAsync
+from adept.container.actorlearner.rollout_queuer import RolloutQueuerAsync
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
 
@@ -82,7 +82,7 @@ class NCCLOptimizer:
 
 
 
-class RayContainer(Container):
+class ActorLearnerHost(Container):
     @classmethod
     def as_remote(cls,
                   num_cpus=None,
@@ -347,7 +347,7 @@ class RayContainer(Container):
         print('Rank {} parameters synced.'.format(self.rank))
 
 
-class RayPeerLearnerContainer(RayContainer):
+class ActorLearnerPeer(ActorLearnerHost):
     def __init__(
             self,
             args,

@@ -23,34 +23,36 @@
 
 Actor Learner Mode
 
-Train an agent with multiple GPUs. https://arxiv.org/abs/1802.01561.
+Train an agent with learners and rollout workers distributed by ray.
 
 Usage:
     actorlearner [options]
+    actorlearner --resume <path>
     actorlearner (-h | --help)
 
 Distributed Options:
-    --nb-node <int>         Number of distributed nodes [default: 1]
-    --node-rank <int>       ID of the node for multi-node training [default: 0]
-    --nb-proc <int>         Number of processes per node [default: 3]
-    --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
-    --master-port <int>     Master node (rank 0's) comm port [default: 29500]
-    --init-method <str>     torch.distrib init [default: file:///tmp/adept_init]
+    --nb-learners <int>         Number of distributed learners [default: 1]
+    --nb-workers <int>          Number of distributed workers [default: 4]
+    --ray-addr <str>            Ray head node address, None for local [default: None]
 
 Topology Options:
     --actor-host <str>        Name of host actor [default: ImpalaHostActor]
     --actor-worker <str>      Name of worker actor [default: ImpalaWorkerActor]
     --learner <str>           Name of learner [default: ImpalaLearner]
     --exp <str>               Name of host experience cache [default: Rollout]
-    --nb-learn-batch <int>    Number of worker batches to learn on [default: 2]
+    --nb-learn-batch <int>    Number of worker batches to learn on (per learner) [default: 2]
+    --worker-cpu-alloc <int>     Number of cpus for each rollout worker [default: 8]
+    --worker-gpu-alloc <float>   Number of gpus for each rollout worker [default: 0.25]
+    --learner-cpu-alloc <int>     Number of cpus for each learner [default: 1]
+    --learner-gpu-alloc <float>   Number of gpus for each learner [default: 1]
+    --rollout-queue-size <int>   Max length of rollout queue before blocking (per learner) [default: 4]
 
 Environment Options:
     --env <str>               Environment name [default: PongNoFrameskip-v4]
-    --rwd-norm <str>          Reward normalizer name [default: Clip]
+    --rwd-norm <str>        Reward normalizer name [default: Clip]
 
 Script Options:
-    --gpu-ids <ids>         Comma-separated CUDA IDs [default: 0,1]
-    --nb-env <int>          Number of env per Tower [default: 16]
+    --nb-env <int>          Number of env per worker [default: 32]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file
@@ -85,12 +87,12 @@ Troubleshooting Options:
     --profile                 Profile this script
 """
 import os
-import subprocess
-import sys
+import ray
 
 from adept.container import Init
+from adept.container import ActorLearnerHost, ActorLearnerPeer, ActorLearnerWorker
 from adept.utils.script_helpers import (
-    parse_list_str, parse_path, parse_none, LogDirHelper
+    parse_list_str, parse_path, parse_none, LogDirHelper, parse_bool_str
 )
 from adept.utils.util import DotDict
 from adept.registry import REGISTRY as R
@@ -106,11 +108,6 @@ def parse_args():
     del args['help']
     args = DotDict(args)
 
-    args.nb_node = int(args.nb_node)
-    args.node_rank = int(args.node_rank)
-    args.nb_proc = int(args.nb_proc)
-    args.master_port = int(args.master_port)
-
     # Ignore other args if resuming
     if args.resume:
         args.resume = parse_path(args.resume)
@@ -119,93 +116,126 @@ def parse_args():
     if args.config:
         args.config = parse_path(args.config)
 
-    # Container Options
     args.logdir = parse_path(args.logdir)
-    args.gpu_ids = parse_list_str(args.gpu_ids, int)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
     args.nb_step = int(float(args.nb_step))
-    args.nb_learn_batch = int(args.nb_learn_batch)
-
-    # Logging Options
     args.tag = parse_none(args.tag)
     args.summary_freq = int(args.summary_freq)
     args.lr = float(args.lr)
     args.epoch_len = int(float(args.epoch_len))
-
-    # Troubleshooting Options
     args.profile = bool(args.profile)
+
+    args.ray_addr = parse_none(args.ray_addr)
+    args.nb_learners = int(args.nb_learners)
+    args.nb_workers = int(args.nb_workers)
+    args.learner_cpu_alloc = int(args.learner_cpu_alloc)
+    args.learner_gpu_alloc = float(args.learner_gpu_alloc)
+    args.worker_cpu_alloc = int(args.worker_cpu_alloc)
+    args.worker_gpu_alloc = float(args.worker_gpu_alloc)
+
+    args.nb_learn_batch = int(args.nb_learn_batch)
+    args.rollout_queue_size = int(args.rollout_queue_size)
+
+    # arg checking
+    assert args.nb_learn_batch <= args.nb_workers, 'WARNING: nb_learn_batch must be <= nb_workers. Got {} <= {}' \
+           .format(args.nb_learn_batch, args.nb_workers)
     return args
 
 
 def main(args):
     """
-    Run impala training.
-
+    Run actorlearner training.
     :param args: Dict[str, Any]
     :return:
     """
-    args = DotDict(args)
-
-    dist_world_size = args.nb_proc * args.nb_node
-
-    current_env = os.environ.copy()
-    current_env["MASTER_ADDR"] = args.master_addr
-    current_env["MASTER_PORT"] = str(args.master_port)
-    current_env["WORLD_SIZE"] = str(dist_world_size)
-    current_env["NB_NODE"] = str(args.nb_node)
-
     args, log_id_dir, initial_step, logger = Init.main(MODE, args)
     R.save_extern_classes(log_id_dir)
 
-    processes = []
+    # start ray
+    if args.ray_addr is not None:
+        ray.init(address=args.ray_addr)
+        print('Using Ray on a cluster. Head node address: {}'.format(args.ray_addr))
+    else:
+        print('Using Ray on a single machine.')
+        ray.init()
 
-    for local_rank in range(0, args.nb_proc):
-        # each process's rank
-        dist_rank = args.nb_proc * args.node_rank + local_rank
-        current_env["RANK"] = str(dist_rank)
-        current_env["LOCAL_RANK"] = str(local_rank)
+    # create a main learner which logs summaries and saves weights
+    main_learner_cls = ActorLearnerHost.as_remote(num_cpus=args.learner_cpu_alloc,
+                                                  num_gpus=args.learner_gpu_alloc)
+    main_learner = main_learner_cls.remote(
+        args, logger, log_id_dir, initial_step, rank=0
+    )
 
-        # spawn the processes
-        if not args.resume:
-            cmd = [
-                sys.executable,
-                "-u",
-                "-m",
-                "adept.scripts._actorlearner",
-                "--log-id-dir={}".format(log_id_dir)
-            ]
-        else:
-            cmd = [
-                sys.executable,
-                "-u",
-                "-m",
-                "adept.scripts._actorlearner",
-                "--log-id-dir={}".format(log_id_dir),
-                "--resume={}".format(True),
-                "--load-network={}".format(args.load_network),
-                "--load-optim={}".format(args.load_optim),
-                "--initial-step-count={}".format(initial_step),
-                "--init-method={}".format(args.init_method)
-            ]
+    # if multiple learners setup nccl
+    if args.nb_learners > 1:
+        # create N peer learners
+        peer_learners = []
+        for p_ind in range(args.nb_learners - 1):
+            remote_cls = ActorLearnerPeer.as_remote(num_cpus=args.learner_cpu_alloc,
+                                                    num_gpus=args.learner_gpu_alloc)
+            # init
+            remote = remote_cls.remote(args, log_id_dir, initial_step, rank=p_ind + 1)
+            peer_learners.append(remote)
 
-        process = subprocess.Popen(cmd, env=current_env)
-        processes.append(process)
+        # figure out main learner node ip
+        nccl_addr, nccl_ip, nccl_port = ray.get(main_learner._rank0_nccl_port_init.remote())
 
-    for process in processes:
-        process.wait()
+        # setup all nccls
+        nccl_inits = [main_learner._nccl_init.remote(nccl_addr, nccl_ip, nccl_port)]
+        nccl_inits.extend([p._nccl_init.remote(nccl_addr, nccl_ip, nccl_port) for p in peer_learners])
+        # wait for all
+        ray.get(nccl_inits)
+        print('NCCL initialized')
+
+        # have all sync parameters
+        [f._sync_peer_parameters.remote() for f in peer_learners]
+        main_learner._sync_peer_parameters.remote()
+    # else just 1 learner
+    else:
+        peer_learners = []
+
+    # create workers
+    workers = [ActorLearnerWorker.as_remote(num_cpus=args.worker_cpu_alloc,
+                                            num_gpus=args.worker_gpu_alloc)
+                    .remote(args, log_id_dir, initial_step, w_ind)
+                    for w_ind in range(args.nb_workers)]
+
+    # synchronize worker variables
+    ray.get(main_learner.synchronize_worker_parameters.remote(workers, initial_step, blocking=True))
+
+    try:
+        # startup the run method of all containers
+        runs = [main_learner.run.remote(workers, args.profile)]
+        runs.extend([f.run.remote(workers) for f in peer_learners])
+        done_training = ray.wait(runs)
+
+    finally:
+        closes = [main_learner.close.remote()]
+        closes.extend([f.close.remote() for f in peer_learners])
+        done_closing = ray.wait(closes)
 
     if args.eval:
-        from adept.scripts.evaluate import main
-        eval_args = {
-            'log_id_dir': log_id_dir,
-            'gpu_id': 0,
-            'nb_episode': 30,
-        }
+        import subprocess
+        command = [
+            'python',
+            '-m',
+            'adept.scripts.evaluate',
+            '--log-id-dir',
+            log_id_dir,
+            '--gpu-id',
+            str(args.gpu_id),
+            '--nb-episode',
+            str(30)
+        ]
         if args.custom_network:
-            eval_args['custom_network'] = args.custom_network
-        main(eval_args)
+            command += [
+                '--custom-network',
+                args.custom_network
+            ]
+        exit(subprocess.call(command, env=os.environ))
 
 
 if __name__ == '__main__':
     main(parse_args())
+

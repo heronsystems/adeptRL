@@ -1,14 +1,17 @@
-"""
-Init:
-sets up environment
-sets up network(s)/actor(s)
-set network weights from args
-Resets env to be ready
-
-Run:
-run one rollout and put data into cache
-return cache
-"""
+# Copyright (C) 2018 Heron Systems, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import namedtuple, deque
 from time import time
 
@@ -24,7 +27,7 @@ from adept.utils.util import dtensor_to_dev, listd_to_dlist
 from adept.container.base import Container
 
 
-class RolloutWorker(Container):
+class ActorLearnerWorker(Container):
     @classmethod
     def as_remote(cls,
                   num_cpus=None,
@@ -245,64 +248,4 @@ class RolloutWorker(Container):
                 raise NotImplementedError("Expected rollout dict item to be a tensor got {}".format(type(var)))
         else:
             raise NotImplementedError("Expected rollout object to be a list got {}".format(type(var)))
-
-
-if __name__ == '__main__':
-    from adept.scripts.actorlearner import parse_args
-    from adept.container import Init
-    args = parse_args()
-    args.nb_env = 8
-    args.gpu_id = 0
-    args = Init.from_defaults(args)
-
-    # ray init
-    ray.init()
-
-    # create some number of remotes
-    num_work = 4
-    workers = [RolloutWorker.as_remote(num_cpus=12/num_work, num_gpus=0).remote(args, 0, w_ind)
-               for w_ind in range(num_work)]
-
-    # synchronize weights
-    futures = [w.set_weights.remote([]) for w in workers]
-    ray.get(futures)
-
-    # get batches directly, just to make sure it works
-    futures = [w.run.remote() for w in workers]
-    rollouts = ray.get(futures)
-    print('got batches manually')
-    batch = {}
-    # TODO: this assumes all rollouts have the same keys
-    for k in rollouts[0].keys():
-        # cat over batch dimension
-        if isinstance(rollouts[0][k], torch.Tensor):
-            v_list = [r[k] for r in rollouts]
-            agg = torch.cat(v_list, dim=1)
-        elif isinstance(rollouts[0][k], dict):
-            # cat all elements of dict
-            agg = {}
-            for r_key in rollouts[0][k].keys():
-                agg[r_key] = torch.cat([r[k][r_key] for r in rollouts], dim=1)
-        batch[k] = agg
-
-    print(batch['states']['Box'].shape)
-
-
-    # setup queuer
-    from rollout_queuer import RolloutQueuerAsync
-    import time
-    manager = RolloutQueuerAsync(workers, 2, 4)
-    manager.start()
-
-    # get batch from queuer this is blocking
-    st = time.time()
-    for i in range(1000):
-        batches = manager.get()
-        print('got batches')
-    et = time.time()
-    print('bps', 1000 / (et - st))
-
-    manager.stop()
-
-
 

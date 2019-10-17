@@ -1,3 +1,17 @@
+# Copyright (C) 2018 Heron Systems, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from time import time
 
 import queue
@@ -76,21 +90,6 @@ class RolloutQueuerAsync:
             r, t = w['rollout'], w['terminal_rewards']
             rollouts.append(r)
             terminal_rewards.append(t)
-
-        # aggregate into batch
-#         batch = {}
-        # # TODO: this assumes all rollouts have the same keys, and send torch.Tensors
-        # for k in rollouts[0].keys():
-            # # cat over batch dimension
-            # if isinstance(rollouts[0][k], torch.Tensor):
-                # v_list = [r[k] for r in rollouts]
-                # agg = torch.cat(v_list, dim=1)
-            # elif isinstance(rollouts[0][k], dict):
-                # # cat all elements of dict
-                # agg = {}
-                # for r_key in rollouts[0][k].keys():
-                    # agg[r_key] = torch.cat([r[k][r_key] for r in rollouts], dim=1)
-            # batch[k] = agg
 
         return rollouts, terminal_rewards
 
