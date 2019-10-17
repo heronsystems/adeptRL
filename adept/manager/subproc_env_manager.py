@@ -29,6 +29,10 @@ import json
 ZMQ_CONNECT_METHOD = 'ipc'
 
 
+class WorkerError(BaseException):
+    pass
+
+
 class SubProcEnvManager(EnvManager):
     """
     Modified.
@@ -110,10 +114,13 @@ class SubProcEnvManager(EnvManager):
 
     def step_wait(self):
         results = [remote.recv() for remote in self._zmq_sockets]
+        self.waiting = False
+
+        # check for errors and parse
+        self._check_for_errors(results)
         results = [json.loads(res.decode()) for res in results]
         obs, rews, dones, infos = zip(*results)
 
-        self.waiting = False
         obs = listd_to_dlist(obs)
         shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
         obs = {**obs, **shared_mems}
@@ -143,6 +150,21 @@ class SubProcEnvManager(EnvManager):
         for p in self.processes:
             p.join()
         self.closed = True
+
+    def _check_for_errors(self, results):
+        errors = []
+        del_inds = []
+        # multiple workers can fail on the same step
+        for i, r in enumerate(results):
+            if r[:5] == b'error':
+                del_inds.append(i)
+                errors.append('Worker {} has an error {}'.format(i, r))
+        if len(errors) > 0:
+            # have to delete from last to first, otherwise inds are invalid
+            for d in reversed(sorted(del_inds)):
+                # remove from open sockets
+                del self._zmq_sockets[d]
+            raise WorkerError(errors)
 
 
 def worker(remote, parent_remote, port, env_fn_wrapper):
@@ -187,33 +209,42 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
 
     running = True
     while running:
-        socket_data = socket.recv()
-        socket_parsed = socket_data.decode()
+        try:
+            socket_data = socket.recv()
+            socket_parsed = socket_data.decode()
 
-        # commands that aren't action dictionaries
-        if socket_parsed == 'reset':
-            ob = env.reset()
-            ob = handle_ob(ob, shared_memory)
-            # only the non-shared obs are returned here
-            socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
-        elif cmd == 'reset_task':
-            ob = env.reset_task()
-            ob = handle_ob(ob, shared_memory)
-            # only the non-shared obs are returned here
-            socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
-        elif socket_parsed == 'close':
-            env.close()
-            running = False
-        # else action dictionary
-        else:
-            action_dictionary = json.loads(socket_parsed)
-            ob, reward, done, info = env.step(action_dictionary)
-            if done:
+            # commands that aren't action dictionaries
+            if socket_parsed == 'reset':
                 ob = env.reset()
-            ob = handle_ob(ob, shared_memory)
-            # only the non-shared obs are returned here
-            msg = json.dumps((ob, reward, done, info))
-            socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
+                ob = handle_ob(ob, shared_memory)
+                # only the non-shared obs are returned here
+                socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
+            elif cmd == 'reset_task':
+                ob = env.reset_task()
+                ob = handle_ob(ob, shared_memory)
+                # only the non-shared obs are returned here
+                socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
+            elif socket_parsed == 'close':
+                env.close()
+                running = False
+            # else action dictionary
+            else:
+                action_dictionary = json.loads(socket_parsed)
+                ob, reward, done, info = env.step(action_dictionary)
+                if done:
+                    raise ValueError('blah')
+                    ob = env.reset()
+                ob = handle_ob(ob, shared_memory)
+                # only the non-shared obs are returned here
+                msg = json.dumps((ob, reward, done, info))
+                socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            running = False
+            e_str = '{}: {}'.format(type(e).__name__, e)
+            print('Subprocess environment has an error', e_str)
+            socket.send('error. {}'.format(e_str).encode(), zmq.NOBLOCK, copy=False, track=False)
 
 
 def handle_ob(ob, shared_memory):
