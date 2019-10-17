@@ -39,6 +39,7 @@ class QRDDQNRolloutLearner(DQNRolloutLearner):
             raise NotImplementedError()
         super().__init__(reward_normalizer, discount, return_scale, double_dqn)
         self.num_atoms = num_atoms
+        self._qr_density = (((2 * torch.arange(self.num_atoms, dtype=torch.float, requires_grad=False)) + 1) / (2.0 * self.num_atoms))
 
     @classmethod
     def from_args(cls, args, reward_normalizer):
@@ -50,7 +51,14 @@ class QRDDQNRolloutLearner(DQNRolloutLearner):
             args.num_atoms
         )
 
-    def _loss_fn(self, batch_values, value_targets):
+    def compute_loss(self, network, experiences, next_obs, internals):
+        # move qr density to network device
+        network_device = next(network.parameters()).device
+        if self._qr_density.device != network_device:
+            self._qr_density = self._qr_density.to(network_device)
+        return super().compute_loss(network, experiences, next_obs, internals)
+
+    def loss_fn(self, batch_values, value_targets):
         # Broadcast temporal difference to compare every combination of quantiles
         # This is the formula for loss from the Implicit Quantile Networks paper
         diff = value_targets.unsqueeze(3) - batch_values.unsqueeze(2)

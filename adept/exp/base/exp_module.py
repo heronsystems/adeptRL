@@ -33,3 +33,12 @@ class ExpModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def is_ready(self):
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def to(self, device):
+        raise NotImplementedError
+
+    @abc.abstractclassmethod
+    def from_args(cls, args, spec_builder):
+        raise NotImplementedError
+

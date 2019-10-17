@@ -4,9 +4,9 @@ from adept.learner.base.learner_module import LearnerModule
 from adept.learner.base.dm_return_scale import DeepMindReturnScaler
 
 
-class DQNRolloutLearner(LearnerModule):
+class DQNReplayLearner(LearnerModule):
     """
-    DQN Rollout Learner
+    DQN Replay Learner
     """
     args = {
         'discount': 0.99,
@@ -41,6 +41,8 @@ class DQNRolloutLearner(LearnerModule):
         # TODO: target network
         # estimate value of next state
         last_values = self.compute_estimated_values(network, network, next_obs, internals)
+
+        # iterate observations and internals to generate values
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(experiences.values)
