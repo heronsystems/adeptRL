@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from collections import namedtuple, deque
+from collections import namedtuple
 from time import time
 
 import numpy as np
@@ -110,12 +110,8 @@ class ActorLearnerWorker(Container):
         # SETUP state variables for run
         self.step_count = self.initial_step_count
         self.global_step_count = self.initial_step_count
-        self.prev_step_t = time()
         self.ep_rewards = torch.zeros(self.nb_env)
-        self.rolling_ep_rewards = deque(maxlen=100)
         self.global_rank = global_rank
-        self.summary_freq = args.summary_freq
-        self.prev_step_t = time()
 
         self.obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         self.internals = listd_to_dlist([
@@ -131,6 +127,7 @@ class ActorLearnerWorker(Container):
 
         self.exp.clear()
         all_terminal_rewards = []
+        all_terminal_infos = {}
 
         # loop to generate a rollout
         with torch.no_grad():
@@ -143,8 +140,8 @@ class ActorLearnerWorker(Container):
                 next_obs = dtensor_to_dev(next_obs, self.device)
                 self.exp.write_env(
                     self.obs,
-                    rewards.to(self.device),  # TODO: make configurable?
-                    terminals.to(self.device),  # TODO: make configurable?
+                    rewards.float(),
+                    terminals.float(),
                     infos
                 )
 
@@ -160,40 +157,43 @@ class ActorLearnerWorker(Container):
                             self.internals[k][i] = v
                         rew = self.ep_rewards[i].item()
                         term_rewards.append(rew)
-                        self.rolling_ep_rewards.append(rew)
                         self.ep_rewards[i].zero_()
+
+                        for k, v in infos[i].items():
+                            if k not in all_terminal_infos:
+                                all_terminal_infos[k] = []
+                            all_terminal_infos[k].append(v)
 
                 # avg rewards
                 if term_rewards:
                     term_reward = np.mean(term_rewards)
                     all_terminal_rewards.append(term_reward)
 
-                    # print metrics
-                    cur_step_t = time()
-                    if cur_step_t - self.prev_step_t > self.summary_freq:
-                        delta_t = time() - self.start_time
-                        print(
-                            'RANK: {} '
-                            'LOCAL STEP: {} '
-                            'REWARD: {} '
-                            'AVG REWARD: {} '
-                            'LOCAL STEP/S: {:.2f}'.format(
-                                self.global_rank,
-                                self.step_count,
-                                term_reward,
-                                round(np.mean(self.rolling_ep_rewards), 2),
-                                (self.step_count - self.initial_step_count) / delta_t
-                            )
+                    delta_t = time() - self.start_time
+                    print(
+                        'RANK: {} '
+                        'LOCAL STEP: {} '
+                        'REWARD: {} '
+                        'LOCAL STEP/S: {:.2f}'.format(
+                            self.global_rank,
+                            self.step_count,
+                            term_reward,
+                            (self.step_count - self.initial_step_count) / delta_t
                         )
-                        self.prev_step_t = cur_step_t
+                    )
 
         # rollout is full return it
         self.exp.write_next_obs(self.obs)
         # TODO: compression?
         if len(all_terminal_rewards) > 0:
-            return {'rollout': self._ray_pack(self.exp), 'terminal_rewards': np.mean(all_terminal_rewards)}
+            return {'rollout': self._ray_pack(self.exp),
+                    'terminal_rewards': np.mean(all_terminal_rewards),
+                    'terminal_infos': {k: np.mean(v) for k, v in all_terminal_infos.items()}
+                    }
         else:
-            return {'rollout': self._ray_pack(self.exp), 'terminal_rewards': None}
+            return {'rollout': self._ray_pack(self.exp),
+                    'terminal_rewards': None,
+                    'terminal_infos': None}
 
     def set_weights(self, weights):
         for w, local_w in zip(weights, self.get_parameters()):

@@ -225,7 +225,7 @@ class ActorLearnerHost(Container):
         while not self.done(global_step_count):
             self.exp.clear()
             # Get batch from queue
-            rollouts, terminal_rewards = self.rollout_queuer.get()
+            rollouts, terminal_rewards, terminal_infos = self.rollout_queuer.get()
 
             # Iterate forward on batch
             self.exp.write_exps(rollouts)
@@ -283,6 +283,20 @@ class ActorLearnerHost(Container):
                     self.summary_writer.add_scalar(
                         'reward', np.mean(terminal_rewards), global_step_count
                     )
+
+                # write infos
+                if any(terminal_infos):
+                    terminal_infos = list(filter(lambda x: x is not None, terminal_infos))
+                    float_keys = [
+                        k for k, v in terminal_infos[0].items() if type(v) == float
+                    ]
+                    terminal_infos_dlist = listd_to_dlist(terminal_infos)
+                    for k in float_keys:
+                        self.summary_writer.add_scalar(
+                            f'info/{k}',
+                            np.mean(terminal_infos_dlist[k]),
+                            global_step_count
+                        )
 
             # write summaries
             cur_step_t = time()

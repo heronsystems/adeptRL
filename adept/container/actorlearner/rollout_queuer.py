@@ -86,12 +86,14 @@ class RolloutQueuerAsync:
 
         rollouts = []
         terminal_rewards = []
+        terminal_infos = []
         for w in worker_data:
-            r, t = w['rollout'], w['terminal_rewards']
+            r, t, i = w['rollout'], w['terminal_rewards'], w['terminal_infos']
             rollouts.append(r)
             terminal_rewards.append(t)
+            terminal_infos.append(i)
 
-        return rollouts, terminal_rewards
+        return rollouts, terminal_rewards, terminal_infos
 
     def stop(self):
         self._should_stop = True
