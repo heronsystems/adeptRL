@@ -49,12 +49,12 @@ class ActorLearnerWorker(Container):
             args,
             log_id_dir,
             initial_step_count,
-            global_rank
+            rank
     ):
         seed = args.seed \
-            if global_rank == 0 \
-            else args.seed + args.nb_env * global_rank
-        print('Worker {} using seed {}'.format(global_rank, seed))
+            if rank == 0 \
+            else args.seed + args.nb_env * rank
+        print('Worker {} using seed {}'.format(rank, seed))
 
         # load saved registry classes
         REGISTRY.load_extern_classes(log_id_dir)
@@ -111,7 +111,7 @@ class ActorLearnerWorker(Container):
         self.step_count = self.initial_step_count
         self.global_step_count = self.initial_step_count
         self.ep_rewards = torch.zeros(self.nb_env)
-        self.global_rank = global_rank
+        self.rank = rank
 
         self.obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
         self.internals = listd_to_dlist([
@@ -130,57 +130,57 @@ class ActorLearnerWorker(Container):
         all_terminal_infos = {}
 
         # loop to generate a rollout
-        with torch.no_grad():
-            while not self.exp.is_ready():
+        while not self.exp.is_ready():
+            with torch.no_grad():
                 actions, exp, self.internals = self.actor.act(self.network, self.obs, self.internals)
 
-                self.exp.write_actor(exp)
+            self.exp.write_actor(exp)
 
-                next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
-                next_obs = dtensor_to_dev(next_obs, self.device)
-                self.exp.write_env(
-                    self.obs,
-                    rewards.float(),
-                    terminals.float(),
-                    infos
-                )
+            next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
+            next_obs = dtensor_to_dev(next_obs, self.device)
+            self.exp.write_env(
+                self.obs,
+                rewards.float(),
+                terminals.float(),
+                infos
+            )
 
-                # Perform state updates
-                self.step_count += self.nb_env
-                self.ep_rewards += rewards.float()
-                self.obs = next_obs
+            # Perform state updates
+            self.step_count += self.nb_env
+            self.ep_rewards += rewards.float()
+            self.obs = next_obs
 
-                term_rewards = []
-                for i, terminal in enumerate(terminals):
-                    if terminal:
-                        for k, v in self.network.new_internals(self.device).items():
-                            self.internals[k][i] = v
-                        rew = self.ep_rewards[i].item()
-                        term_rewards.append(rew)
-                        self.ep_rewards[i].zero_()
+            term_rewards = []
+            for i, terminal in enumerate(terminals):
+                if terminal:
+                    for k, v in self.network.new_internals(self.device).items():
+                        self.internals[k][i] = v
+                    rew = self.ep_rewards[i].item()
+                    term_rewards.append(rew)
+                    self.ep_rewards[i].zero_()
 
-                        for k, v in infos[i].items():
-                            if k not in all_terminal_infos:
-                                all_terminal_infos[k] = []
-                            all_terminal_infos[k].append(v)
+                    for k, v in infos[i].items():
+                        if k not in all_terminal_infos:
+                            all_terminal_infos[k] = []
+                        all_terminal_infos[k].append(v)
 
-                # avg rewards
-                if term_rewards:
-                    term_reward = np.mean(term_rewards)
-                    all_terminal_rewards.append(term_reward)
+            # avg rewards
+            if term_rewards:
+                term_reward = np.mean(term_rewards)
+                all_terminal_rewards.append(term_reward)
 
-                    delta_t = time() - self.start_time
-                    print(
-                        'RANK: {} '
-                        'LOCAL STEP: {} '
-                        'REWARD: {} '
-                        'LOCAL STEP/S: {:.2f}'.format(
-                            self.global_rank,
-                            self.step_count,
-                            term_reward,
-                            (self.step_count - self.initial_step_count) / delta_t
-                        )
+                delta_t = time() - self.start_time
+                print(
+                    'RANK: {} '
+                    'LOCAL STEP: {} '
+                    'REWARD: {} '
+                    'LOCAL STEP/S: {:.2f}'.format(
+                        self.rank,
+                        self.step_count,
+                        term_reward,
+                        (self.step_count - self.initial_step_count) / delta_t
                     )
+                )
 
         # rollout is full return it
         self.exp.write_next_obs(self.obs)

@@ -95,7 +95,7 @@ class RolloutQueuerAsync:
 
         return rollouts, terminal_rewards, terminal_infos
 
-    def stop(self):
+    def close(self):
         self._should_stop = True
 
         # try to join background thread

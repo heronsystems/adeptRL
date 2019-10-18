@@ -23,63 +23,12 @@ import torch
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
-from adept.container.base import Container
+from adept.container.base import Container, NCCLOptimizer
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.container.actorlearner.rollout_queuer import RolloutQueuerAsync
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
-
-
-class NCCLOptimizer:
-    def __init__(self, optimizer_fn, network, world_size, param_sync_rate=1000):
-        self.network = network
-        self.optimizer = optimizer_fn(self.network.parameters())
-        self.param_sync_rate = param_sync_rate
-        self._opt_count = 0
-        self.process_group = None
-        self.world_size = world_size
-
-    def set_process_group(self, pg):
-        self.process_group = pg
-
-    def step(self):
-        handles = []
-        for param in self.network.parameters():
-            handles.append(
-            self.process_group.allreduce(param.grad))
-        for handle in handles:
-            handle.wait()
-        for param in self.network.parameters():
-            param.grad.mul_(1. / self.world_size)
-        self.optimizer.step()
-        self._opt_count += 1
-
-        # sync params every once in a while to reduce numerical errors
-        if self._opt_count % self.param_sync_rate == 0:
-            self.sync_parameters()
-            # can't just sync buffers, some are int and don't mean well
-            # self.sync_buffers()
-
-    def sync_parameters(self):
-        for param in self.network.parameters():
-            self.process_group.allreduce(param.data)
-            param.data.mul_(1. / self.world_size)
-
-    def sync_buffers(self):
-        for b in self.network.buffers():
-            self.process_group.allreduce(b.data)
-            b.data.mul_(1. / self.world_size)
-
-    def zero_grad(self):
-        self.optimizer.zero_grad()
-
-    def state_dict(self):
-        return self.optimizer.state_dict()
-
-    def load_state_dict(self, d):
-        return self.optimizer.load_state_dict(d)
-
 
 
 class ActorLearnerHost(Container):
@@ -133,7 +82,7 @@ class ActorLearnerHost(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device("cuda:{}".format(0))  # ray handles gpus
+        device = torch.device("cuda")  # ray handles gpus
         torch.backends.cudnn.benchmark = True
         output_space = REGISTRY.lookup_output_space(
             args.actor_worker, env_action_space)
@@ -210,8 +159,8 @@ class ActorLearnerHost(Container):
             profiler.start()
 
         # setup queuer
-        self.rollout_queuer = RolloutQueuerAsync(workers, self.nb_learn_batch, self.rollout_queue_size)
-        self.rollout_queuer.start()
+        rollout_queuer = RolloutQueuerAsync(workers, self.nb_learn_batch, self.rollout_queue_size)
+        rollout_queuer.start()
 
         # initial setup
         global_step_count = self.initial_step_count
@@ -225,7 +174,7 @@ class ActorLearnerHost(Container):
         while not self.done(global_step_count):
             self.exp.clear()
             # Get batch from queue
-            rollouts, terminal_rewards, terminal_infos = self.rollout_queuer.get()
+            rollouts, terminal_rewards, terminal_infos = rollout_queuer.get()
 
             # Iterate forward on batch
             self.exp.write_exps(rollouts)
@@ -243,8 +192,8 @@ class ActorLearnerHost(Container):
                                                      internals)
                 self.exp.write_actor(h_exp, no_env=True)
 
-                actual_terminals = np.where(terminals)[0]
-                for i in actual_terminals:
+                terminal_inds, _ = np.where(terminals)
+                for i in terminal_inds:
                     for k, v in self.network.new_internals(self.device).items():
                         internals[k][i] = v
 
@@ -301,13 +250,15 @@ class ActorLearnerHost(Container):
             # write summaries
             cur_step_t = time()
             if cur_step_t - prev_step_t > self.summary_freq:
-                print('Rank {} Metrics:'.format(self.rank), self.rollout_queuer.metrics())
+                print('Rank {} Metrics:'.format(self.rank), rollout_queuer.metrics())
                 if self.rank == 0:
                     self.write_summaries(
                         self.summary_writer, global_step_count, total_loss,
                         loss_dict, metric_dict, self.network.named_parameters()
                     )
                 prev_step_t = cur_step_t
+
+        rollout_queuer.close()
         print('{} stopped training'.format(self.rank))
         if profile:
             profiler.stop()
@@ -317,7 +268,7 @@ class ActorLearnerHost(Container):
         return global_step_count >= self.nb_step
 
     def close(self):
-        self.rollout_queuer.stop()
+        pass
 
     def get_parameters(self):
         params = [p.cpu() for p in self.network.parameters()]
