@@ -68,7 +68,7 @@ class DQNRolloutActor(ActorModule):
         return q_vals.gather(1, action)
 
     def _values_to_tensor(self, values):
-        return torch.cat(values, dim=1)
+        return torch.stack(values, dim=1)
 
     @classmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):

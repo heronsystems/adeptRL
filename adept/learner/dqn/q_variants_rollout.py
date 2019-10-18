@@ -61,7 +61,7 @@ class QRDDQNRolloutLearner(DQNRolloutLearner):
     def loss_fn(self, batch_values, value_targets):
         # Broadcast temporal difference to compare every combination of quantiles
         # This is the formula for loss from the Implicit Quantile Networks paper
-        diff = value_targets.unsqueeze(3) - batch_values.unsqueeze(2)
+        diff = value_targets.unsqueeze(-1) - batch_values.unsqueeze(-2)
         dist_mask = torch.abs(self._qr_density - (diff.detach() < 0).float())
         return (huber(diff) * dist_mask).sum(-1).mean(-1, keepdim=True)
 

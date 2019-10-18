@@ -41,6 +41,7 @@ class DQNRolloutLearner(LearnerModule):
         # TODO: target network
         # estimate value of next state
         last_values = self.compute_estimated_values(network, network, next_obs, internals)
+        # shape nb_env, nb_action, value size
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(experiences.values)
@@ -74,12 +75,11 @@ class DQNRolloutLearner(LearnerModule):
                 for k, a in zip(self.action_keys, last_actions):
                     last_values.append(self._get_action_values(target_q[k], a, batch_size))
                 last_values = torch.stack(last_values, dim=1)
-                # remove action dim of size 1
-                last_values = last_values.squeeze(1)
             else:
                 # TODO: this should be a function so it can be overridden 
                 last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self.action_keys], dim=1)
 
+        # nb_env, nb_action, value size 
         return last_values
 
     def compute_returns(self, estimated_value, rewards, terminals):
@@ -88,9 +88,9 @@ class DQNRolloutLearner(LearnerModule):
         target_return = estimated_value
         nstep_target_returns = []
         for i in reversed(range(len(rewards))):
-            # unsqueeze over action dim so it isn't broadcasted
-            reward = rewards[i].unsqueeze(-1)
-            terminal_mask = 1. - terminals[i].unsqueeze(-1).float()
+            # unsqueeze over action dim and value dim so it isn't broadcasted
+            reward = rewards[i].unsqueeze(-1).unsqueeze(-1)
+            terminal_mask = 1. - terminals[i].unsqueeze(-1).unsqueeze(-1).float()
 
             # Nstep return is always calculated for the critic's target
             if self.return_scale:
