@@ -90,7 +90,7 @@ import os
 import ray
 
 from adept.container import Init
-from adept.container import ActorLearnerHost, ActorLearnerPeer, ActorLearnerWorker
+from adept.container import ActorLearnerHost, ActorLearnerWorker
 from adept.utils.script_helpers import (
     parse_list_str, parse_path, parse_none, LogDirHelper, parse_bool_str
 )
@@ -155,16 +155,16 @@ def main(args):
     # start ray
     if args.ray_addr is not None:
         ray.init(address=args.ray_addr)
-        print('Using Ray on a cluster. Head node address: {}'.format(args.ray_addr))
+        logger.info('Using Ray on a cluster. Head node address: {}'.format(args.ray_addr))
     else:
-        print('Using Ray on a single machine.')
+        logger.info('Using Ray on a single machine.')
         ray.init()
 
     # create a main learner which logs summaries and saves weights
     main_learner_cls = ActorLearnerHost.as_remote(num_cpus=args.learner_cpu_alloc,
                                                   num_gpus=args.learner_gpu_alloc)
     main_learner = main_learner_cls.remote(
-        args, logger, log_id_dir, initial_step, rank=0
+        args, log_id_dir, initial_step, rank=0
     )
 
     # if multiple learners setup nccl
@@ -172,7 +172,7 @@ def main(args):
         # create N peer learners
         peer_learners = []
         for p_ind in range(args.nb_learners - 1):
-            remote_cls = ActorLearnerPeer.as_remote(num_cpus=args.learner_cpu_alloc,
+            remote_cls = ActorLearnerHost.as_remote(num_cpus=args.learner_cpu_alloc,
                                                     num_gpus=args.learner_gpu_alloc)
             # init
             remote = remote_cls.remote(args, log_id_dir, initial_step, rank=p_ind + 1)
@@ -186,7 +186,7 @@ def main(args):
         nccl_inits.extend([p._nccl_init.remote(nccl_addr, nccl_ip, nccl_port) for p in peer_learners])
         # wait for all
         ray.get(nccl_inits)
-        print('NCCL initialized')
+        logger.info('NCCL initialized')
 
         # have all sync parameters
         [f._sync_peer_parameters.remote() for f in peer_learners]

@@ -49,7 +49,6 @@ class ActorLearnerHost(Container):
     def __init__(
             self,
             args,
-            logger,
             log_id_dir,
             initial_step_count,
             rank=0,
@@ -67,7 +66,6 @@ class ActorLearnerHost(Container):
         self.nb_learn_batch = args.nb_learn_batch
         self.rollout_queue_size = args.rollout_queue_size
         # can be none if rank != 0
-        self.logger = logger
         self.log_id_dir = log_id_dir
 
         # load saved registry classes
@@ -140,12 +138,12 @@ class ActorLearnerHost(Container):
         if rank == 0:
             if args.load_network:
                 self.network = self.load_network(self.network, args.load_network)
-                logger.info('Reloaded network from {}'.format(args.load_network))
+                print('Reloaded network from {}'.format(args.load_network))
             if args.load_optim:
                 self.optimizer = self.load_optim(self.optimizer, args.load_optim)
-                logger.info('Reloaded optimizer from {}'.format(args.load_optim))
+                print('Reloaded optimizer from {}'.format(args.load_optim))
 
-            logger.info('Network parameters: ' + str(self.count_parameters(net)))
+            print('Network parameters: ' + str(self.count_parameters(net)))
             self.summary_writer = SummaryWriter(log_id_dir)
             self.saver = SimpleModelSaver(log_id_dir)
 
@@ -192,11 +190,11 @@ class ActorLearnerHost(Container):
                                                      internals)
                 self.exp.write_actor(h_exp, no_env=True)
 
-                terminal_inds, _ = np.where(terminals)
+                # where returns a single element tuple with the indexes
+                terminal_inds = np.where(terminals)[0]
                 for i in terminal_inds:
                     for k, v in self.network.new_internals(self.device).items():
                         internals[k][i] = v
-
 
             # compute loss
             loss_dict, metric_dict = self.learner.compute_loss(
@@ -310,16 +308,4 @@ class ActorLearnerHost(Container):
             self.process_group.allreduce(p.data)
             p.data = p.data / self.nb_learners
         print('Rank {} parameters synced.'.format(self.rank))
-
-
-class ActorLearnerPeer(ActorLearnerHost):
-    def __init__(
-            self,
-            args,
-            log_id_dir,
-            initial_step_count,
-            rank
-    ):
-        # no logger for peer learners
-        super().__init__(args, None, log_id_dir, initial_step_count, rank)
 
