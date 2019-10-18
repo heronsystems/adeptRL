@@ -38,6 +38,9 @@ class DQNRolloutLearner(LearnerModule):
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):
+        # normalize rewards
+        rewards = self.reward_normalizer(torch.stack(experiences.rewards))
+
         # TODO: target network
         # estimate value of next state
         last_values = self.compute_estimated_values(network, network, next_obs, internals)
@@ -45,7 +48,7 @@ class DQNRolloutLearner(LearnerModule):
 
         # compute nstep return and advantage over batch
         batch_values = torch.stack(experiences.values)
-        value_targets = self.compute_returns(last_values, experiences.rewards, experiences.terminals)
+        value_targets = self.compute_returns(last_values, rewards, experiences.terminals)
 
         # batched loss
         value_loss = self.loss_fn(batch_values, value_targets)

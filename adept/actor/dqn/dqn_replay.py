@@ -41,6 +41,7 @@ class DQNReplayActor(ActorModule):
 
         # reduce feature dim, build action_key dim
         actions = OrderedDict()
+        actions_gpu = OrderedDict()
         values = []
         for key in self.action_keys:
             # random action across some environments based on the actors epsilon
@@ -49,6 +50,7 @@ class DQNReplayActor(ActorModule):
             rand_act = torch.randint(self.action_space[key][0], (rand_mask.shape[0], 1), dtype=torch.long).to(action.device)
             action[rand_mask] = rand_act
             actions[key] = action.squeeze(1).cpu()
+            actions_gpu[key] = action
 
             values.append(self._get_action_values(q_vals[key], action, batch_size))
 
@@ -56,8 +58,8 @@ class DQNReplayActor(ActorModule):
         internals = {k: torch.stack(vs) for k, vs in internals.items()}
 
         return actions, {
-            'actions': actions,
-            **internals
+            'actions': actions_gpu,
+            'internals': internals
         }
 
     def _get_qvals_from_pred(self, preds):
@@ -80,8 +82,8 @@ class DQNReplayActor(ActorModule):
         }
 
         spec = {
-            'actions': (exp_len, batch_sz, act_key_len),
-            **internal_spec
+            'actions': (exp_len, batch_sz, act_key_len, 1),
+            'internals': internal_spec
         }
 
         return spec

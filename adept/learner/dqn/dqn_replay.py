@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from adept.learner.base.learner_module import LearnerModule
 from adept.learner.base.dm_return_scale import DeepMindReturnScaler
@@ -37,16 +38,46 @@ class DQNReplayLearner(LearnerModule):
             args.double_dqn
         )
 
-    def compute_loss(self, network, experiences, next_obs, internals):
+    def compute_loss(self, network, experiences, next_obs, current_internals):
+        # normalize rewards
+        rewards = self.reward_normalizer(torch.stack(experiences.rewards))
+
+        # first internals
+        internals = {k: v.unbind(0) for k, v in experiences.internals[0].items()}
+
+        # iterate observations and internals to generate values
+        batch_values = []
+        # keep a copy of terminals on the cpu it's faster
+        rollout_terminals = torch.stack(experiences.terminals).cpu().numpy()
+        batch_size = rollout_terminals.shape[1]
+
+        for obs, action, terminals in zip(
+                experiences.observations,
+                experiences.actions,
+                rollout_terminals
+        ):
+            predictions, internals = network(obs, internals)
+            # TODO: HACK for QR and DDQN, where can this class get action keys?
+            self.action_keys = list(filter(lambda x: x != 'value', predictions.keys()))
+            q_vals = self._get_qvals_from_pred(predictions)
+
+            # select from values based on sampled action
+            q_val_action = [self._get_action_values(q_vals[k], action[k], batch_size) for k in self.action_keys]
+            batch_values.append(torch.stack(q_val_action, dim=1))
+
+            # where returns a single element tuple with the indexes
+            terminal_inds = np.where(terminals)[0]
+            for i in terminal_inds:
+                for k, v in network.new_internals(next(network.parameters()).device).items():
+                    internals[k][i] = v
+
         # TODO: target network
         # estimate value of next state
         last_values = self.compute_estimated_values(network, network, next_obs, internals)
 
-        # iterate observations and internals to generate values
-
         # compute nstep return and advantage over batch
-        batch_values = torch.stack(experiences.values)
-        value_targets = self.compute_returns(last_values, experiences.rewards, experiences.terminals)
+        batch_values = torch.stack(batch_values)
+        value_targets = self.compute_returns(last_values, rewards, experiences.terminals)
 
         # batched loss
         value_loss = self.loss_fn(batch_values, value_targets)
@@ -62,8 +93,6 @@ class DQNReplayLearner(LearnerModule):
         # estimate value of next state
         with torch.no_grad():
             results, _ = target_network(next_obs, internals)
-            # TODO: HACK for QR and DDQN, where can this class get action keys?
-            self.action_keys = list(filter(lambda x: x != 'value', results.keys()))
             target_q = self._get_qvals_from_pred(results)
             batch_size = target_q[self.action_keys[0]].shape[0]
 
@@ -76,12 +105,11 @@ class DQNReplayLearner(LearnerModule):
                 for k, a in zip(self.action_keys, last_actions):
                     last_values.append(self._get_action_values(target_q[k], a, batch_size))
                 last_values = torch.stack(last_values, dim=1)
-                # remove action dim of size 1
-                last_values = last_values.squeeze(1)
             else:
                 # TODO: this should be a function so it can be overridden 
                 last_values = torch.stack([torch.max(target_q[k], 1)[0].data for k in self.action_keys], dim=1)
 
+        # nb_env, nb_action, value size 
         return last_values
 
     def compute_returns(self, estimated_value, rewards, terminals):
@@ -91,8 +119,8 @@ class DQNReplayLearner(LearnerModule):
         nstep_target_returns = []
         for i in reversed(range(len(rewards))):
             # unsqueeze over action dim so it isn't broadcasted
-            reward = rewards[i].unsqueeze(-1)
-            terminal_mask = 1. - terminals[i].unsqueeze(-1).float()
+            reward = rewards[i].unsqueeze(-1).unsqueeze(-1)
+            terminal_mask = 1. - terminals[i].unsqueeze(-1).unsqueeze(-1).float()
 
             # Nstep return is always calculated for the critic's target
             if self.return_scale:

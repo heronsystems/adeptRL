@@ -26,7 +26,7 @@ from operator import itemgetter
 
 class ExperienceReplay(ExpModule):
     args = {
-        'exp_size': 1000000,
+        'exp_size': 15625,
         'exp_min_size': 1000,
         'rollout_len': 20,
         'exp_update_rate': 1
@@ -34,6 +34,8 @@ class ExperienceReplay(ExpModule):
 
     def __init__(self, spec_builder, size, min_size, rollout_len, update_rate):
         """
+        Size and min_size are not dependent on nb of envs so if desired size is 
+        1mil samples with 64 envs size should be 1mil/64 = 15625
         Parameters
         ----------
         size: int
@@ -59,6 +61,8 @@ class ExperienceReplay(ExpModule):
         self._keys = ['observations', 'rewards', 'terminals'] + self.keys
 
         self.rollout_len = rollout_len
+        self.device = 'cpu'
+        self.target_device = self.device
 
     @classmethod
     def from_args(cls, args, spec_builder):
@@ -74,12 +78,26 @@ class ExperienceReplay(ExpModule):
         else:
             return self._maxsize
 
-    def write_actor(self, experience, no_env=False):
+    def write_actor(self, experience):
+        # convert to cpu
+        exp_storage_dev = self._exp_to_dev(experience, self.device)
         # write forward occurs before write env so append here
         if not self._full and self._next_idx >= len(self._storage):
-            self._storage.append(experience)
+            self._storage.append(exp_storage_dev)
         else:
-            self._storage[self._next_idx] = experience
+            self._storage[self._next_idx] = exp_storage_dev
+
+    def _exp_to_dev(self, experience, device):
+        # TODO: this should be a generic function somewhere
+        exp = {}
+        for k, v in experience.items():
+            if isinstance(v, dict):
+                on_d = {d_key: d_v.to(device) for d_key, d_v in v.items()}
+            # tensor
+            else:
+                on_d = v.to(device)
+            exp[k] = on_d
+        return exp
 
     def write_env(self, obs, rewards, terminals, infos):
         # forward already written, add env info then increment
@@ -89,19 +107,20 @@ class ExperienceReplay(ExpModule):
         if self._next_idx == 0:
             self._full = True
 
-        dict_at_ind['observations'] = obs
-        dict_at_ind['rewards'] = rewards
-        dict_at_ind['terminals'] = terminals
+        dict_at_ind['observations'] = {k: v.cpu() for k, v in obs.items()}
+        dict_at_ind['rewards'] = rewards.cpu()
+        dict_at_ind['terminals'] = terminals.cpu()
 
     def read(self):
         exp_list, last_obs, is_weights = self._sample()
+        exp_dev_list = [self._exp_to_dev(e, self.target_device) for e in exp_list]
         # will be list of dicts, convert to dict of lists
-        dict_of_list = listd_to_dlist(exp_list)
-        print('dl', list(dict_of_list.keys()), self._keys)
+        dict_of_list = listd_to_dlist(exp_dev_list)
         # get the next observation
         dict_of_list['next_observation'] = last_obs
         # importance sampling weights
         dict_of_list['importance_sample_weights'] = is_weights
+
         # return named tuple
         return namedtuple(self.__class__.__name__, ['importance_sample_weights', 'next_observation'] + self._keys)(**dict_of_list)
 
@@ -142,7 +161,7 @@ class ExperienceReplay(ExpModule):
         pass
 
     def to(self, device):
-        pass
+        self.target_device = device
 
 
 class PrioritizedExperienceReplay(ExpModule):
