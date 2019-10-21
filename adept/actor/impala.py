@@ -163,3 +163,4 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
         for k in obs_space.keys():
             d[k] = 'byte'
         return d
+
