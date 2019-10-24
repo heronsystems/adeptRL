@@ -34,6 +34,7 @@ Required:
     --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
 
 Options:
+    --epoch <int>           Epoch number to load [default: None]
     --eval-actor <str>      Name of the Evaluation Actor [default: ACActorEval]
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-episode <int>      Number of episodes to average [default: 30]
@@ -88,6 +89,7 @@ def main(args):
 
     eval_container = EvalContainer(
         args.eval_actor,
+        args.epoch,
         logger,
         args.log_id_dir,
         args.gpu_id,

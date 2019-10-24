@@ -29,6 +29,7 @@ class EvalContainer:
     def __init__(
             self,
             eval_actor,
+            epoch_id,
             logger,
             log_id_dir,
             gpu_id,
@@ -39,6 +40,12 @@ class EvalContainer:
         self.train_args = train_args = log_dir_helper.load_args()
         self.device = device = self._device_from_gpu_id(gpu_id)
         self.logger = logger
+
+        if epoch_id is None:
+            epoch_ids = self.log_dir_helper.epochs()
+        else:
+            epoch_ids = [epoch_id]
+        self.epoch_ids = epoch_ids
 
         engine = REGISTRY.lookup_engine(train_args.env)
         env_cls = REGISTRY.lookup_env(train_args.env)
@@ -103,7 +110,7 @@ class EvalContainer:
         nb_env = self.env_mgr.nb_env
         best_epoch_id = None
         overall_mean = -float('inf')
-        for epoch_id in self.log_dir_helper.epochs():
+        for epoch_id in self.epoch_ids:
             best_mean = -float('inf')
             best_std = None
             selected_model = None
