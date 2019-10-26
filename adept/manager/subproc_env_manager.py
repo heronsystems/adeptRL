@@ -26,7 +26,7 @@ from adept.utils.util import listd_to_dlist, dlist_to_listd
 import zmq
 import json
 
-ZMQ_CONNECT_METHOD = 'ipc'
+ZMQ_CONNECT_METHOD = 'tcp'
 
 
 class WorkerError(BaseException):

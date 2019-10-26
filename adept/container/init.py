@@ -111,8 +111,7 @@ class Init:
     def from_config(args):
         with open(args.config, 'r') as args_file:
             config_args = json.load(args_file)
-        args = DotDict({**args, **config_args})
-        return args
+        return DotDict({**args, **config_args})
 
     @staticmethod
     def from_prompt(args):

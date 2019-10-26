@@ -31,3 +31,17 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
     @classmethod
     def _exp_spec(cls, rollout_len, batch_sz, obs_space, act_space, internal_space):
         return {}
+
+
+class ACActorEvalSample(ACActorEval):
+    def compute_action_exp(self, preds, internals, available_actions):
+        actions = OrderedDict()
+
+        for key in self.action_keys:
+            logit = self.flatten_logits(preds[key])
+
+            softmax = self.softmax(logit)
+            action = self.sample_action(softmax)
+
+            actions[key] = action.cpu()
+        return actions, {}
