@@ -12,19 +12,18 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import json
 import os
 import pickle
 
 import cloudpickle
 import numpy as np
 import torch
+import zmq
 from torch import multiprocessing as mp
 
-from adept.manager._manager import EnvManager
 from adept.utils.util import listd_to_dlist, dlist_to_listd
-
-import zmq
-import json
+from .base.manager_module import EnvManagerModule
 
 ZMQ_CONNECT_METHOD = 'tcp'
 
@@ -33,12 +32,15 @@ class WorkerError(BaseException):
     pass
 
 
-class SubProcEnvManager(EnvManager):
+class SubProcEnvManager(EnvManagerModule):
     """
     Modified.
     MIT License
     Copyright (c) 2017 OpenAI (http://openai.com)
     """
+
+    args = {}
+
     def __init__(self, env_fns, engine):
         super(SubProcEnvManager, self).__init__(env_fns, engine)
         self.waiting = False

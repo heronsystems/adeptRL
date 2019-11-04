@@ -61,12 +61,12 @@ class Space(dict):
             }
         elif isinstance(gym_space, spaces.Dict):
             return {
-                name: Space.dtypes_from_gym(s)
+                name: list(Space._detect_gym_spaces(s).values())[0]
                 for name, s in gym_space.spaces.items()
             }
         elif isinstance(gym_space, spaces.Tuple):
             return {
-                idx: Space.dtypes_from_gym(s)
+                idx: list(Space._detect_gym_spaces(s).values())[0]
                 for idx, s in enumerate(gym_space.spaces)
             }
         else:

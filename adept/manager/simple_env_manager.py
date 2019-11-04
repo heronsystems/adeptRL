@@ -15,16 +15,18 @@
 import numpy as np
 import torch
 
-from adept.manager._manager import EnvManager
 from adept.utils import listd_to_dlist
 from adept.utils.util import dlist_to_listd
+from .base.manager_module import EnvManagerModule
 
 
-class SimpleEnvManager(EnvManager):
+class SimpleEnvManager(EnvManagerModule):
     """
     Manages multiple env in the same process. This is slower than a
     SubProcEnvManager but allows debugging.
     """
+
+    args = {}
 
     def __init__(self, env_fns, engine):
         super(SimpleEnvManager, self).__init__(env_fns, engine)
@@ -81,7 +83,7 @@ class SimpleEnvManager(EnvManager):
                 new_obs[k] = v
         self.buf_obs = new_obs
 
-        return self.buf_obs, self.buf_rews, self.buf_dones, self.buf_infos
+        return self.buf_obs, torch.tensor(self.buf_rews), torch.tensor(self.buf_dones), self.buf_infos
 
     def reset(self):
         obs = []

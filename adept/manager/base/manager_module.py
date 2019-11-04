@@ -15,9 +15,10 @@
 import abc
 
 from adept.env.base._env import EnvBase
+from adept.utils.requires_args import RequiresArgsMixin
 
 
-class EnvManager(EnvBase, metaclass=abc.ABCMeta):
+class EnvManagerModule(EnvBase, RequiresArgsMixin, metaclass=abc.ABCMeta):
     def __init__(self, env_fns, engine):
         self._env_fns = env_fns
         self._engine = engine
