@@ -100,7 +100,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             internal_states: Dict[str, Tensor]
         """
 
-        predictions, internal_states = network(obs, prev_internals)
+        predictions, internal_states, pobs = network(obs, prev_internals)
 
         if 'available_actions' in obs:
             av_actions = obs['available_actions']
@@ -110,7 +110,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         actions, exp = self.compute_action_exp(
             predictions,
             prev_internals,
-            obs,
+            pobs,
             av_actions
         )
         return actions, exp, internal_states

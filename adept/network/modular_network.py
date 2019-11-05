@@ -246,23 +246,23 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             gpu_preprocessor
         )
 
-    def forward(self, obs_key_to_obs, internals):
+    def forward(self, observation, internals):
         """
 
-        :param obs_key_to_obs: Dict[str, torch.Tensor (1D | 2D | 3D | 4D)]
+        :param observation: Dict[str, torch.Tensor (1D | 2D | 3D | 4D)]
         :param internals: Dict[str, torch.Tensor (ND)]
         :return: Tuple[
             Dict[str, torch.Tensor (1D | 2D | 3D | 4D)],
             Dict[str, torch.Tensor (ND)]
         ]
         """
-        obs_key_to_obs = self.gpu_preprocessor(obs_key_to_obs)
+        proc_obs = self.gpu_preprocessor(observation)
         # Process input network
         nxt_internals = []
         processed_inputs = []
         for key in self._obs_keys:
             result, nxt_internal = self.source_nets[key].forward(
-                obs_key_to_obs[key],
+                proc_obs[key],
                 internals,
                 dim=self.body.dim
             )
@@ -301,7 +301,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         for internal in nxt_internals:
             for k, v in internal.items():
                 merged_internals[k] = v
-        return output_by_key, merged_internals
+        return output_by_key, merged_internals, proc_obs
 
     @staticmethod
     def _expand_dims(inputs):
