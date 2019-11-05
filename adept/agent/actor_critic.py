@@ -82,8 +82,8 @@ class ActorCritic(AgentModule):
     def output_space(action_space):
         return ACRolloutActorTrain.output_space(action_space)
 
-    def compute_action_exp(self, predictions, internals, available_actions):
-        return self._actor.compute_action_exp(predictions, internals, available_actions)
+    def compute_action_exp(self, predictions, internals, obs, available_actions):
+        return self._actor.compute_action_exp(predictions, internals, obs, available_actions)
 
     def compute_loss(self, network, next_obs, internals):
         return self._learner.compute_loss(network, self.exp_cache.read(),

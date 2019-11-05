@@ -79,7 +79,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_action_exp(self, preds, internals, available_actions):
+    def compute_action_exp(self, preds, internals, obs, available_actions):
         """
         B = Batch Size
 
@@ -110,6 +110,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         actions, exp = self.compute_action_exp(
             predictions,
             prev_internals,
+            obs,
             av_actions
         )
         return actions, exp, internal_states

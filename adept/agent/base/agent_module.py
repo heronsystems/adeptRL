@@ -97,7 +97,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_action_exp(self, predictions, internals, available_actions):
+    def compute_action_exp(self, predictions, internals, obs, available_actions):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -127,7 +127,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             av_actions = None
 
         actions, experience = self.compute_action_exp(
-            predictions, prev_internals, av_actions)
+            predictions, prev_internals, obs, av_actions)
         self.exp_cache.write_actor(experience)
         return actions, internal_states
 
