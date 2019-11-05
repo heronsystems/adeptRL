@@ -49,7 +49,8 @@ class DistribHost(Container):
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
         env_cls = REGISTRY.lookup_env(args.env)
-        env_mgr = SubProcEnvManager.from_args(args, engine, env_cls, seed=seed)
+        mgr_cls = REGISTRY.lookup_manager(args.manager)
+        env_mgr = mgr_cls.from_args(args, engine, env_cls, seed=seed)
 
         # NETWORK
         torch.manual_seed(args.seed)

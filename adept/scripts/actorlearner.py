@@ -48,8 +48,9 @@ Topology Options:
     --rollout-queue-size <int>   Max length of rollout queue before blocking (per learner) [default: 4]
 
 Environment Options:
-    --env <str>               Environment name [default: PongNoFrameskip-v4]
+    --env <str>             Environment name [default: PongNoFrameskip-v4]
     --rwd-norm <str>        Reward normalizer name [default: Clip]
+    --manager <str>         Manager to use [default: SubProcEnvManager]
 
 Script Options:
     --nb-env <int>          Number of env per worker [default: 32]
@@ -229,4 +230,3 @@ def main(args):
 
 if __name__ == '__main__':
     main(parse_args())
-

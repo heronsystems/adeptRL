@@ -37,3 +37,8 @@ def register_network(network_cls):
 def register_submodule(submod_cls):
     from adept.registry import REGISTRY
     REGISTRY.register_submodule(submod_cls)
+
+
+def register_manager(manager_cls):
+    from adept.registry import REGISTRY
+    REGISTRY.register_manager(manager_cls)

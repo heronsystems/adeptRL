@@ -49,6 +49,8 @@ class EvalContainer:
 
         engine = REGISTRY.lookup_engine(train_args.env)
         env_cls = REGISTRY.lookup_env(train_args.env)
+        mgr_cls = REGISTRY.lookup_manager(args.manager)
+        env_mgr = mgr_cls.from_args(args, engine, env_cls)
         self.env_mgr = env_mgr = SubProcEnvManager.from_args(
             self.train_args,
             engine,

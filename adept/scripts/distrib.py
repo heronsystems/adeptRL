@@ -47,6 +47,7 @@ Agent Options:
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
     --rwd-norm <str>        Reward normalizer name [default: Clip]
+    --manager <str>         Manager to use [default: SubProcEnvManager]
 
 Script Options:
     --nb-env <int>          Number of parallel env [default: 32]
