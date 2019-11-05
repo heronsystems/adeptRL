@@ -8,25 +8,11 @@ from adept.agent import AgentModule
 from adept.env import EnvModule
 from adept.exp import ExpModule
 from adept.learner import LearnerModule
+from adept.manager import EnvManagerModule
 from adept.network import NetworkModule
 from adept.network.base.submodule import SubModule
 from adept.rewardnorm import RewardNormModule
 from adept.utils.requires_args import RequiresArgsMixin
-
-
-def agent_eval_lookup():
-    from adept.agent import ActorCritic
-    return {
-        ActorCritic.__name__: ACActorEval.__name__
-    }
-
-
-def actor_eval_lookup():
-    from adept.actor import ImpalaWorkerActor, ImpalaHostActor
-    return {
-        ImpalaWorkerActor.__name__: ACActorEval.__name__,
-        ImpalaHostActor.__name__: ACActorEval.__name__
-    }
 
 
 class Registry:
@@ -39,6 +25,7 @@ class Registry:
         self._engine_ids_by_env_id_set = {}
         self._env_class_by_engine_id = {}
         self._reward_norm_class_by_id = {}
+        self._manager_class_by_id = {}
 
         self._net_class_by_id = {}
         self._submod_class_by_id = {}
@@ -53,6 +40,7 @@ class Registry:
 
         self._register_networks()
         self._register_submodules()
+        self._register_managers()
 
         self._internal_modules = set([k for k, v in self._iter_all_classes()])
 
@@ -65,7 +53,8 @@ class Registry:
             self._env_class_by_engine_id.items(),
             self._reward_norm_class_by_id.items(),
             self._net_class_by_id.items(),
-            self._submod_class_by_id.items()
+            self._submod_class_by_id.items(),
+            self._manager_class_by_id.items()
         )
 
     def save_extern_classes(self, log_id_dir):
@@ -92,6 +81,8 @@ class Registry:
                     self._write_cls(v, log_id_dir, 'net')
                 elif k in self._submod_class_by_id:
                     self._write_cls(v, log_id_dir, 'submod')
+                elif k in self._manager_class_by_id:
+                    self._write_cls(v, log_id_dir, 'manager')
                 else:
                     raise Exception('Unreachable.')
 
@@ -100,7 +91,7 @@ class Registry:
             return os.path.join(log_id_dir, d)
         cls_dirs = [join('agent'), join('actor'), join('exp'), join('learner'),
                     join('env'), join('reward_norm'), join('net'),
-                    join('submod')]
+                    join('submod'), join('manager')]
         for cls_dir in cls_dirs:
             if os.path.exists(cls_dir):
                 dirname = os.path.split(cls_dir)[-1]
@@ -122,6 +113,8 @@ class Registry:
                         self.register_network(cls)
                     elif 'submod' in dirname:
                         self.register_submodule(cls)
+                    elif 'manager' in dirname:
+                        self.register_manager(cls)
                     else:
                         raise Exception('Unreachable.')
 
@@ -183,22 +176,6 @@ class Registry:
 
     def lookup_actor(self, actor_id):
         return self._actor_class_by_id[actor_id]
-
-    def lookup_eval_actor(self, train_name):
-        """
-        Get the eval actor by training agent or actor name.
-
-        :param train_name: Name of agent or actor class used for training
-        :return: ActorModule
-        """
-        agent_lookup = agent_eval_lookup()
-        actor_lookup = actor_eval_lookup()
-        if train_name in agent_lookup:
-            return self._actor_class_by_id[agent_lookup[train_name]]
-        elif train_name in actor_lookup:
-            return self._actor_class_by_id[actor_lookup[train_name]]
-        else:
-            raise IndexError(f'Unknown training agent or actor: {train_name}')
 
     # EXP METHODS
     def register_exp(self, exp_class):
@@ -344,6 +321,14 @@ class Registry:
             self.lookup_modular_args(args)
         )
 
+    def register_manager(self, manager_cls):
+        assert issubclass(manager_cls, EnvManagerModule)
+        manager_cls.check_args_implemented()
+        self._manager_class_by_id[manager_cls.__name__] = manager_cls
+
+    def lookup_manager(self, manager_id):
+        return self._manager_class_by_id[manager_id]
+
     def _register_agents(self):
         from adept.agent import AGENT_REG
         for agent in AGENT_REG:
@@ -383,3 +368,8 @@ class Registry:
         from adept.network import SUBMOD_REG
         for submod in SUBMOD_REG:
             self.register_submodule(submod)
+
+    def _register_managers(self):
+        from adept.manager import MANAGER_REG
+        for manager in MANAGER_REG:
+            self.register_manager(manager)

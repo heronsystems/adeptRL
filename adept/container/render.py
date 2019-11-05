@@ -29,7 +29,8 @@ class RenderContainer:
             logger,
             log_id_dir,
             gpu_id,
-            seed
+            seed,
+            manager
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
@@ -44,7 +45,8 @@ class RenderContainer:
 
         engine = REGISTRY.lookup_engine(train_args.env)
         env_cls = REGISTRY.lookup_env(train_args.env)
-        self.env_mgr = SimpleEnvManager.from_args(
+        manager_cls = REGISTRY.lookup_manager(manager)
+        self.env_mgr = manager_cls.from_args(
             self.train_args,
             engine,
             env_cls,
