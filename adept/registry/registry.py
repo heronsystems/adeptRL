@@ -53,7 +53,8 @@ class Registry:
             self._env_class_by_engine_id.items(),
             self._reward_norm_class_by_id.items(),
             self._net_class_by_id.items(),
-            self._submod_class_by_id.items()
+            self._submod_class_by_id.items(),
+            self._manager_class_by_id.items()
         )
 
     def save_extern_classes(self, log_id_dir):

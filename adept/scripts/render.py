@@ -37,6 +37,7 @@ Options:
     --actor <str>           Name of the Actor [default: ACActorEval]
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --seed <int>            Seed for random variables [default: 512]
+    --manager <str>         Manager to use [default: SimpleEnvManager]
 """
 
 from adept.container import Init
@@ -86,7 +87,8 @@ def main(args):
         logger,
         args.log_id_dir,
         args.gpu_id,
-        args.seed
+        args.seed,
+        args.manager
     )
     try:
         container.run()
