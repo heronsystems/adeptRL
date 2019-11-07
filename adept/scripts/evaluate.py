@@ -77,15 +77,15 @@ def main(args):
     args = DotDict(args)
 
     Init.print_ascii_logo()
-    logger = Init.setup_logger(args.log_id_dir, 'eval')
+    logger = Init.setup_logger(args.logdir, 'eval')
     Init.log_args(logger, args)
-    R.load_extern_classes(args.log_id_dir)
+    R.load_extern_classes(args.logdir)
 
     eval_container = EvalContainer(
         args.actor,
         args.epoch,
         logger,
-        args.log_id_dir,
+        args.logdir,
         args.gpu_id,
         args.nb_episode,
         args.seed
