@@ -40,6 +40,7 @@ Options:
     --nb-episode <int>      Number of episodes to average [default: 30]
     --seed <int>            Seed for random variables [default: 512]
     --custom-network <str>  Name of custom network class
+    --manager <str>         Name of manager [default: SubProcEnvManager]
 """
 from absl import flags
 
@@ -88,7 +89,8 @@ def main(args):
         args.logdir,
         args.gpu_id,
         args.nb_episode,
-        args.seed
+        args.seed,
+        args.manager
     )
     try:
         eval_container.run()

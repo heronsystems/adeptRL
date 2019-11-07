@@ -34,7 +34,8 @@ class EvalContainer:
             log_id_dir,
             gpu_id,
             nb_episode,
-            seed
+            seed,
+            manager
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
@@ -49,8 +50,7 @@ class EvalContainer:
 
         engine = REGISTRY.lookup_engine(train_args.env)
         env_cls = REGISTRY.lookup_env(train_args.env)
-        mgr_cls = REGISTRY.lookup_manager(args.manager)
-        env_mgr = mgr_cls.from_args(args, engine, env_cls)
+        mgr_cls = REGISTRY.lookup_manager(manager)
         self.env_mgr = env_mgr = SubProcEnvManager.from_args(
             self.train_args,
             engine,
