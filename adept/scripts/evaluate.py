@@ -27,15 +27,15 @@ loading a saved model from each epoch. N-episode averages are computed by
 running N env in parallel.
 
 Usage:
-    evaluate (--log-id-dir <path>) [options]
+    evaluate (--logdir <path>) [options]
     evaluate (-h | --help)
 
 Required:
-    --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
+    --logdir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
 
 Options:
     --epoch <int>           Epoch number to load [default: None]
-    --eval-actor <str>      Name of the Evaluation Actor [default: ACActorEval]
+    --actor <str>           Name of the eval actor [default: ACActorEval]
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-episode <int>      Number of episodes to average [default: 30]
     --seed <int>            Seed for random variables [default: 512]
@@ -61,23 +61,17 @@ def parse_args():
     del args['h']
     del args['help']
     args = DotDict(args)
-    args.log_id_dir = parse_path(args.log_id_dir)
+    args.logdir = parse_path(args.logdir)
     args.gpu_id = int(args.gpu_id)
     args.nb_episode = int(args.nb_episode)
     args.seed = int(args.seed)
     return args
 
 
-MODE = 'Eval'
-
-
 def main(args):
     """
     Run an evaluation.
     :param args: Dict[str, Any]
-    :param agent_registry: AgentRegistry
-    :param env_registry: EnvRegistry
-    :param net_registry: NetworkRegistry
     :return:
     """
     args = DotDict(args)
@@ -88,7 +82,7 @@ def main(args):
     R.load_extern_classes(args.log_id_dir)
 
     eval_container = EvalContainer(
-        args.eval_actor,
+        args.actor,
         args.epoch,
         logger,
         args.log_id_dir,

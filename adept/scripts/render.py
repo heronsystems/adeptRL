@@ -23,14 +23,17 @@
 
 Render Atari
 
-Renders an agent interacting with an Atari environment.
+Renders an agent interacting with an environment.
 
 Usage:
-    render --log-id-dir <path> [options]
+    render --logdir <path> [options]
     render (-h | --help)
 
 Required:
-    --log-id-dir <path>     Path to train logs (.../logs/<env-id>/<log-id>)
+    --logdir <path>         Path to train logs (.../logs/<env-id>/<log-id>)
+    --network
+    --agent
+
 
 Options:
     --epoch <int>           Epoch number to load [default: None]
@@ -55,7 +58,7 @@ def parse_args():
     del args['help']
     args = DotDict(args)
 
-    args.log_id_dir = parse_path(args.log_id_dir)
+    args.logdir = parse_path(args.logdir)
 
     if args.epoch == 'None':
         args.epoch = None
@@ -85,7 +88,7 @@ def main(args):
         args.actor,
         args.epoch,
         logger,
-        args.log_id_dir,
+        args.logdir,
         args.gpu_id,
         args.seed,
         args.manager
