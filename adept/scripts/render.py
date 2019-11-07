@@ -32,7 +32,6 @@ Usage:
 Required:
     --logdir <path>         Path to train logs (.../logs/<env-id>/<log-id>)
     --network
-    --agent
 
 
 Options:
@@ -80,9 +79,9 @@ def main(args):
     args = DotDict(args)
 
     Init.print_ascii_logo()
-    logger = Init.setup_logger(args.log_id_dir, 'eval')
+    logger = Init.setup_logger(args.logdir, 'eval')
     Init.log_args(logger, args)
-    R.load_extern_classes(args.log_id_dir)
+    R.load_extern_classes(args.logdir)
 
     container = RenderContainer(
         args.actor,
