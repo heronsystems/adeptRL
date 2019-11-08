@@ -45,7 +45,7 @@ Options:
 from absl import flags
 
 from adept.container import EvalContainer
-from adept.utils.script_helpers import parse_path
+from adept.utils.script_helpers import parse_path, parse_none
 from adept.utils.util import DotDict
 from adept.container import Init
 from adept.registry import REGISTRY as R
@@ -63,6 +63,7 @@ def parse_args():
     del args['help']
     args = DotDict(args)
     args.logdir = parse_path(args.logdir)
+    args.epoch = parse_none(args.epoch)
     args.gpu_id = int(args.gpu_id)
     args.nb_episode = int(args.nb_episode)
     args.seed = int(args.seed)
