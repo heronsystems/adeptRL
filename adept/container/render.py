@@ -51,7 +51,7 @@ class RenderContainer:
             engine,
             env_cls,
             seed=seed,
-            nb_env=1
+            nb_env=2
         )
         if train_args.agent:
             agent = train_args.agent

@@ -97,7 +97,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_action_exp(self, predictions, internals, available_actions):
+    def compute_action_exp(self, predictions, internals, obs, available_actions):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -119,7 +119,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             actions: Dict[ActionKey, LongTensor (B)]
             internal_states: Dict[str, Tensor]
         """
-        predictions, internal_states = network(obs, prev_internals)
+        predictions, internal_states, pobs = network(obs, prev_internals)
 
         if 'available_actions' in obs:
             av_actions = obs['available_actions']
@@ -127,7 +127,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             av_actions = None
 
         actions, experience = self.compute_action_exp(
-            predictions, prev_internals, av_actions)
+            predictions, prev_internals, pobs, av_actions)
         self.exp_cache.write_actor(experience)
         return actions, internal_states
 

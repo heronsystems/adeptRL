@@ -79,7 +79,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_action_exp(self, preds, internals, available_actions):
+    def compute_action_exp(self, preds, internals, obs, available_actions):
         """
         B = Batch Size
 
@@ -100,7 +100,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             internal_states: Dict[str, Tensor]
         """
 
-        predictions, internal_states = network(obs, prev_internals)
+        predictions, internal_states, pobs = network(obs, prev_internals)
 
         if 'available_actions' in obs:
             av_actions = obs['available_actions']
@@ -110,6 +110,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         actions, exp = self.compute_action_exp(
             predictions,
             prev_internals,
+            pobs,
             av_actions
         )
         return actions, exp, internal_states

@@ -47,7 +47,7 @@ class ACRolloutLearner(LearnerModule):
 
         # estimate value of next state
         with torch.no_grad():
-            results, _ = network(next_obs, internals)
+            results, _, _ = network(next_obs, internals)
             last_values = results['critic'].squeeze(1).data
 
         # compute nstep return and advantage over batch
