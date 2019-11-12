@@ -26,6 +26,8 @@ class RenderContainer:
             self,
             actor,
             epoch_id,
+            start,
+            end,
             logger,
             log_id_dir,
             gpu_id,
@@ -37,10 +39,14 @@ class RenderContainer:
         self.device = device = self._device_from_gpu_id(gpu_id)
         self.logger = logger
 
-        if epoch_id is None:
-            epoch_ids = self.log_dir_helper.epochs()
-        else:
+        if epoch_id:
             epoch_ids = [epoch_id]
+        else:
+            epoch_ids = self.log_dir_helper.epochs()
+            epoch_ids = filter(lambda eid: eid >= start, epoch_ids)
+            if end != -1.:
+                epoch_ids = filter(lambda eid: eid <= end, epoch_ids)
+            epoch_ids = list(epoch_ids)
         self.epoch_ids = epoch_ids
 
         engine = REGISTRY.lookup_engine(train_args.env)

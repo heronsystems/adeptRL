@@ -31,12 +31,12 @@ Usage:
 
 Required:
     --logdir <path>         Path to train logs (.../logs/<env-id>/<log-id>)
-    --network
-
 
 Options:
     --epoch <int>           Epoch number to load [default: None]
     --actor <str>           Name of the Actor [default: ACActorEval]
+    --start <float>         Epoch number  to start from [default: 0]
+    --end <float>           Epoch number to end on [default: -1]
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --seed <int>            Seed for random variables [default: 512]
     --manager <str>         Manager to use [default: SimpleEnvManager]
@@ -45,7 +45,7 @@ Options:
 from adept.container import Init
 from adept.container.render import RenderContainer
 from adept.registry import REGISTRY as R
-from adept.utils.script_helpers import parse_path
+from adept.utils.script_helpers import parse_path, parse_none
 from adept.utils.util import DotDict
 
 
@@ -59,10 +59,14 @@ def parse_args():
 
     args.logdir = parse_path(args.logdir)
 
-    if args.epoch == 'None':
-        args.epoch = None
+    # TODO implement Option utility
+    epoch_option = parse_none(args.epoch)
+    if epoch_option:
+        args.epoch = int(float(epoch_option))
     else:
-        args.epoch = int(float(args.epoch))
+        args.epoch = epoch_option
+    args.start = int(float(args.start))
+    args.end = int(float(args.end))
     args.gpu_id = int(args.gpu_id)
     args.seed = int(args.seed)
     return args
@@ -86,6 +90,8 @@ def main(args):
     container = RenderContainer(
         args.actor,
         args.epoch,
+        args.start,
+        args.end,
         logger,
         args.logdir,
         args.gpu_id,

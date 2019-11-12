@@ -38,6 +38,8 @@ Options:
     --actor <str>           Name of the eval actor [default: ACActorEval]
     --gpu-id <int>          CUDA device ID of GPU [default: 0]
     --nb-episode <int>      Number of episodes to average [default: 30]
+    --start <float>         Epoch to start from [default: 0]
+    --end <float>           Epoch to end on [default: -1]
     --seed <int>            Seed for random variables [default: 512]
     --custom-network <str>  Name of custom network class
     --manager <str>         Name of manager [default: SubProcEnvManager]
@@ -63,9 +65,16 @@ def parse_args():
     del args['help']
     args = DotDict(args)
     args.logdir = parse_path(args.logdir)
-    args.epoch = parse_none(args.epoch)
+    # TODO implement Option utility
+    epoch_option = parse_none(args.epoch)
+    if epoch_option:
+        args.epoch = int(float(epoch_option))
+    else:
+        args.epoch = epoch_option
     args.gpu_id = int(args.gpu_id)
     args.nb_episode = int(args.nb_episode)
+    args.start = float(args.start)
+    args.end = float(args.end)
     args.seed = int(args.seed)
     return args
 
@@ -90,6 +99,8 @@ def main(args):
         args.logdir,
         args.gpu_id,
         args.nb_episode,
+        args.start,
+        args.end,
         args.seed,
         args.manager
     )
