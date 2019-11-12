@@ -43,9 +43,9 @@ class RenderContainer:
             epoch_ids = [epoch_id]
         else:
             epoch_ids = self.log_dir_helper.epochs()
-            epoch_ids = filter(lambda eid: eid > start, epoch_ids)
+            epoch_ids = filter(lambda eid: eid >= start, epoch_ids)
             if end != -1.:
-                epoch_ids = filter(lambda eid: eid < end, epoch_ids)
+                epoch_ids = filter(lambda eid: eid <= end, epoch_ids)
             epoch_ids = list(epoch_ids)
         self.epoch_ids = epoch_ids
 
@@ -57,7 +57,7 @@ class RenderContainer:
             engine,
             env_cls,
             seed=seed,
-            nb_env=1
+            nb_env=2
         )
         if train_args.agent:
             agent = train_args.agent

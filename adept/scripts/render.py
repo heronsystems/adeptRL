@@ -59,7 +59,12 @@ def parse_args():
 
     args.logdir = parse_path(args.logdir)
 
-    args.epoch = int(float(parse_none(args.epoch)))
+    # TODO implement Option utility
+    epoch_option = parse_none(args.epoch)
+    if epoch_option:
+        args.epoch = int(float(epoch_option))
+    else:
+        args.epoch = epoch_option
     args.start = int(float(args.start))
     args.end = int(float(args.end))
     args.gpu_id = int(args.gpu_id)

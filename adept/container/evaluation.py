@@ -48,9 +48,9 @@ class EvalContainer:
             epoch_ids = [epoch_id]
         else:
             epoch_ids = self.log_dir_helper.epochs()
-            epoch_ids = filter(lambda eid: eid > start, epoch_ids)
+            epoch_ids = filter(lambda eid: eid >= start, epoch_ids)
             if end != -1.:
-                epoch_ids = filter(lambda eid: eid < end, epoch_ids)
+                epoch_ids = filter(lambda eid: eid <= end, epoch_ids)
             epoch_ids = list(epoch_ids)
         self.epoch_ids = epoch_ids
 
