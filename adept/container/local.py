@@ -56,11 +56,8 @@ class Local(Container):
             elif args.optim == 'Adam':
                 return torch.optim.Adam(x, lr=args.lr)
 
-        def warmup_schedule(epoch):
-            if epoch < 100:
-                return epoch / 100.
-            else:
-                return 1.
+        def warmup_schedule(back_step):
+            return back_step / args.warmup if back_step < args.warmup else 1.
 
         # AGENT
         rwd_norm = REGISTRY.lookup_reward_normalizer(

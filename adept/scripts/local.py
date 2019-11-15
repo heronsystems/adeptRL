@@ -65,6 +65,7 @@ Network Options:
 Optimizer Options:
     --optim <str>           Name of optimizer [default: RMSprop]
     --lr <float>            Learning rate [default: 0.0007]
+    --warmup <int>          Number of steps to warm up for [default: 100]
 
 Logging Options:
     --tag <str>             Name your run [default: None]
@@ -119,6 +120,7 @@ def parse_args():
     args.nb_eval_env = int(args.nb_eval_env)
     args.summary_freq = int(args.summary_freq)
     args.lr = float(args.lr)
+    args.warmup = int(float(args.warmup))
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
     return args

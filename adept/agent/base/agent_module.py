@@ -42,8 +42,8 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, args, reward_normalizer, gpu_preprocessor,
-        action_space, **kwargs
+        cls, args, reward_normalizer,
+        action_space, spec_builder, **kwargs
     ):
         raise NotImplementedError
 
