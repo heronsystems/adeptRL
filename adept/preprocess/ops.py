@@ -18,26 +18,17 @@ from functools import reduce
 
 import cv2
 import torch
-from torch.nn.functional import upsample
+from torch.nn import functional as F
 import numpy as np
 
 cv2.ocl.setUseOpenCL(False)
 
 
 class Operation(abc.ABC):
-    def __init__(self, filter_names=frozenset(), filter_ranks=frozenset()):
-        if filter_names:
-            self.filters = frozenset(filter_names)
-        elif filter_ranks:
-            self.filters = frozenset(filter_ranks)
-        else:
-            self.filters = frozenset()
-
-    def filter(self, name, rank):
-        if self.filters:
-            return name in self.filters or rank in self.filters
-        else:
-            return True
+    def __init__(self, name_filters, rank_filters):
+        self.name_filters = frozenset(name_filters) if name_filters else None
+        self.rank_filters = frozenset(rank_filters) if (rank_filters and not
+        name_filters) else None
 
     def reset(self):
         pass
@@ -55,97 +46,114 @@ class Operation(abc.ABC):
 
 
 class CastToFloat(Operation):
-    def __init__(self, filter_names=set()):
-        super(CastToFloat, self).__init__(filter_names)
+    def __init__(self, name_filters=None, rank_filters=None):
+        super(CastToFloat, self).__init__(name_filters, rank_filters)
 
     def update_shape(self, old_shape):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return torch.float32
+        return {k: torch.float32 for k in old_dtype.keys()}
 
     def update_obs(self, obs):
-        return obs.float()
+        return {k: ob.float() for k, ob in obs.items()}
 
 
 class GrayScaleAndMoveChannel(Operation):
-    def __init__(self, filter_names=set()):
-        super(GrayScaleAndMoveChannel, self).__init__(filter_names, {3})
+    def __init__(self, name_filters=None, rank_filters=frozenset([3])):
+        super(GrayScaleAndMoveChannel, self).__init__(name_filters, rank_filters)
 
     def update_shape(self, old_shape):
-        return (1, ) + old_shape[:-1]
+        return {k: (1, ) + v[:-1] for k, v in old_shape.items()}
 
     def update_dtype(self, old_dtype):
         return old_dtype
 
     def update_obs(self, obs):
-        if obs.dim() == 3:
-            return torch.from_numpy(
-                cv2.cvtColor(obs.numpy(), cv2.COLOR_RGB2GRAY)
-            ).unsqueeze(0)
-            # return obs.mean(dim=2).unsqueeze(0)
-        elif obs.dim() == 4:
-            return obs.mean(dim=3).unsqueeze(1)
-        else:
-            raise ValueError(
-                'cant grayscale a rank' + str(obs.dim()) + ' tensor'
-            )
+        updated = {}
+        for k, v in obs.items:
+            if v.dim() == 3:
+                result = torch.from_numpy(
+                    cv2.cvtColor(v.numpy(), cv2.COLOR_RGB2GRAY)
+                ).unsqueeze(0)
+            elif v.dim() == 4:
+                result = v.mean(dim=3).unsqueeze(1)
+            else:
+                raise ValueError(
+                    'cant grayscale a rank' + str(obs.dim()) + ' tensor'
+                )
+            updated[k] = result
+        return updated
 
 
 class ResizeTo84x84(Operation):
-    def __init__(self, filter_names=set()):
-        super().__init__(filter_names, {3})
+    def __init__(self, name_filters=None, rank_filters=frozenset([3])):
+        super().__init__(name_filters, rank_filters)
 
     def update_shape(self, old_shape):
-        return (1, 84, 84)
+        return {k: (1, 84, 84) for k, v in old_shape.items()}
 
     def update_dtype(self, old_dtype):
         return old_dtype
 
     def update_obs(self, obs):
-        if obs.dim() == 3:
-            obs = cv2.resize(
-                obs.squeeze(0).numpy(), (84, 84), interpolation=cv2.INTER_AREA
-            )
-            return torch.from_numpy(obs).unsqueeze(0)
-            # return upsample(obs.unsqueeze(0), (84, 84), mode='bilinear').squeeze(0)
-        elif obs.dim() == 4:
-            return upsample(obs, (84, 84), mode='bilinear')
-        else:
-            raise ValueError(
-                'cant resize a rank' + str(obs.dim()) + ' tensor to 84x84'
-            )
+        updated = {}
+        for k, v in obs.items():
+            if v.dim() == 3:
+                result = cv2.resize(
+                    v.squeeze(0).numpy(), (84, 84), interpolation=cv2.INTER_AREA
+                )
+                result = torch.from_numpy(result).unsqueeze(0)
+            elif v.dim() == 4:
+                result = F.interpolate(v, (84, 84), mode='area')
+            else:
+                raise ValueError(
+                    'cant resize a rank' + str(obs.dim()) + ' tensor to 84x84'
+                )
+            updated[k] = result
+        return updated
 
 
 class Divide255(Operation):
-    def __init__(self, filter_names=set()):
-        super().__init__(filter_names, {3})
+    def __init__(self, name_filters=None, rank_filters=frozenset([3])):
+        super().__init__(name_filters, rank_filters)
 
     def update_shape(self, old_shape):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return torch.float32
+        return {k: torch.float32 for k in old_dtype.keys()}
 
     def update_obs(self, obs):
-        obs = obs.float()
-        obs *= (1. / 255.)
-        return obs
+        updated = {}
+        for k, v in obs.items():
+            v = v.float()
+            v *= (1. / 255.)
+            updated[k] = v
+        return updated
 
 
 class FrameStack(Operation):
-    def __init__(self, nb_frame, filter_names=set()):
-        super(FrameStack, self).__init__(filter_names, {3})
+    def __init__(self, nb_frame, name_filters=None,
+                 rank_filters=frozenset([3])):
+        super(FrameStack, self).__init__(name_filters, rank_filters)
         self.nb_frame = nb_frame
         self.frames = deque([], maxlen=nb_frame)
 
     def update_shape(self, old_shape):
-        return (old_shape[0] * self.nb_frame,) + old_shape[1:]
+        updated = {}
+        for k, v in old_shape.items():
+            result = (v[0] * self.nb_frame,) + v[1:]
+            updated[k] = result
+        return updated
 
     def update_dtype(self, old_dtype):
         return old_dtype
 
     def update_obs(self, obs):
+        
+
+    def _update_obs(self, obs):
         while len(self.frames) < self.nb_frame:
             self.frames.append(obs)
 
@@ -162,8 +170,8 @@ class FrameStack(Operation):
 
 
 class FlattenSpace(Operation):
-    def __init__(self, filter_names=set()):
-        super(FlattenSpace, self).__init__(filter_names)
+    def __init__(self, name_filters=None, rank_filters=None):
+        super().__init__(name_filters, rank_filters)
 
     def update_shape(self, old_shape):
         return (reduce(lambda prev, cur: prev * cur, old_shape), )
@@ -176,8 +184,8 @@ class FlattenSpace(Operation):
 
 
 class FromNumpy(Operation):
-    def __init__(self, filter_names=set()):
-        super().__init__(filter_names)
+    def __init__(self, name_filters=None, rank_filters=None):
+        super().__init__(name_filters, rank_filters)
 
     def update_shape(self, old_shape):
         return old_shape
