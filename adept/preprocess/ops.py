@@ -71,7 +71,7 @@ class GrayScaleAndMoveChannel(Operation):
 
     def update_obs(self, obs):
         updated = {}
-        for k, v in obs.items:
+        for k, v in obs.items():
             if v.dim() == 3:
                 result = torch.from_numpy(
                     cv2.cvtColor(v.numpy(), cv2.COLOR_RGB2GRAY)
@@ -133,14 +133,19 @@ class Divide255(Operation):
         return updated
 
 
-class FrameStack(Operation):
+class FrameStackCPU(Operation):
     def __init__(self, nb_frame, name_filters=None,
                  rank_filters=frozenset([3])):
-        super(FrameStack, self).__init__(name_filters, rank_filters)
+        super().__init__(name_filters, rank_filters)
         self.nb_frame = nb_frame
-        self.frames = deque([], maxlen=nb_frame)
+        self.frames = None
+        self.obs_space = None
 
     def update_shape(self, old_shape):
+        # lazily initialize old observation space
+        if self.obs_space is None:
+            self.obs_space = old_shape
+            self.reset()
         updated = {}
         for k, v in old_shape.items():
             result = (v[0] * self.nb_frame,) + v[1:]
@@ -151,22 +156,48 @@ class FrameStack(Operation):
         return old_dtype
 
     def update_obs(self, obs):
-        
+        updated = {}
+        for k, v in obs.items():
+            self.frames[k].append(v)
+            updated[k] = self._update_obs(v)
+
+        return updated
 
     def _update_obs(self, obs):
-        while len(self.frames) < self.nb_frame:
-            self.frames.append(obs)
-
-        self.frames.append(obs)
         if obs.dim() == 3:  # cpu
             if len(self.frames) == self.nb_frame:
                 return torch.cat(list(self.frames))
-        elif obs.dim() == 4:  # gpu
-            if len(self.frames) == self.nb_frame:
-                return torch.cat(list(self.frames), dim=1)
+        else:
+            raise NotImplementedError(
+                f'Dimensionality not supported: {obs.dim()}'
+            )
 
     def reset(self):
-        self.frames = deque([], maxlen=self.nb_frame)
+        self.frames = {
+            k: deque(
+                [torch.zeros(dims)] * self.nb_frame,
+                maxlen=self.nb_frame
+            ) for k, dims in self.obs_space.items()
+        }
+
+
+class FrameStackGPU(FrameStackCPU):
+    def reset(self):
+        self.frames = {
+            k: deque(
+                [torch.zeros((1,) + v)] * self.nb_frame,
+                maxlen=self.nb_frame
+            ) for k, v in self.obs_space.items()
+        }
+
+    def _update_obs(self, obs):
+        if obs.dim() == 4:
+            if len(self.frames) == self.nb_frame:
+                return torch.cat(list(self.frames), dim=1)
+        else:
+            raise NotImplementedError(
+                f'Dimensionality not supported: {obs.dim()}'
+            )
 
 
 class FlattenSpace(Operation):
@@ -174,13 +205,19 @@ class FlattenSpace(Operation):
         super().__init__(name_filters, rank_filters)
 
     def update_shape(self, old_shape):
-        return (reduce(lambda prev, cur: prev * cur, old_shape), )
+        updated = {}
+        for k, olds in old_shape.items():
+            updated[k] = (reduce(lambda prev, cur: prev * cur, olds), )
+        return updated
 
     def update_dtype(self, old_dtype):
         return old_dtype
 
     def update_obs(self, obs):
-        return obs.view(-1)
+        updated = {}
+        for k, v in obs.items():
+            updated[k] = v.view(-1)
+        return updated
 
 
 class FromNumpy(Operation):
@@ -191,24 +228,43 @@ class FromNumpy(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        if old_dtype == np.float32:
-            return torch.float32
-        elif old_dtype == np.float64:
-            return torch.float64
-        elif old_dtype == np.float16:
-            return torch.float16
-        elif old_dtype == np.uint8:
-            return torch.uint8
-        elif old_dtype == np.int8:
-            return torch.int8
-        elif old_dtype == np.int16:
-            return torch.int16
-        elif old_dtype == np.int32:
-            return torch.int32
-        elif old_dtype == np.int16:
-            return torch.int16
-        else:
-            raise ValueError('Unsupported dtype {}'.format(old_dtype))
+        updated = {}
+        for k, v in old_dtype.items():
+            if v == np.float32:
+                dt = torch.float32
+            elif v == np.float64:
+                dt = torch.float64
+            elif v == np.float16:
+                dt = torch.float16
+            elif v == np.uint8:
+                dt = torch.uint8
+            elif v == np.int8:
+                dt = torch.int8
+            elif v == np.int16:
+                dt = torch.int16
+            elif v == np.int32:
+                dt = torch.int32
+            elif v == np.int16:
+                dt = torch.int16
+            else:
+                raise ValueError('Unsupported dtype {}'.format(v))
+            updated[k] = dt
+        return updated
 
     def update_obs(self, obs):
-        return torch.from_numpy(obs)
+        updated = {}
+        for k, v in obs.items():
+            updated[k] = torch.from_numpy(v)
+        return updated
+
+
+if __name__ == '__main__':
+    # fstack = FrameStackCPU(4)
+    # fstack.update_shape({"box": (3, 5, 5)})
+    # fstack.update_obs({"box": torch.ones(3, 5, 5)})
+    # print(fstack.frames)
+
+    fstack = FrameStackGPU(4)
+    fstack.update_shape({"box": (3, 5, 5)})
+    fstack.update_obs({"box": torch.ones(3, 3, 5, 5)})
+    print(fstack.frames)
