@@ -185,9 +185,6 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
             if not dtypes:
                 tensor = torch.FloatTensor(*shape)
             else:
-                print(shape)
-                print(dtypes)
-                print(name)
                 tensor = torch.zeros(*shape, dtype=dtypes[name])
             shared_memory[name] = tensor
 
