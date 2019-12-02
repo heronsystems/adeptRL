@@ -22,39 +22,50 @@ class ObsPreprocessor:
         :param observation_space: Dict[ObsKey, Shape]
         :param observation_dtypes: Dict[ObsKey, dtype_str]
         """
-        updated_obs_space = deepcopy(observation_space)
-        updated_obs_dtypes = deepcopy(observation_dtypes)
+        cur_space = deepcopy(observation_space)
+        cur_dtypes = deepcopy(observation_dtypes)
 
-        rank_to_names = {1: [], 2: [], 3: [], 4: []}
-        for name, shape in updated_obs_space.items():
-            rank_to_names[len(shape)].append(name)
+        rank_to_names = self._bld_rank_to_names(observation_space)
 
         for op in ops:
-            for rank, names in rank_to_names.items():
-                for name in names:
-                    if op.filter(name, rank):
-                        updated_obs_space[name] = op.update_shape(
-                            updated_obs_space[name]
-                        )
-                        if updated_obs_dtypes:
-                            updated_obs_dtypes[name] = op.update_dtype(
-                                updated_obs_dtypes[name]
-                            )
+            if op.name_filters:
+                names = op.name_filters
+            elif op.rank_filters:
+                names = []
+                for rank in op.rank_filters:
+                    names += rank_to_names[rank]
+            else:
+                names = list(cur_space.keys())
+
+            cur_space = self._update(names, cur_space, op.update_shape)
+            if observation_dtypes:
+                cur_dtypes = self._update(names, observation_dtypes, op.update_dtype)
+            rank_to_names = self._bld_rank_to_names(observation_space)
 
         self.ops = ops
-        self.observation_space = updated_obs_space
-        self.observation_dtypes = updated_obs_dtypes
+        self.observation_space = cur_space
+        self.observation_dtypes = cur_dtypes
         self.rank_to_names = rank_to_names
 
     def __call__(self, obs):
-        processed_obs = deepcopy(obs)
         for op in self.ops:
-            for rank, names in self.rank_to_names.items():
-                for name in names:
-                    if op.filter(name, rank):
-                        processed_obs[name] = op.update_obs(processed_obs[name])
-        return processed_obs
+            obs = op.update_obs(obs)
+        return obs
 
     def reset(self):
         for o in self.ops:
             o.reset()
+
+    def _bld_rank_to_names(self, obs_space):
+        d = {1: [], 2: [], 3: [], 4: []}
+        for name, shape in obs_space.items():
+            d[len(shape)].append(name)
+        return d
+
+    def _update(self, names, prev, fn):
+        cur = {}
+        for name in names:
+            cur[name] = prev[name]
+            del prev[name]
+        update = fn(cur)
+        return {**prev, **update}

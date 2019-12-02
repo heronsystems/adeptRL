@@ -182,7 +182,7 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
     dtypes = env.cpu_preprocessor.observation_dtypes
     for name, shape in env.cpu_preprocessor.observation_space.items():
         if shape is not None:
-            if dtypes is None:
+            if not dtypes:
                 tensor = torch.FloatTensor(*shape)
             else:
                 tensor = torch.zeros(*shape, dtype=dtypes[name])

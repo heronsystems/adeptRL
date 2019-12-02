@@ -19,7 +19,7 @@ from gym import spaces
 from adept.env._spaces import Space
 from adept.preprocess.observation import ObsPreprocessor
 from adept.preprocess.ops import (
-    CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStack,
+    CastToFloat, GrayScaleAndMoveChannel, ResizeTo84x84, Divide255, FrameStackCPU,
     FromNumpy)
 from adept.env.base.env_module import EnvModule
 from ._gym_wrappers import (
@@ -111,7 +111,7 @@ class AdeptGymEnv(EnvModule):
         # CPU Ops
         cpu_ops = [FromNumpy(), GrayScaleAndMoveChannel(), ResizeTo84x84()]
         if do_frame_stack:
-            cpu_ops.append(FrameStack(4))
+            cpu_ops.append(FrameStackCPU(4))
         cpu_preprocessor = ObsPreprocessor(
             cpu_ops,
             Space.from_gym(env.observation_space),
