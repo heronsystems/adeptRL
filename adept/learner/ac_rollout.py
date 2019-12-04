@@ -69,9 +69,9 @@ class ACRolloutLearner(LearnerModule):
 
         # batched losses
         policy_loss = -(r_log_probs_action) * r_advantages.unsqueeze(-1)
-        # sum over actions, mean over sequence and batch size
-        policy_loss = policy_loss.sum(-1).mean()
-        entropy_loss = -r_entropies.sum(-1).mean()
+        # mean over actions, seq, batch
+        policy_loss = policy_loss.mean()
+        entropy_loss = -r_entropies.mean() * self.entropy_weight
         value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
 
         losses = {
