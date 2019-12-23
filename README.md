@@ -33,16 +33,7 @@ We're happy to accept feedback and contributions.
 * Custom Environment ([stub](examples/custom_environment_stub.py) | [example](adept/environments/openai_gym.py))
 
 ## Installation
-**Dependencies:**
-* gym
-* PyTorch 1.x
-* Python 3.5+
-* We recommend CUDA 10, pytorch 1.0, python 3.6
-
 **From source:**
-* Follow instructions for [PyTorch](https://pytorch.org/)
-* (Optional) Follow instructions for 
-[StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
 ```bash
 git clone https://github.com/heronsystems/adeptRL
 cd adeptRL
@@ -67,13 +58,9 @@ python -m adept.app local --env BeamRiderNoFrameskip-v4
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
 python -m adept.app distrib --env BeamRiderNoFrameskip-v4
 
-# IMPALA (requires mpi4py and is resource intensive)
+# Actor Learner Mode
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-python -m adept.app impala --agent ActorCriticVtrace --env BeamRiderNoFrameskip-v4
-
-# StarCraft 2 (IMPALA not supported yet)
-# Warning: much more resource intensive than Atari
-python -m adept.app local --env CollectMineralShards
+python -m adept.app actorlearner
 
 # To see a full list of options:
 python -m adept.app -h
@@ -88,7 +75,7 @@ my_script.py
 Train an agent on a single GPU.
 """
 from adept.scripts.local import parse_args, main
-from adept.networks import NetworkModule, NetworkRegistry, SubModule1D
+from adept.network import NetworkModule,
 from adept.agents import AgentModule, AgentRegistry
 from adept.environments import EnvModule, EnvRegistry
 
@@ -110,25 +97,15 @@ class MySubModule1D(SubModule1D):
 
 
 if __name__ == '__main__':
-    agent_registry = AgentRegistry()
-    agent_registry.register_agent(MyAgent)
-    
-    env_registry = EnvRegistry()
-    env_registry.register_env(MyEnv, ['env-id-1', 'env-id-2'])
-    
-    network_registry = NetworkRegistry()
-    network_registry.register_custom_net(MyNet)
-    network_registry.register_submodule(MySubModule1D)
-    
-    main(
-        parse_args(),
-        agent_registry=agent_registry,
-        env_registry=env_registry,
-        net_registry=network_registry
-    )
+    adept.register_agent(MyAgent)
+    adept.register_env(MyEnv)
+    adept.register_custom_net(MyNet)
+    adept.register_submodule(MySubModule1D)
+
+
+    main(parse_args())
 ```
-* Call your script like this: `python my_script.py --agent MyAgent --env 
-env-id-1 --custom-network MyNet`
+* Call your script like this: `python my_script.py --agent MyAgent`
 * You can see all the args [here](adept/scripts/local.py) or how to implement
  the stubs in the examples section above.
 
@@ -143,15 +120,9 @@ server or host process.
 * Supports NVLINK and InfiniBand to reduce communication overhead
 * InfiniBand untested since we do not have a setup to test on.
 
-**Importance Weighted Actor Learner Architectures, IMPALA (Single Node, Multi-GPU)**
+**Actor Learner (Single Node, Multi-GPU)**
 * Our implementation uses GPU workers rather than CPU workers for forward 
 passes.
-* On Atari we achieve ~4k SPS = ~16k FPS with two GPUs and an 8-core CPU.
-* "Note that the shallow IMPALA experiment completes training over 200 
-million frames in less than one hour."
-* IMPALA official experiments use 48 cores.
-* Ours: 2000 frame / (second * # CPU core) DeepMind: 1157 frame / (second * # CPU core)
-* Does not yet support multiple nodes or direct GPU memory transfers.
 
 ### Agents
 * Advantage Actor Critic, A2C ([paper](https://arxiv.org/pdf/1708.05144.pdf) | [code](adept/agents/actor_critic.py))
@@ -164,8 +135,7 @@ million frames in less than one hour."
 * Batch normalization ([paper](https://arxiv.org/pdf/1502.03167.pdf))
 
 ### Environments
-* OpenAI Gym
-* StarCraft 2 (unstable)
+* Atari (OpenAI Gym)
 
 ## Performance
 * ~ 3,000 Steps/second = 12,000 FPS (Atari)
@@ -184,8 +154,3 @@ million frames in less than one hour."
 followed by an [LSTM](./adept/networks/net1d/lstm.py) (F=512)
 * Reproduce with `python -m adept.app local --logdir ~/local64_benchmark --eval 
 -y --nb-step 50e6 --env <env-id>`
-
-## Acknowledgements
-We borrow pieces of OpenAI's [gym](https://github.com/openai/gym) and 
-[baselines](https://github.com/openai/baselines) code. We indicate where this
- is done.
