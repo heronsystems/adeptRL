@@ -39,7 +39,7 @@ class ObsPreprocessor:
 
             cur_space = self._update(names, cur_space, op.update_shape)
             if observation_dtypes:
-                cur_dtypes = self._update(names, observation_dtypes, op.update_dtype)
+                cur_dtypes = self._update(names, cur_dtypes, op.update_dtype)
             rank_to_names = self._bld_rank_to_names(observation_space)
 
         self.ops = ops
