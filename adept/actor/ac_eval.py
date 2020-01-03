@@ -26,7 +26,7 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
             action = self.select_action(softmax)
 
             actions[key] = action.cpu()
-        return actions, {}
+        return actions, {'value': preds['critic'].squeeze(-1)}
 
     @classmethod
     def _exp_spec(cls, rollout_len, batch_sz, obs_space, act_space, internal_space):
@@ -44,4 +44,4 @@ class ACActorEvalSample(ACActorEval):
             action = self.sample_action(softmax)
 
             actions[key] = action.cpu()
-        return actions, {}
+        return actions, {'value': preds['critic'].squeeze(-1)}
