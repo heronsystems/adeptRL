@@ -59,7 +59,7 @@ class ImpalaLearner(LearnerModule):
     def compute_loss(self, network, experiences, next_obs, internals):
         # estimate value of next state
         with torch.no_grad():
-            results, _ = network(next_obs, internals)
+            results, _, _ = network(next_obs, internals)
             b_last_values = results['critic'].squeeze(1).data
 
         # Gather host log_probs
