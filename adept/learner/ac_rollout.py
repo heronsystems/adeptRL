@@ -21,8 +21,10 @@ class ACRolloutLearner(LearnerModule):
             discount,
             normalize_advantage,
             entropy_weight,
-            return_scale
+            return_scale,
+            optimizer
     ):
+        super(ACRolloutLearner, self).__init__(optimizer)
         self.reward_normalizer = reward_normalizer
         self.discount = discount
         self.normalize_advantage = normalize_advantage
@@ -32,13 +34,14 @@ class ACRolloutLearner(LearnerModule):
             self.dm_scaler = DeepMindReturnScaler(10. ** -3)
 
     @classmethod
-    def from_args(cls, args, reward_normalizer):
+    def from_args(cls, args, reward_normalizer, optimizer):
         return cls(
             reward_normalizer,
             args.discount,
             args.normalize_advantage,
             args.entropy_weight,
-            args.return_scale
+            args.return_scale,
+            args.optimizer
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):

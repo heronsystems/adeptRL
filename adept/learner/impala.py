@@ -38,8 +38,10 @@ class ImpalaLearner(LearnerModule):
             discount,
             minimum_importance_value,
             minimum_importance_policy,
-            entropy_weight
+            entropy_weight,
+            optimizer
     ):
+        super(ImpalaLearner, self).__init__(optimizer)
         self.reward_normalizer = reward_normalizer
         self.discount = discount
         self.minimum_importance_value = minimum_importance_value
@@ -47,13 +49,14 @@ class ImpalaLearner(LearnerModule):
         self.entropy_weight = entropy_weight
 
     @classmethod
-    def from_args(cls, args, reward_normalizer):
+    def from_args(cls, args, reward_normalizer, optimizer):
         return cls(
             reward_normalizer,
             discount=args.discount,
             minimum_importance_value=args.minimum_importance_value,
             minimum_importance_policy=args.minimum_importance_policy,
-            entropy_weight=args.entropy_weight
+            entropy_weight=args.entropy_weight,
+            optimizer=optimizer
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):

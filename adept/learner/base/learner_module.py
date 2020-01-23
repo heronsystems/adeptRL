@@ -27,10 +27,13 @@ class LearnerModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
     This one of the modules to use for custom Actor-Learner code.
     """
+    def __init__(self, optimizer):
+        super(LearnerModule, self).__init__()
+        self.optimizer = optimizer
 
     @classmethod
     @abc.abstractmethod
-    def from_args(self, args, reward_normalizer, optimizer):
+    def from_args(cls, args, reward_normalizer, optimizer):
         raise NotImplementedError
 
     @abc.abstractmethod

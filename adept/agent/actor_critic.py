@@ -34,11 +34,13 @@ class ActorCritic(AgentModule):
             discount,
             normalize_advantage,
             entropy_weight,
-            return_scale
+            return_scale,
+            optimizer
     ):
         super(ActorCritic, self).__init__(
             reward_normalizer,
-            action_space
+            action_space,
+            optimizer
         )
         self.discount = discount
         self.normalize_advantage = normalize_advantage
@@ -51,13 +53,14 @@ class ActorCritic(AgentModule):
             discount,
             normalize_advantage,
             entropy_weight,
-            return_scale
+            return_scale,
+            optimizer
         )
 
     @classmethod
     def from_args(
         cls, args, reward_normalizer,
-        action_space, spec_builder, **kwargs
+        action_space, spec_builder, optimizer, **kwargs
     ):
         return cls(
             reward_normalizer, action_space, spec_builder,
@@ -65,7 +68,8 @@ class ActorCritic(AgentModule):
             discount=args.discount,
             normalize_advantage=args.normalize_advantage,
             entropy_weight=args.entropy_weight,
-            return_scale=args.return_scale
+            return_scale=args.return_scale,
+            optimizer=optimizer
         )
 
     @property
