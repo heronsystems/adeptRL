@@ -47,7 +47,7 @@ class Local(Container):
             output_space,
             env_mgr.gpu_preprocessor,
             REGISTRY
-        )
+        ).to(device)
         logger.info('Network parameters: ' + str(self.count_parameters(net)))
 
         def optim_fn(x):
@@ -69,20 +69,21 @@ class Local(Container):
             net.internal_space(),
             env_mgr.nb_env
         )
+        optimizer = optim_fn(self.network.parameters())
         agent = agent_cls.from_args(
             args,
             rwd_norm,
             env_mgr.action_space,
-            builder
+            builder,
+            optimizer
         )
 
         self.agent = agent.to(device)
         self.nb_step = args.nb_step
         self.env_mgr = env_mgr
         self.nb_env = args.nb_env
-        self.network = net.to(device)
-        self.optimizer = optim_fn(self.network.parameters())
-        self.scheduler = LambdaLR(self.optimizer, warmup_schedule)
+        self.network = net
+        self.scheduler = LambdaLR(optimizer, warmup_schedule)
         self.device = device
         self.initial_step_count = initial_step_count
         self.log_id_dir = log_id_dir
@@ -96,7 +97,7 @@ class Local(Container):
             self.network = self.load_network(self.network, args.load_network)
             logger.info('Reloaded network from {}'.format(args.load_network))
         if args.load_optim:
-            self.optimizer = self.load_optim(self.optimizer, args.load_optim)
+            self.agent.load_optim(optimizer, args.load_optim)
             logger.info('Reloaded optimizer from {}'.format(args.load_optim))
 
         self.network.train()
@@ -167,7 +168,7 @@ class Local(Container):
 
             if step_count >= next_save:
                 self.saver.save_state_dicts(
-                    self.network, step_count, self.optimizer
+                    self.network, step_count, self.agent.optimizer
                 )
                 next_save += self.epoch_len
 
@@ -180,9 +181,9 @@ class Local(Container):
                     torch.stack(tuple(loss for loss in loss_dict.values()))
                 )
 
-                self.optimizer.zero_grad()
+                self.agent.zero_grad()
                 total_loss.backward()
-                self.optimizer.step()
+                self.agent.optimizer_step()
                 epoch = step_count / self.nb_env
                 self.scheduler.step(epoch)
 

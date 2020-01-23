@@ -94,6 +94,15 @@ class ACRolloutLearner(LearnerModule):
         return losses, metrics
 
     def compute_returns(self, bootstrap_value, rewards, terminals):
+        """
+        R = Rollout Length
+        B = Batch Size
+
+        :param bootstrap_value:
+        :param rewards: Tensor[R, B]
+        :param terminals: Tensor[R, B]
+        :return:
+        """
         # First step of nstep reward target is estimated value of t+1
         target_return = bootstrap_value
         rollout_len = len(rewards)

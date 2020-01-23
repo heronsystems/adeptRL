@@ -12,16 +12,6 @@ class Container:
         return network
 
     @staticmethod
-    def load_optim(optimizer, path):
-        optimizer.load_state_dict(
-                torch.load(
-                    path,
-                    map_location=lambda storage, loc: storage
-                )
-            )
-        return optimizer
-
-    @staticmethod
     def init_next_save(initial_step_count, epoch_len):
         next_save = 0
         if initial_step_count > 0:

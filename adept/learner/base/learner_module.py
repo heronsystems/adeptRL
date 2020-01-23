@@ -17,6 +17,9 @@ A Learner receives agent-environment interactions which are used to compute
 loss.
 """
 import abc
+
+import torch
+
 from adept.utils.requires_args import RequiresArgsMixin
 
 
@@ -27,9 +30,25 @@ class LearnerModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     @classmethod
     @abc.abstractmethod
-    def from_args(self, args, reward_normalizer):
+    def from_args(self, args, reward_normalizer, optimizer):
         raise NotImplementedError
 
     @abc.abstractmethod
     def compute_loss(self, network, experiences, next_obs, internals):
         raise NotImplementedError
+
+    def zero_grad(self):
+        self.optimizer.zero_grad()
+
+    def optimizer_step(self):
+        self.optimizer.step()
+
+    def load_optim(self, optimizer, path):
+        optimizer.load_state_dict(
+            torch.load(
+                path,
+                map_location=lambda storage, loc: storage
+            )
+        )
+        self.optimizer = optimizer
+        return optimizer

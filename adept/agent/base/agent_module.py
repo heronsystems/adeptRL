@@ -18,6 +18,8 @@ An Agent interacts with the environment and accumulates experience.
 import abc
 from collections import defaultdict
 
+import torch
+
 from adept.exp import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
 
@@ -34,16 +36,18 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def __init__(
             self,
             reward_normalizer,
-            action_space
+            action_space,
+            optimizer
     ):
         self._reward_normalizer = reward_normalizer
         self._action_space = action_space
+        self.optimizer = optimizer
 
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, args, reward_normalizer,
-        action_space, spec_builder, **kwargs
+            cls, args, reward_normalizer, action_space, spec_builder, optimizer,
+            **kwargs
     ):
         raise NotImplementedError
 
@@ -138,3 +142,19 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def to(self, device):
         self.exp_cache.to(device)
         return self
+
+    def zero_grad(self):
+        self.optimizer.zero_grad()
+
+    def optimizer_step(self):
+        self.optimizer.step()
+
+    def load_optim(self, optimizer, path):
+        optimizer.load_state_dict(
+            torch.load(
+                path,
+                map_location=lambda storage, loc: storage
+            )
+        )
+        self.optimizer = optimizer
+        return optimizer

@@ -14,9 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 class NCCLOptimizer:
-    def __init__(self, optimizer_fn, network, world_size, param_sync_rate=1000):
+    def __init__(self, network, optimizer, world_size, param_sync_rate=1000):
         self.network = network
-        self.optimizer = optimizer_fn(self.network.parameters())
+        self.optimizer = optimizer
         self.param_sync_rate = param_sync_rate
         self._opt_count = 0
         self.process_group = None

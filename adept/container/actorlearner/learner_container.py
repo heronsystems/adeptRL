@@ -94,8 +94,8 @@ class ActorLearnerHost(Container):
             output_space,
             env_gpu_preprocessor,
             REGISTRY
-        )
-        self.network = net.to(device)
+        ).to(device)
+        self.network = net
         # TODO: this is a hack, remove once queuer puts rollouts on the correct device
         self.network.device = device
         self.device = device
@@ -103,11 +103,12 @@ class ActorLearnerHost(Container):
 
         # OPTIMIZER
         def optim_fn(x):
-            return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
-        if args.nb_learners > 1:
-            self.optimizer = NCCLOptimizer(optim_fn, self.network, self.nb_learners)
-        else:
-            self.optimizer = optim_fn(self.network.parameters())
+            optimizer = torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
+            if args.nb_learners > 1:
+                optimizer = NCCLOptimizer(
+                    self.network, optimizer, self.nb_learners
+                )
+            return optimizer
 
         # LEARNER / EXP
         rwd_norm = REGISTRY.lookup_reward_normalizer(
@@ -119,14 +120,11 @@ class ActorLearnerHost(Container):
             net.internal_space(),
             args.nb_env * args.nb_learn_batch
         )
-        w_builder = REGISTRY.lookup_actor(args.actor_worker).exp_spec_builder(
-            env.observation_space,
-            env.action_space,
-            net.internal_space(),
-            args.nb_env
-        )
         actor = actor_cls.from_args(args, env.action_space)
-        learner = REGISTRY.lookup_learner(args.learner).from_args(args, rwd_norm)
+        optimizer = optim_fn(net.parameters())
+        learner = REGISTRY.lookup_learner(args.learner).from_args(
+            args, rwd_norm, optimizer
+        )
 
         exp_cls = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
 
@@ -140,7 +138,7 @@ class ActorLearnerHost(Container):
                 self.network = self.load_network(self.network, args.load_network)
                 print('Reloaded network from {}'.format(args.load_network))
             if args.load_optim:
-                self.optimizer = self.load_optim(self.optimizer, args.load_optim)
+                self.optimizer = self.learner.load_optim(optimizer, args.load_optim)
                 print('Reloaded optimizer from {}'.format(args.load_optim))
 
             print('Network parameters: ' + str(self.count_parameters(net)))
@@ -204,9 +202,9 @@ class ActorLearnerHost(Container):
                 torch.stack(tuple(loss for loss in loss_dict.values()))
             )
 
-            self.optimizer.zero_grad()
+            self.learner.zero_grad()
             total_loss.backward()
-            self.optimizer.step()
+            self.learner.optimizer_step()
 
             # Perform state updates
             global_step_count += self.nb_env * self.nb_learn_batch * len(r.terminals) * self.nb_learners

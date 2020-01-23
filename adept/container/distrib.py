@@ -67,7 +67,7 @@ class DistribHost(Container):
             output_space,
             env_mgr.gpu_preprocessor,
             REGISTRY
-        )
+        ).to(device)
         logger.info('Network parameters: ' + str(self.count_parameters(net)))
 
         def optim_fn(x):
@@ -83,19 +83,20 @@ class DistribHost(Container):
             net.internal_space(),
             env_mgr.nb_env
         )
+        optimizer = optim_fn(net.parameters())
         agent = agent_cls.from_args(
             args,
             rwd_norm,
             env_mgr.action_space,
-            builder
+            builder,
+            optimizer
         )
 
         self.agent = agent
         self.nb_step = args.nb_step
         self.env_mgr = env_mgr
         self.nb_env = args.nb_env
-        self.network = net.to(device)
-        self.optimizer = optim_fn(self.network.parameters())
+        self.network = net
         self.device = device
         self.initial_step_count = initial_step_count
         self.log_id_dir = log_id_dir
@@ -114,7 +115,7 @@ class DistribHost(Container):
             self.network = self.load_network(self.network, args.load_network)
             logger.info('Reloaded network from {}'.format(args.load_network))
         if args.load_optim:
-            self.optimizer = self.load_optim(self.optimizer, args.load_optim)
+            optimizer = self.agent.load_optim(optimizer, args.load_optim)
             logger.info('Reloaded optimizer from {}'.format(args.load_optim))
 
         self.network.train()
@@ -183,7 +184,7 @@ class DistribHost(Container):
 
             if global_step_count >= next_save:
                 self.saver.save_state_dicts(
-                    self.network, global_step_count, self.optimizer
+                    self.network, global_step_count, self.agent.optimizer
                 )
                 next_save += self.epoch_len
 
@@ -196,7 +197,7 @@ class DistribHost(Container):
                     torch.stack(tuple(loss for loss in loss_dict.values()))
                 )
 
-                self.optimizer.zero_grad()
+                self.agent.zero_grad()
                 total_loss.backward()
                 dist.barrier()
                 handles = []
@@ -207,7 +208,7 @@ class DistribHost(Container):
                     handle.wait()
                 # for param in self.network.parameters():
                 #     param.grad.mul_(1. / self.world_size)
-                self.optimizer.step()
+                self.agent.step_optimizer()
 
                 self.agent.clear()
                 for k, vs in internals.items():
@@ -267,7 +268,7 @@ class DistribWorker(Container):
             output_space,
             env_mgr.gpu_preprocessor,
             REGISTRY
-        )
+        ).to(device)
 
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
@@ -282,19 +283,20 @@ class DistribWorker(Container):
             net.internal_space(),
             env_mgr.nb_env
         )
+        optimizer = optim_fn(net.parameters())
         agent = agent_cls.from_args(
             args,
             rwd_norm,
             env_mgr.action_space,
-            builder
+            builder,
+            optimizer
         )
 
         self.agent = agent
         self.nb_step = args.nb_step
         self.env_mgr = env_mgr
         self.nb_env = args.nb_env
-        self.network = net.to(device)
-        self.optimizer = optim_fn(self.network.parameters())
+        self.network = net
         self.device = device
         self.initial_step_count = initial_step_count
         self.log_id_dir = log_id_dir
@@ -309,7 +311,7 @@ class DistribWorker(Container):
             self.network = self.load_network(self.network, args.load_network)
             logger.info('Reloaded network from {}'.format(args.load_network))
         if args.load_optim:
-            self.optimizer = self.load_optim(self.optimizer, args.load_optim)
+            optimizer = self.agent.load_optim(optimizer, args.load_optim)
             logger.info('Reloaded optimizer from {}'.format(args.load_optim))
 
         self.network.train()
@@ -380,7 +382,7 @@ class DistribWorker(Container):
                     torch.stack(tuple(loss for loss in loss_dict.values()))
                 )
 
-                self.optimizer.zero_grad()
+                self.agent.zero_grad()
                 total_loss.backward()
                 dist.barrier()
                 handles = []
@@ -391,7 +393,7 @@ class DistribWorker(Container):
                     handle.wait()
                 # for param in self.network.parameters():
                 #     param.grad.mul_(1. / self.world_size)
-                self.optimizer.step()
+                self.agent.step_optimizer()
 
                 self.agent.clear()
                 for k, vs in internals.items():
