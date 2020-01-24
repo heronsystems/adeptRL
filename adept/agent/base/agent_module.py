@@ -17,6 +17,7 @@ An Agent interacts with the environment and accumulates experience.
 """
 import abc
 from collections import defaultdict
+import torch
 
 from adept.exp import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
@@ -109,6 +110,19 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     def clear(self):
         self.exp_cache.clear()
+
+    def compute_loss_and_step(self, network, optimizer, next_obs, internals):
+        loss_dict, metric_dict = self.compute_loss(
+            network, next_obs, internals
+        )
+        total_loss = torch.sum(
+            torch.stack(tuple(loss for loss in loss_dict.values()))
+        )
+
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
+        return loss_dict, total_loss, metric_dict
 
     def act(self, network, obs, prev_internals):
         """
