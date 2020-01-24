@@ -166,16 +166,10 @@ class Local(Container):
 
             # Learn
             if self.agent.is_ready():
-                loss_dict, metric_dict = self.agent.compute_loss(
-                    self.network, next_obs, internals
-                )
-                total_loss = torch.sum(
-                    torch.stack(tuple(loss for loss in loss_dict.values()))
+                loss_dict, total_loss, metric_dict = self.agent.compute_loss_and_step(
+                    self.network, self.optimizer, next_obs, internals
                 )
 
-                self.optimizer.zero_grad()
-                total_loss.backward()
-                self.optimizer.step()
                 epoch = step_count / self.nb_env
                 self.scheduler.step(epoch)
 
