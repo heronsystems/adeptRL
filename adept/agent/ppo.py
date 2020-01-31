@@ -16,7 +16,7 @@ from adept.actor import ACPPOActorTrain
 from adept.actor.base.ac_helper import ACActorHelperMixin
 from adept.exp import Rollout
 from .base.agent_module import AgentModule
-from adept.utils import listd_to_dlist
+from adept.utils import listd_to_dlist, dlist_to_listd
 
 import numpy as np
 import torch
@@ -131,11 +131,11 @@ class PPO(AgentModule):
         gae_returns = []
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
-            terminals = r.terminals[i]
+            terminal_mask = 1. - r.terminals[i].float()
             current_values = r.values[i].squeeze(-1)
             # generalized advantage estimation
-            delta_t = rewards + self.discount * next_values.data * terminals - current_values
-            gae = gae * self.discount * self.gae_discount * terminals + delta_t
+            delta_t = rewards + self.discount * next_values.data * terminal_mask - current_values
+            gae = gae * self.discount * self.gae_discount * terminal_mask + delta_t
             gae_returns.append(gae + current_values)
             next_values = current_values.data
         gae_returns = torch.stack(list(reversed(gae_returns))).data
@@ -144,7 +144,6 @@ class PPO(AgentModule):
         old_values = torch.stack(r.values).squeeze(-1)
         adv_targets_batch = (gae_returns - old_values).data
         old_log_probs_batch = torch.stack(r.log_probs).data
-        terminals_batch = torch.stack(r.terminals)
         # keep a copy of terminals on the cpu it's faster
         rollout_terminals = torch.stack(r.terminals).cpu().numpy()
 
@@ -159,31 +158,26 @@ class PPO(AgentModule):
             # randomize sequences to sample NOTE: in-place operation
             np.random.shuffle(minibatch_inds)
             for i in minibatch_inds:
-                import pudb; pudb.set_trace()
                 # TODO: detach internals, no_grad in compute_action_exp takes care of this
-                print('this is a list and we are trying to pull inds')
-                starting_internals = {k: ts[i].unbind(0) for k, ts in r.internals.items()}
+                starting_internals = {k: ts[i[0]].unbind(0) for k, ts in r.internals.items()}
                 gae_return = gae_returns[i]
                 old_log_probs = old_log_probs_batch[i]
-                sampled_actions = {k: r[k][i] for k in self.action_space}
-                adv_targets = adv_targets_batch[i]
-                terminal_masks = terminals_batch[i]
-
-                # States are list(dict) select batch and convert to dict(list)
-                obs = listd_to_dlist([r.obs[batch_ind] for batch_ind in i])
-                # convert to dict(tensors)
-                obs = {k: torch.stack(v) for k, v in obs.items()}
+                sampled_actions = [r.actions[x] for x in i]
+                batch_obs = [r.observations[x] for x in i]
+                # needs to be seq, batch, broadcast dim
+                adv_targets = adv_targets_batch[i].unsqueeze(-1)
+                terminals_batch = rollout_terminals[i]
 
                 # forward pass
-                cur_log_probs, cur_values, entropies = self.act_batch(network, obs, rollout_terminals, sampled_actions,
+                cur_log_probs, cur_values, entropies = self.act_batch(network, batch_obs, terminals_batch, sampled_actions,
                                                                       starting_internals, device)
                 value_loss = 0.5 * torch.mean((cur_values - gae_return).pow(2))
 
                 # calculate surrogate loss
                 surrogate_ratio = torch.exp(cur_log_probs - old_log_probs)
                 surrogate_loss = surrogate_ratio * adv_targets
-                surrogate_loss_clipped = torch.clamp(surrogate_ratio, 1 - self.loss_clip,
-                                                     1 + self.loss_clip) * adv_targets
+                surrogate_loss_clipped = torch.clamp(surrogate_ratio, 1 - self.policy_clipping,
+                                                     1 + self.policy_clipping) * adv_targets
                 policy_loss = torch.mean(-torch.min(surrogate_loss, surrogate_loss_clipped))
                 entropy_loss = torch.mean(self.entropy_weight * entropies)
 
@@ -204,9 +198,9 @@ class PPO(AgentModule):
     def act_batch(self, network, batch_obs, batch_terminals, batch_actions, internals, device):
         exp_cache = []
 
-        for obs, terminals in zip(batch_obs, batch_terminals):
+        for obs, actions, terminals in zip(batch_obs, batch_actions, batch_terminals):
             preds, internals, _ = network(obs, internals)
-            exp_cache.append(self._process_exp(preds, batch_actions))
+            exp_cache.append(self._process_exp(preds, actions))
 
             # where returns a single element tuple with the indexes
             terminal_inds = np.where(terminals)[0]
@@ -215,7 +209,7 @@ class PPO(AgentModule):
                     internals[k][i] = v
 
         exp = listd_to_dlist(exp_cache)
-        return exp['log_probs'], exp['values'], exp['entropies']
+        return torch.stack(exp['log_probs']), torch.stack(exp['values']), torch.stack(exp['entropies'])
 
     def _process_exp(self, preds, sampled_actions):
         values = preds['critic'].squeeze(1)
@@ -232,7 +226,8 @@ class PPO(AgentModule):
             action = sampled_actions[key]
             log_probs.append(ACActorHelperMixin.log_probability(log_softmax, action))
 
-        log_probs = torch.stack(log_probs, dim=1)
+        # we can cat here for whatever reason
+        log_probs = torch.cat(log_probs, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
         return {

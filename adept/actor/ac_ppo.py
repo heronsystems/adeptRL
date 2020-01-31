@@ -66,11 +66,14 @@ class ACPPOActorTrain(ActorModule, ACActorHelperMixin):
         internal_spec = {
             k: (exp_len, batch_sz, *shape) for k, shape in internal_space.items()
         }
+        obs_spec = {k: (exp_len + 1, batch_sz, *shape) for k, shape in
+                    obs_space.items()}
 
         spec = {
             'log_probs': (exp_len, batch_sz, act_key_len),
             'values': (exp_len, batch_sz),
             **action_spec,
+            **obs_spec,
             **internal_spec
         }
 
