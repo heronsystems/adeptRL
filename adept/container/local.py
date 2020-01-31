@@ -52,7 +52,7 @@ class Local(Container):
             if args.optim == 'RMSprop':
                 return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
             elif args.optim == 'Adam':
-                return torch.optim.Adam(x, lr=args.lr)
+                return torch.optim.Adam(x, lr=args.lr, eps=1e-5)
 
         def warmup_schedule(back_step):
             return back_step / args.warmup if back_step < args.warmup else 1.
