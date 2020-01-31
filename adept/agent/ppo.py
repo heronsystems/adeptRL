@@ -25,18 +25,17 @@ from torch.utils.data.sampler import BatchSampler, SequentialSampler
 
 
 class PPO(AgentModule):
+    # PPO Atari defaults https://arxiv.org/abs/1707.06347 pg 10.
     args = {
-        **Rollout.args,
-        **ACPPOActorTrain.args,
+        'rollout_len': 128,
         'discount': 0.99,
         'normalize_advantage': True,
-        'entropy_weight': 0.00,
+        'entropy_weight': 0.01,
         'gradient_norm_clipping': 0.5,
         'gae_discount': 0.95,
         'minibatches_per_update': 4,
         'num_epochs_per_update': 4,
-        'policy_clipping': 0.2,
-        'value_clipping': 0.2
+        'policy_clipping': 0.2
     }
 
     def __init__(
@@ -52,8 +51,7 @@ class PPO(AgentModule):
             gae_discount,
             minibatches_per_update,
             num_epochs_per_update,
-            policy_clipping,
-            value_clipping
+            policy_clipping
     ):
         super().__init__(
             reward_normalizer,
@@ -71,7 +69,6 @@ class PPO(AgentModule):
         self.minibatches_per_update = minibatches_per_update
         self.num_epochs_per_update = num_epochs_per_update
         self.policy_clipping = policy_clipping
-        self.value_clipping = value_clipping
 
         if rollout_len % minibatches_per_update != 0:
             raise ValueError('Rollout length must be divisible by number of minibatches')
@@ -92,8 +89,7 @@ class PPO(AgentModule):
             gae_discount=args.gae_discount,
             minibatches_per_update=args.minibatches_per_update,
             num_epochs_per_update=args.num_epochs_per_update,
-            policy_clipping=args.policy_clipping,
-            value_clipping=args.value_clipping
+            policy_clipping=args.policy_clipping
         )
 
     @property
@@ -110,10 +106,13 @@ class PPO(AgentModule):
     def output_space(action_space):
         return ACPPOActorTrain.output_space(action_space)
 
-    def compute_action_exp(self, predictions, internals, obs, available_actions):
+    def act(self, *args, **kwargs):
         # PPO recomputes actions so we don't need grads
         with torch.no_grad():
-            return self._actor.compute_action_exp(predictions, internals, obs, available_actions)
+            return super().act(*args, **kwargs)
+
+    def compute_action_exp(self, predictions, internals, obs, available_actions):
+        return self._actor.compute_action_exp(predictions, internals, obs, available_actions)
 
     def compute_loss_and_step(self, network, optimizer, next_obs, next_internals):
         r = self.exp_cache.read()
@@ -179,7 +178,7 @@ class PPO(AgentModule):
                 surrogate_loss_clipped = torch.clamp(surrogate_ratio, 1 - self.policy_clipping,
                                                      1 + self.policy_clipping) * adv_targets
                 policy_loss = torch.mean(-torch.min(surrogate_loss, surrogate_loss_clipped))
-                entropy_loss = torch.mean(self.entropy_weight * entropies)
+                entropy_loss = torch.mean(-self.entropy_weight * entropies)
 
                 losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss':
                           entropy_loss}
