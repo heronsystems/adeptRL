@@ -13,16 +13,30 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from adept.actor import ACPPOActorTrain
+from adept.actor.base.ac_helper import ACActorHelperMixin
 from adept.exp import Rollout
-from adept.learner import ACRolloutLearner
 from .base.agent_module import AgentModule
+from adept.utils import listd_to_dlist
+
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data.sampler import BatchSampler, SequentialSampler
 
 
-class ActorCritic(AgentModule):
+class PPO(AgentModule):
     args = {
         **Rollout.args,
         **ACPPOActorTrain.args,
-        **ACRolloutLearner.args
+        'discount': 0.99,
+        'normalize_advantage': True,
+        'entropy_weight': 0.00,
+        'gradient_norm_clipping': 0.5,
+        'gae_discount': 0.95,
+        'minibatches_per_update': 4,
+        'num_epochs_per_update': 4,
+        'policy_clipping': 0.2,
+        'value_clipping': 0.2
     }
 
     def __init__(
@@ -34,7 +48,12 @@ class ActorCritic(AgentModule):
             discount,
             normalize_advantage,
             entropy_weight,
-            return_scale
+            gradient_norm_clipping,
+            gae_discount,
+            minibatches_per_update,
+            num_epochs_per_update,
+            policy_clipping,
+            value_clipping
     ):
         super().__init__(
             reward_normalizer,
@@ -47,7 +66,16 @@ class ActorCritic(AgentModule):
         self._exp_cache = Rollout(spec_builder, rollout_len)
         self._actor = ACPPOActorTrain(action_space)
         self.reward_normalizer = reward_normalizer
-        self.return_scale = return_scale
+        self.gradient_norm_clipping = gradient_norm_clipping
+        self.gae_discount = gae_discount
+        self.minibatches_per_update = minibatches_per_update
+        self.num_epochs_per_update = num_epochs_per_update
+        self.policy_clipping = policy_clipping
+        self.value_clipping = value_clipping
+
+        if rollout_len % minibatches_per_update != 0:
+            raise ValueError('Rollout length must be divisible by number of minibatches')
+        self.batch_size = rollout_len // minibatches_per_update
 
     @classmethod
     def from_args(
@@ -60,7 +88,12 @@ class ActorCritic(AgentModule):
             discount=args.discount,
             normalize_advantage=args.normalize_advantage,
             entropy_weight=args.entropy_weight,
-            return_scale=args.return_scale
+            gradient_norm_clipping=args.gradient_norm_clipping,
+            gae_discount=args.gae_discount,
+            minibatches_per_update=args.minibatches_per_update,
+            num_epochs_per_update=args.num_epochs_per_update,
+            policy_clipping=args.policy_clipping,
+            value_clipping=args.value_clipping
         )
 
     @property
@@ -78,17 +111,19 @@ class ActorCritic(AgentModule):
         return ACPPOActorTrain.output_space(action_space)
 
     def compute_action_exp(self, predictions, internals, obs, available_actions):
-        return self._actor.compute_action_exp(predictions, internals, obs, available_actions)
+        # PPO recomputes actions so we don't need grads
+        with torch.no_grad():
+            return self._actor.compute_action_exp(predictions, internals, obs, available_actions)
 
     def compute_loss_and_step(self, network, optimizer, next_obs, next_internals):
-        r = rollouts
-        rollout_len = len(r.rewards)
+        r = self.exp_cache.read()
+        device = r.rewards[0].device
+        rollout_len = self.exp_cache.rollout_len
 
         # estimate value of next state
         with torch.no_grad():
-            next_obs_on_device = self.gpu_preprocessor(next_obs, self.device)
-            pred, _ = self.network(next_obs_on_device, self.internals)
-            last_values = pred['critic'].squeeze(1).data
+            pred, _, _ = network(next_obs, next_internals)
+            last_values = pred['critic'].squeeze(-1).data
 
         # calc nsteps
         gae = 0.
@@ -97,10 +132,10 @@ class ActorCritic(AgentModule):
         for i in reversed(range(rollout_len)):
             rewards = r.rewards[i]
             terminals = r.terminals[i]
-            current_values = r.values[i].squeeze(1)
+            current_values = r.values[i].squeeze(-1)
             # generalized advantage estimation
             delta_t = rewards + self.discount * next_values.data * terminals - current_values
-            gae = gae * self.discount * self.tau * terminals + delta_t
+            gae = gae * self.discount * self.gae_discount * terminals + delta_t
             gae_returns.append(gae + current_values)
             next_values = current_values.data
         gae_returns = torch.stack(list(reversed(gae_returns))).data
@@ -108,23 +143,29 @@ class ActorCritic(AgentModule):
         # Convert to torch tensors of [seq, num_env]
         old_values = torch.stack(r.values).squeeze(-1)
         adv_targets_batch = (gae_returns - old_values).data
-        actions_device = torch.from_numpy(np.asarray(r.actions)).to(self.device)
         old_log_probs_batch = torch.stack(r.log_probs).data
         terminals_batch = torch.stack(r.terminals)
+        # keep a copy of terminals on the cpu it's faster
+        rollout_terminals = torch.stack(r.terminals).cpu().numpy()
 
         # Normalize advantage
         if self.normalize_advantage:
             adv_targets_batch = (adv_targets_batch - adv_targets_batch.mean()) / \
                                 (adv_targets_batch.std() + 1e-5)
 
-        for e in range(self.nb_epoch):
+        for e in range(self.num_epochs_per_update):
             # setup minibatch iterator
-            minibatch_inds = BatchSampler(SequentialSampler(range(rollout_len)), self.batch_size, drop_last=False)
+            minibatch_inds = list(BatchSampler(SequentialSampler(range(rollout_len)), self.batch_size, drop_last=False))
+            # randomize sequences to sample NOTE: in-place operation
+            np.random.shuffle(minibatch_inds)
             for i in minibatch_inds:
-                starting_internals = self._detach_internals(r.internals[i[0]])
+                import pudb; pudb.set_trace()
+                # TODO: detach internals, no_grad in compute_action_exp takes care of this
+                print('this is a list and we are trying to pull inds')
+                starting_internals = {k: ts[i].unbind(0) for k, ts in r.internals.items()}
                 gae_return = gae_returns[i]
                 old_log_probs = old_log_probs_batch[i]
-                sampled_actions = actions_device[i]
+                sampled_actions = {k: r[k][i] for k in self.action_space}
                 adv_targets = adv_targets_batch[i]
                 terminal_masks = terminals_batch[i]
 
@@ -134,8 +175,8 @@ class ActorCritic(AgentModule):
                 obs = {k: torch.stack(v) for k, v in obs.items()}
 
                 # forward pass
-                cur_log_probs, cur_values, entropies = self.act_batch(obs, terminal_masks, sampled_actions,
-                                                                      starting_internals)
+                cur_log_probs, cur_values, entropies = self.act_batch(network, obs, rollout_terminals, sampled_actions,
+                                                                      starting_internals, device)
                 value_loss = 0.5 * torch.mean((cur_values - gae_return).pow(2))
 
                 # calculate surrogate loss
@@ -143,15 +184,62 @@ class ActorCritic(AgentModule):
                 surrogate_loss = surrogate_ratio * adv_targets
                 surrogate_loss_clipped = torch.clamp(surrogate_ratio, 1 - self.loss_clip,
                                                      1 + self.loss_clip) * adv_targets
-                policy_loss = torch.mean(-torch.min(surrogate_loss, surrogate_loss_clipped)) 
-                entropy_loss = torch.mean(-0.01 * entropies)
+                policy_loss = torch.mean(-torch.min(surrogate_loss, surrogate_loss_clipped))
+                entropy_loss = torch.mean(self.entropy_weight * entropies)
 
                 losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss':
                           entropy_loss}
-                # print('losses', losses)
                 total_loss = torch.sum(torch.stack(tuple(loss for loss in losses.values())))
-                update_handler.update(total_loss)
 
+                # backprop
+                optimizer.zero_grad()
+                total_loss.backward()
+                nn.utils.clip_grad_norm_(network.parameters(), self.gradient_norm_clipping)
+                optimizer.step()
+
+        # TODO: metrics: average loss, policy % change, loss over epochs?, value change
         metrics = {'advantage': torch.mean(adv_targets_batch)}
         return losses, total_loss, metrics
 
+    def act_batch(self, network, batch_obs, batch_terminals, batch_actions, internals, device):
+        exp_cache = []
+
+        for obs, terminals in zip(batch_obs, batch_terminals):
+            preds, internals, _ = network(obs, internals)
+            exp_cache.append(self._process_exp(preds, batch_actions))
+
+            # where returns a single element tuple with the indexes
+            terminal_inds = np.where(terminals)[0]
+            for i in terminal_inds:
+                for k, v in network.new_internals(device).items():
+                    internals[k][i] = v
+
+        exp = listd_to_dlist(exp_cache)
+        return exp['log_probs'], exp['values'], exp['entropies']
+
+    def _process_exp(self, preds, sampled_actions):
+        values = preds['critic'].squeeze(1)
+        log_probs = []
+        entropies = []
+
+        for key in self.action_keys:
+            logit = ACActorHelperMixin.flatten_logits(preds[key])
+
+            log_softmax, softmax = ACActorHelperMixin.log_softmax(logit), ACActorHelperMixin.softmax(logit)
+            entropy = ACActorHelperMixin.entropy(log_softmax, softmax)
+            entropies.append(entropy)
+
+            action = sampled_actions[key]
+            log_probs.append(ACActorHelperMixin.log_probability(log_softmax, action))
+
+        log_probs = torch.stack(log_probs, dim=1)
+        entropies = torch.cat(entropies, dim=1)
+
+        return {
+            'log_probs': log_probs,
+            'entropies': entropies,
+            'values': values
+        }
+
+    def compute_loss(self, *args):
+        pass
