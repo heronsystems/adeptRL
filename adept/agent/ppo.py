@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from adept.actor import ACPPOActorTrain
+from adept.actor import PPOActorTrain
 from adept.actor.base.ac_helper import ACActorHelperMixin
 from adept.exp import Rollout
 from .base.agent_module import AgentModule
@@ -62,7 +62,7 @@ class PPO(AgentModule):
         self.entropy_weight = entropy_weight
 
         self._exp_cache = Rollout(spec_builder, rollout_len)
-        self._actor = ACPPOActorTrain(action_space)
+        self._actor = PPOActorTrain(action_space)
         self.reward_normalizer = reward_normalizer
         self.gradient_norm_clipping = gradient_norm_clipping
         self.gae_discount = gae_discount
@@ -98,13 +98,13 @@ class PPO(AgentModule):
 
     @classmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
-        return ACPPOActorTrain._exp_spec(
+        return PPOActorTrain._exp_spec(
             exp_len, batch_sz, obs_space, act_space, internal_space
         )
 
     @staticmethod
     def output_space(action_space):
-        return ACPPOActorTrain.output_space(action_space)
+        return PPOActorTrain.output_space(action_space)
 
     def act(self, *args, **kwargs):
         # PPO recomputes actions so we don't need grads
@@ -153,7 +153,10 @@ class PPO(AgentModule):
 
         for e in range(self.num_epochs_per_update):
             # setup minibatch iterator
-            minibatch_inds = list(BatchSampler(SequentialSampler(range(rollout_len)), self.batch_size, drop_last=False))
+            minibatch_inds = list(BatchSampler(
+                SequentialSampler(range(rollout_len)),
+                self.batch_size, drop_last=False)
+            )
             # randomize sequences to sample NOTE: in-place operation
             np.random.shuffle(minibatch_inds)
             for i in minibatch_inds:
@@ -168,21 +171,31 @@ class PPO(AgentModule):
                 terminals_batch = rollout_terminals[i]
 
                 # forward pass
-                cur_log_probs, cur_values, entropies = self.act_batch(network, batch_obs, terminals_batch, sampled_actions,
-                                                                      starting_internals, device)
+                cur_log_probs, cur_values, entropies = self.act_batch(
+                    network, batch_obs, terminals_batch, sampled_actions,
+                    starting_internals, device
+                )
                 value_loss = 0.5 * torch.mean((cur_values - gae_return).pow(2))
 
                 # calculate surrogate loss
                 surrogate_ratio = torch.exp(cur_log_probs - old_log_probs)
                 surrogate_loss = surrogate_ratio * adv_targets
-                surrogate_loss_clipped = torch.clamp(surrogate_ratio, 1 - self.policy_clipping,
-                                                     1 + self.policy_clipping) * adv_targets
+                surrogate_loss_clipped = torch.clamp(
+                    surrogate_ratio,
+                    min=1 - self.policy_clipping,
+                    max=1 + self.policy_clipping
+                ) * adv_targets
                 policy_loss = torch.mean(-torch.min(surrogate_loss, surrogate_loss_clipped))
                 entropy_loss = torch.mean(-self.entropy_weight * entropies)
 
-                losses = {'value_loss': value_loss, 'policy_loss': policy_loss, 'entropy_loss':
-                          entropy_loss}
-                total_loss = torch.sum(torch.stack(tuple(loss for loss in losses.values())))
+                losses = {
+                    'value_loss': value_loss,
+                    'policy_loss': policy_loss,
+                    'entropy_loss': entropy_loss
+                }
+                total_loss = torch.sum(torch.stack(
+                    tuple(loss for loss in losses.values())
+                ))
 
                 # backprop
                 optimizer.zero_grad()
