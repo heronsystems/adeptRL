@@ -20,7 +20,7 @@ from adept.actor.base.ac_helper import ACActorHelperMixin
 from adept.actor.base.actor_module import ActorModule
 
 
-class ACPPOActorTrain(ActorModule, ACActorHelperMixin):
+class PPOActorTrain(ActorModule, ACActorHelperMixin):
     args = {}
 
     @classmethod
