@@ -45,13 +45,17 @@ class ACRolloutLearner(LearnerModule):
         # normalize rewards
         rewards = self.reward_normalizer(torch.stack(experiences.rewards))
 
+        # torch stack rollouts
+        r_log_probs_action = torch.stack(experiences.log_probs)
+        r_values = torch.stack(experiences.values)
+        r_entropies = torch.stack(experiences.entropies)
+
         # estimate value of next state
         with torch.no_grad():
             results, _, _ = network(next_obs, internals)
             last_values = results['critic'].squeeze(1).data
 
         # compute nstep return and advantage over batch
-        r_values = torch.stack(experiences.values)
         r_tgt_returns = self.compute_returns(
             last_values, rewards, experiences.terminals
         )
@@ -62,28 +66,13 @@ class ACRolloutLearner(LearnerModule):
         if self.normalize_advantage:
             r_advantages = (r_advantages - r_advantages.mean()) \
                                / (r_advantages.std() + 1e-5)
-        policy_loss = 0.
-        entropy_loss = 0.
 
-        rollout_len = len(rewards)
-        for i in range(rollout_len):
-            log_probs = experiences.log_probs[i]
-            entropies = experiences.entropies[i]
-
-            policy_loss = policy_loss - (
-                    log_probs * r_advantages[i].unsqueeze(1).data
-            ).sum(1)
-            entropy_loss = entropy_loss - (
-                    self.entropy_weight * entropies
-            ).sum(1)
-
-        batch_size = policy_loss.shape[0]
-        nb_action = log_probs.shape[1]
-
+        # batched losses
+        policy_loss = -(r_log_probs_action) * r_advantages.unsqueeze(-1)
+        # mean over actions, seq, batch
+        policy_loss = policy_loss.mean()
+        entropy_loss = -r_entropies.mean() * self.entropy_weight
         value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
-        denom = batch_size * rollout_len * nb_action
-        policy_loss = policy_loss.sum(0) / denom
-        entropy_loss = entropy_loss.sum(0) / denom
 
         losses = {
             'value_loss': value_loss,
