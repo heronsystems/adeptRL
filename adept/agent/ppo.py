@@ -33,8 +33,8 @@ class PPO(AgentModule):
         'entropy_weight': 0.01,
         'gradient_norm_clipping': 0.5,
         'gae_discount': 0.95,
-        'minibatches_per_update': 4,
-        'num_epochs_per_update': 4,
+        'backprop_rollout_len': 10,
+        'rollout_repeat': 4,
         'policy_clipping': 0.2
     }
 
@@ -49,8 +49,8 @@ class PPO(AgentModule):
             entropy_weight,
             gradient_norm_clipping,
             gae_discount,
-            minibatches_per_update,
-            num_epochs_per_update,
+            backprop_rollout_len,
+            rollout_repeat,
             policy_clipping
     ):
         super().__init__(
@@ -66,13 +66,12 @@ class PPO(AgentModule):
         self.reward_normalizer = reward_normalizer
         self.gradient_norm_clipping = gradient_norm_clipping
         self.gae_discount = gae_discount
-        self.minibatches_per_update = minibatches_per_update
-        self.num_epochs_per_update = num_epochs_per_update
+        self.backprop_rollout_len = backprop_rollout_len
+        self.rollout_repeat = rollout_repeat
         self.policy_clipping = policy_clipping
 
-        if rollout_len % minibatches_per_update != 0:
+        if rollout_len % backprop_rollout_len != 0:
             raise ValueError('Rollout length must be divisible by number of minibatches')
-        self.batch_size = rollout_len // minibatches_per_update
 
     @classmethod
     def from_args(
@@ -87,8 +86,8 @@ class PPO(AgentModule):
             entropy_weight=args.entropy_weight,
             gradient_norm_clipping=args.gradient_norm_clipping,
             gae_discount=args.gae_discount,
-            minibatches_per_update=args.minibatches_per_update,
-            num_epochs_per_update=args.num_epochs_per_update,
+            backprop_rollout_len=args.backprop_rollout_len,
+            rollout_repeat=args.rollout_repeat,
             policy_clipping=args.policy_clipping
         )
 
@@ -151,11 +150,11 @@ class PPO(AgentModule):
             adv_targets_batch = (adv_targets_batch - adv_targets_batch.mean()) / \
                                 (adv_targets_batch.std() + 1e-5)
 
-        for e in range(self.num_epochs_per_update):
+        for e in range(self.rollout_repeat):
             # setup minibatch iterator
             minibatch_inds = list(BatchSampler(
                 SequentialSampler(range(rollout_len)),
-                self.batch_size, drop_last=False)
+                self.backprop_rollout_len, drop_last=False)
             )
             # randomize sequences to sample NOTE: in-place operation
             np.random.shuffle(minibatch_inds)
