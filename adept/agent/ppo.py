@@ -66,8 +66,8 @@ class PPO(AgentModule):
         self.reward_normalizer = reward_normalizer
         self.gradient_norm_clipping = gradient_norm_clipping
         self.gae_discount = gae_discount
-        self.backprop_rollout_len = rollout_minibatch_len
-        self.rollout_repeat = nb_rollout_epoch
+        self.rollout_minibatch_len = rollout_minibatch_len
+        self.nb_rollout_epoch = nb_rollout_epoch
         self.policy_clipping = policy_clipping
 
         if rollout_len % rollout_minibatch_len != 0:
@@ -150,11 +150,11 @@ class PPO(AgentModule):
             adv_targets_batch = (adv_targets_batch - adv_targets_batch.mean()) / \
                                 (adv_targets_batch.std() + 1e-5)
 
-        for e in range(self.rollout_repeat):
+        for e in range(self.nb_rollout_epoch):
             # setup minibatch iterator
             minibatch_inds = list(BatchSampler(
                 SequentialSampler(range(rollout_len)),
-                self.backprop_rollout_len, drop_last=False)
+                self.rollout_minibatch_len, drop_last=False)
             )
             # randomize sequences to sample NOTE: in-place operation
             np.random.shuffle(minibatch_inds)
