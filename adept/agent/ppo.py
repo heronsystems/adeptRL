@@ -33,8 +33,8 @@ class PPO(AgentModule):
         'entropy_weight': 0.01,
         'gradient_norm_clipping': 0.5,
         'gae_discount': 0.95,
-        'backprop_rollout_len': 10,
-        'rollout_repeat': 4,
+        'rollout_minibatch_len': 32,
+        'nb_rollout_epoch': 4,
         'policy_clipping': 0.2
     }
 
@@ -49,8 +49,8 @@ class PPO(AgentModule):
             entropy_weight,
             gradient_norm_clipping,
             gae_discount,
-            backprop_rollout_len,
-            rollout_repeat,
+            rollout_minibatch_len,
+            nb_rollout_epoch,
             policy_clipping
     ):
         super().__init__(
@@ -66,11 +66,11 @@ class PPO(AgentModule):
         self.reward_normalizer = reward_normalizer
         self.gradient_norm_clipping = gradient_norm_clipping
         self.gae_discount = gae_discount
-        self.backprop_rollout_len = backprop_rollout_len
-        self.rollout_repeat = rollout_repeat
+        self.backprop_rollout_len = rollout_minibatch_len
+        self.rollout_repeat = nb_rollout_epoch
         self.policy_clipping = policy_clipping
 
-        if rollout_len % backprop_rollout_len != 0:
+        if rollout_len % rollout_minibatch_len != 0:
             raise ValueError('Rollout length must be divisible by number of minibatches')
 
     @classmethod
@@ -86,8 +86,8 @@ class PPO(AgentModule):
             entropy_weight=args.entropy_weight,
             gradient_norm_clipping=args.gradient_norm_clipping,
             gae_discount=args.gae_discount,
-            backprop_rollout_len=args.backprop_rollout_len,
-            rollout_repeat=args.rollout_repeat,
+            rollout_minibatch_len=args.rollout_minibatch_len,
+            nb_rollout_epoch=args.nb_rollout_epoch,
             policy_clipping=args.policy_clipping
         )
 
