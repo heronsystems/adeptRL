@@ -86,12 +86,13 @@ class Registry:
                 else:
                     raise Exception('Unreachable.')
 
-    def load_extern_classes(self, log_id_dir):
+    def load_extern_classes(self, log_id_dir, extern_modules=
+                            ['agent', 'actor', 'exp', 'learner', 'env',
+                             'reward_norm', 'net', 'submod', 'manager'
+                            ]):
         def join(d):
             return os.path.join(log_id_dir, d)
-        cls_dirs = [join('agent'), join('actor'), join('exp'), join('learner'),
-                    join('env'), join('reward_norm'), join('net'),
-                    join('submod'), join('manager')]
+        cls_dirs = [join(x) for x in extern_modules]
         for cls_dir in cls_dirs:
             if os.path.exists(cls_dir):
                 dirname = os.path.split(cls_dir)[-1]
