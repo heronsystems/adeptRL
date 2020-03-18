@@ -109,12 +109,6 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         Ensures SubModule graph is valid.
         :return:
         """
-        # heads can't be higher dim than body
-        for head in self.heads.values():
-            assert head.dim <= self.body.dim, \
-                'Head dimensionality cannot be higher than ' \
-                'body dimensionality: {} > {}'.format(head.dim, self.body.dim)
-
         # non feature dims of source nets match non feature dim of body
         # Doesn't matter if converting to 1D
         if self.body.dim > 1:
@@ -345,5 +339,3 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             for k, v in internal.items():
                 merged_internals[k] = v
         return merged_internals
-
-

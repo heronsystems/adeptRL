@@ -5,12 +5,10 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
-from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.utils.logging import SimpleModelSaver
 from adept.utils.util import dtensor_to_dev, listd_to_dlist
-
 from .base import Container
 
 
@@ -30,11 +28,11 @@ class Local(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device(
-            "cuda:{}".format(args.gpu_id)
-            if (torch.cuda.is_available() and args.gpu_id >= 0)
-            else "cpu"
-        )
+        if torch.cuda.is_available() and args.gpu_id >= 0:
+            device = torch.device("cuda:{}".format(args.gpu_id))
+            torch.backends.cudnn.benchmark = True
+        else:
+            device = torch.device("cpu")
         output_space = REGISTRY.lookup_output_space(
             args.agent, env_mgr.action_space)
         if args.custom_network:
@@ -43,7 +41,7 @@ class Local(Container):
             net_cls = ModularNetwork
         net = net_cls.from_args(
             args,
-            env_mgr.observation_space,
+            env_mgr.gpu_preprocessor.observation_space,
             output_space,
             env_mgr.gpu_preprocessor,
             REGISTRY

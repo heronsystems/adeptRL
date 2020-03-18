@@ -127,8 +127,9 @@ class Divide255(Operation):
     def update_obs(self, obs):
         updated = {}
         for k, v in obs.items():
-            v = v.float()
-            v *= (1. / 255.)
+            if k in self.name_filters:
+                v = v.float()
+                v *= (1. / 255.)
             updated[k] = v
         return updated
 
