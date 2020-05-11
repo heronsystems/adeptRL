@@ -26,9 +26,10 @@ cv2.ocl.setUseOpenCL(False)
 
 class Operation(abc.ABC):
     def __init__(self, name_filters, rank_filters):
-        self.name_filters = frozenset(name_filters) if name_filters else None
-        self.rank_filters = frozenset(rank_filters) if (rank_filters and not
-        name_filters) else None
+        self.name_filters = frozenset(name_filters)\
+            if name_filters else frozenset()
+        self.rank_filters = frozenset(rank_filters)\
+            if (rank_filters and not name_filters) else frozenset()
 
     def reset(self):
         pass
