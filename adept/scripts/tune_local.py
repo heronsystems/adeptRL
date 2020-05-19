@@ -143,9 +143,11 @@ def main(args):
     from hyperopt import hp
     from hyperopt.pyll import scope
     from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
+    ray.init(num_cpus=8, num_gpus=1)
+
     space = {
-        "lr": hp.loguniform("lr", 1e-10, .1) - 1,
-        "warmup": scope.int(hp.quniform('warmup', 0, 500, q=1)),
+        "lr": hp.loguniform("lr", 1e-10, .01) - 1,
+        "warmup": scope.int(hp.quniform('warmup', 0, 100, q=1)),
 
     }
     algo = HyperOptSearch(space, metric="term_reward", mode="max")
@@ -154,11 +156,13 @@ def main(args):
         analysis = tune.run(Trainable,
                         config=args,
                         search_alg=algo,
-                        num_samples=2,
+                        num_samples=4,
                         scheduler=ASHAScheduler(metric="term_reward", mode="max", grace_period=1),
-                        resources_per_trial={"cpu": 1, "gpu": 1},
-                        reuse_actors=True
+                        resources_per_trial={"cpu": 4, "gpu": .5},
+                        reuse_actors=True,
+                        stop={"training_iteration": 5}
                             )
+        print(analysis.dataframe('term_reward'))
     except Exception as e:
         print(e)
 
@@ -175,7 +179,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    ray.init(num_cpus=4, num_gpus=1)
 
     args = parse_args()
 
