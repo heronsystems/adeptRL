@@ -30,8 +30,9 @@ class Trainable(tune.Trainable):
         Returns:
             A dict of training metrics.
         """
-        term_reward = self.local.run()
-        return term_reward
+        term_reward, steps_ps = self.local.run()
+        return {'term_reward': term_reward,
+                'steps /s': steps_ps}
 
     def _save(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
@@ -154,4 +155,5 @@ class Local(Local):
                     )
                     prev_step_t = cur_step_t
         if term_reward:
-            return term_reward.item()
+            delta_time = time() - start_time
+            return term_reward.item(), (self.step_count - self.initial_step_count) / delta_time
