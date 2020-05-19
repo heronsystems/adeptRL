@@ -31,19 +31,14 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     where multiple actors send their experience to a single learner.
     """
 
-    def __init__(
-            self,
-            reward_normalizer,
-            action_space
-    ):
+    def __init__(self, reward_normalizer, action_space):
         self._reward_normalizer = reward_normalizer
         self._action_space = action_space
 
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls, args, reward_normalizer,
-        action_space, spec_builder, **kwargs
+        cls, args, reward_normalizer, action_space, spec_builder, **kwargs
     ):
         raise NotImplementedError
 
@@ -65,17 +60,19 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def exp_spec_builder(cls, obs_space, act_space, internal_space, batch_sz):
         def build_fn(exp_len):
             exp_space = cls._exp_spec(
-                exp_len, batch_sz, obs_space, act_space, internal_space)
+                exp_len, batch_sz, obs_space, act_space, internal_space
+            )
             env_space = {
-                'rewards': (exp_len, batch_sz),
-                'terminals': (exp_len, batch_sz)
+                "rewards": (exp_len, batch_sz),
+                "terminals": (exp_len, batch_sz),
             }
             return {**exp_space, **env_space}
 
         key_types = cls._key_types(obs_space, act_space, internal_space)
         exp_keys = cls._exp_keys(obs_space, act_space, internal_space)
-        return ExpSpecBuilder(obs_space, act_space, internal_space,
-                              key_types, exp_keys, build_fn)
+        return ExpSpecBuilder(
+            obs_space, act_space, internal_space, key_types, exp_keys, build_fn
+        )
 
     @classmethod
     @abc.abstractmethod
@@ -89,7 +86,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     @classmethod
     def _key_types(cls, obs_space, act_space, internal_space):
-        return defaultdict(lambda: 'float')
+        return defaultdict(lambda: "float")
 
     @staticmethod
     @abc.abstractmethod
@@ -97,7 +94,9 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_action_exp(self, predictions, internals, obs, available_actions):
+    def compute_action_exp(
+        self, predictions, internals, obs, available_actions
+    ):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -121,13 +120,14 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         """
         predictions, internal_states, pobs = network(obs, prev_internals)
 
-        if 'available_actions' in obs:
-            av_actions = obs['available_actions']
+        if "available_actions" in obs:
+            av_actions = obs["available_actions"]
         else:
             av_actions = None
 
         actions, experience = self.compute_action_exp(
-            predictions, prev_internals, pobs, av_actions)
+            predictions, prev_internals, pobs, av_actions
+        )
         self.exp_cache.write_actor(experience)
         return actions, internal_states
 

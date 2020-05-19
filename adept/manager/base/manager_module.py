@@ -36,15 +36,7 @@ class EnvManagerModule(EnvBase, RequiresArgsMixin, metaclass=abc.ABCMeta):
         return len(self._env_fns)
 
     @classmethod
-    def from_args(
-        cls,
-        args,
-        engine,
-        env_cls,
-        seed=None,
-        nb_env=None,
-        **kwargs
-    ):
+    def from_args(cls, args, engine, env_cls, seed=None, nb_env=None, **kwargs):
         if seed is None:
             seed = int(args.seed)
         if nb_env is None:

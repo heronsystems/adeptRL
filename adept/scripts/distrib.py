@@ -94,15 +94,16 @@ from adept.utils.script_helpers import parse_path, parse_none
 from adept.utils.util import DotDict
 from adept.registry import REGISTRY as R
 
-MODE = 'Distrib'
+MODE = "Distrib"
 
 
 def parse_args():
     from docopt import docopt
+
     args = docopt(__doc__)
-    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
-    del args['h']
-    del args['help']
+    args = {k.strip("--").replace("-", "_"): v for k, v in args.items()}
+    del args["h"]
+    del args["help"]
 
     args = DotDict(args)
 
@@ -164,7 +165,7 @@ def main(args):
                 "-u",
                 "-m",
                 "adept.scripts._distrib",
-                "--log-id-dir={}".format(log_id_dir)
+                "--log-id-dir={}".format(log_id_dir),
             ]
         else:
             cmd = [
@@ -177,13 +178,10 @@ def main(args):
                 "--load-network={}".format(args.load_network),
                 "--load-optim={}".format(args.load_optim),
                 "--initial-step-count={}".format(initial_step),
-                "--init-method={}".format(args.init_method)
+                "--init-method={}".format(args.init_method),
             ]
         if args.custom_network:
-            cmd += [
-                '--custom-network',
-                args.custom_network
-            ]
+            cmd += ["--custom-network", args.custom_network]
 
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
@@ -193,15 +191,16 @@ def main(args):
 
     if args.eval:
         from adept.scripts.evaluate import main
+
         eval_args = {
-            'log_id_dir': log_id_dir,
-            'gpu_id': 0,
-            'nb_episode': 30,
+            "log_id_dir": log_id_dir,
+            "gpu_id": 0,
+            "nb_episode": 30,
         }
         if args.custom_network:
-            eval_args['custom_network'] = args.custom_network
+            eval_args["custom_network"] = args.custom_network
         main(eval_args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())

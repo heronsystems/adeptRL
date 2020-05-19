@@ -16,6 +16,4 @@ from adept.env.openai_gym import ATARI_ENVS
 from .base.env_module import EnvModule
 from .openai_gym import AdeptGymEnv
 
-ENV_REG = [
-    AdeptGymEnv
-]
+ENV_REG = [AdeptGymEnv]

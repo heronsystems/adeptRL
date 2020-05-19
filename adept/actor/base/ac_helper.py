@@ -7,6 +7,7 @@ class ACActorHelperMixin(metaclass=abc.ABCMeta):
     """
     A helper class for actor critic actors.
     """
+
     @staticmethod
     def flatten_logits(logit):
         """
@@ -59,9 +60,7 @@ class ACActorHelperMixin(metaclass=abc.ABCMeta):
         :param softmax: Tensor (N, X)
         :return: Tensor (N, 1)
         """
-        return -(
-            log_softmax * softmax
-        ).sum(1, keepdim=True)
+        return -(log_softmax * softmax).sum(1, keepdim=True)
 
     @staticmethod
     def sample_action(softmax):

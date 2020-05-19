@@ -7,10 +7,7 @@ from adept.scripts.local import parse_args, main
 
 class MyCustomAgent(AgentModule):
     # You will be prompted for these when training script starts
-    args = {
-        'example_arg1': True,
-        'example_arg2': 5
-    }
+    args = {"example_arg1": True, "example_arg2": 5}
 
     def __init__(
         self,
@@ -31,12 +28,21 @@ class MyCustomAgent(AgentModule):
             gpu_preprocessor,
             engine,
             action_space,
-            nb_env
+            nb_env,
         )
 
     @classmethod
-    def from_args(cls, args, network, device, reward_normalizer,
-                  gpu_preprocessor, engine, action_space, **kwargs):
+    def from_args(
+        cls,
+        args,
+        network,
+        device,
+        reward_normalizer,
+        gpu_preprocessor,
+        engine,
+        action_space,
+        **kwargs
+    ):
         """
 
         ArgName = str
@@ -113,7 +119,7 @@ class MyCustomAgent(AgentModule):
         pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     agent_reg = AgentRegistry()
     agent_reg.register_agent(MyCustomAgent)

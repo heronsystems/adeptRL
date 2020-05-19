@@ -25,21 +25,21 @@ def parse_bool_str(bool_str):
     :param bool_str: str
     :return: Bool
     """
-    if bool_str.lower() == 'false':
+    if bool_str.lower() == "false":
         return False
-    elif bool_str.lower() == 'true':
+    elif bool_str.lower() == "true":
         return True
     else:
         raise ValueError('Unable to parse "{}"'.format(bool_str))
 
 
 def parse_list_str(list_str, item_type):
-    items = list_str.split(',')
+    items = list_str.split(",")
     return [item_type(item) for item in items]
 
 
 def parse_none(none_str):
-    if none_str == 'None':
+    if none_str == "None":
         return None
     else:
         return none_str
@@ -80,15 +80,13 @@ class LogDirHelper:
 
     def latest_network_path(self):
         network_file = [
-            f for f in os.listdir(self.latest_epoch_path())
-            if ('model' in f)
+            f for f in os.listdir(self.latest_epoch_path()) if ("model" in f)
         ][0]
         return os.path.join(self.latest_epoch_path(), network_file)
 
     def latest_optim_path(self):
         optim_file = [
-            f for f in os.listdir(self.latest_epoch_path())
-            if ('optim' in f)
+            f for f in os.listdir(self.latest_epoch_path()) if ("optim" in f)
         ][0]
         return os.path.join(self.latest_epoch_path(), optim_file)
 
@@ -97,41 +95,38 @@ class LogDirHelper:
 
     def network_path_at_epoch(self, epoch):
         epoch_path = self.epoch_path_at_epoch(epoch)
-        network_files = [
-            f for f in os.listdir(epoch_path)
-            if ('model' in f)
-        ]
-        assert len(network_files), "More than one network file, " \
-                                   "maybe you want network_paths_at_epoch()"
+        network_files = [f for f in os.listdir(epoch_path) if ("model" in f)]
+        assert len(network_files), (
+            "More than one network file, "
+            "maybe you want network_paths_at_epoch()"
+        )
         network_file = network_files[0]
         return os.path.join(epoch_path, network_file)
 
     def network_paths_at_epoch(self, epoch):
         epoch_path = self.epoch_path_at_epoch(epoch)
         return [
-            os.path.join(epoch_path, f) for f in os.listdir(epoch_path)
-            if ('model' in f)
+            os.path.join(epoch_path, f)
+            for f in os.listdir(epoch_path)
+            if ("model" in f)
         ]
 
     def optim_path_at_epoch(self, epoch):
         epoch_path = self.epoch_path_at_epoch(epoch)
-        optim_file = [
-            f for f in os.listdir(epoch_path)
-            if ('optim' in f)
-        ][0]
+        optim_file = [f for f in os.listdir(epoch_path) if ("optim" in f)][0]
         return os.path.join(epoch_path, optim_file)
 
     def timestamp(self):
-        splits = self._log_id_path.split('_')
-        timestamp = splits[-2] + '_' + splits[-1]
+        splits = self._log_id_path.split("_")
+        timestamp = splits[-2] + "_" + splits[-1]
         return timestamp
 
     def args_file_path(self):
-        return os.path.join(self._log_id_path, 'args.json')
+        return os.path.join(self._log_id_path, "args.json")
 
     def load_args(self):
         with open(self.args_file_path()) as args_file:
             return DotDict(json.load(args_file))
 
     def eval_path(self):
-        return os.path.join(self._log_id_path, 'eval.csv')
+        return os.path.join(self._log_id_path, "eval.csv")

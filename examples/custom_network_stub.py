@@ -7,23 +7,14 @@ from adept.scripts.local import parse_args, main
 
 class MyCustomNetwork(NetworkModule):
     # You will be prompted for these when training script starts
-    args = {
-        'example_arg1': True,
-        'example_arg2': 5
-    }
+    args = {"example_arg1": True, "example_arg2": 5}
 
     def __init__(self):
         super(MyCustomNetwork, self).__init__()
         # Set properties and whatnot here
 
     @classmethod
-    def from_args(
-        cls,
-        args,
-        observation_space,
-        output_space,
-        net_reg
-    ):
+    def from_args(cls, args, observation_space, output_space, net_reg):
         """
         Construct a MyCustomNetwork from arguments.
         ArgName = str
@@ -58,7 +49,7 @@ class MyCustomNetwork(NetworkModule):
         pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     network_reg = NetworkRegistry()
     network_reg.register_network(MyCustomNetwork)

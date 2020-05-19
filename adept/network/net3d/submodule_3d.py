@@ -25,7 +25,7 @@ class SubModule3D(SubModule, metaclass=abc.ABCMeta):
     def output_shape(self, dim=None):
         if dim == 1:
             f, h, w = self._output_shape
-            return (f * h * w, )
+            return (f * h * w,)
         elif dim == 2:
             f, h, w = self._output_shape
             return (f, h * w)
@@ -35,7 +35,7 @@ class SubModule3D(SubModule, metaclass=abc.ABCMeta):
             f, h, w = self._output_shape
             return (f, 1, h, w)
         else:
-            raise ValueError('Invalid dim: {}'.format(dim))
+            raise ValueError("Invalid dim: {}".format(dim))
 
     def _to_1d(self, submodule_output):
         """

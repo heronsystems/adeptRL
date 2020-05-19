@@ -24,11 +24,7 @@ from adept.utils.requires_args import RequiresArgsMixin
 
 
 class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
-
-    def __init__(
-            self,
-            action_space
-    ):
+    def __init__(self, action_space):
         self._action_space = action_space
 
     @property
@@ -48,17 +44,19 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
     def exp_spec_builder(cls, obs_space, act_space, internal_space, batch_sz):
         def build_fn(exp_len):
             exp_space = cls._exp_spec(
-                exp_len, batch_sz, obs_space, act_space, internal_space)
+                exp_len, batch_sz, obs_space, act_space, internal_space
+            )
             env_space = {
-                'rewards': (exp_len, batch_sz),
-                'terminals': (exp_len, batch_sz)
+                "rewards": (exp_len, batch_sz),
+                "terminals": (exp_len, batch_sz),
             }
             return {**exp_space, **env_space}
 
         key_types = cls._key_types(obs_space, act_space, internal_space)
         exp_keys = cls._exp_keys(obs_space, act_space, internal_space)
-        return ExpSpecBuilder(obs_space, act_space, internal_space,
-                              key_types, exp_keys, build_fn)
+        return ExpSpecBuilder(
+            obs_space, act_space, internal_space, key_types, exp_keys, build_fn
+        )
 
     @classmethod
     @abc.abstractmethod
@@ -72,7 +70,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     @classmethod
     def _key_types(cls, obs_space, act_space, internal_space):
-        return defaultdict(lambda: 'float')
+        return defaultdict(lambda: "float")
 
     @abc.abstractmethod
     def from_args(self, args, action_space):
@@ -102,15 +100,12 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
         predictions, internal_states, pobs = network(obs, prev_internals)
 
-        if 'available_actions' in obs:
-            av_actions = obs['available_actions']
+        if "available_actions" in obs:
+            av_actions = obs["available_actions"]
         else:
             av_actions = None
 
         actions, exp = self.compute_action_exp(
-            predictions,
-            prev_internals,
-            pobs,
-            av_actions
+            predictions, prev_internals, pobs, av_actions
         )
         return actions, exp, internal_states

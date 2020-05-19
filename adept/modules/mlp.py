@@ -38,7 +38,7 @@ class GaussianLinear(nn.Module):
             return mu
 
     def get_parameter_names(self):
-        return ['Mu_W', 'Mu_b', 'Std_W', 'Std_b']
+        return ["Mu_W", "Mu_b", "Std_W", "Std_b"]
 
 
 class NoisyLinear(nn.Linear):
@@ -76,8 +76,8 @@ class NoisyLinear(nn.Linear):
 
     def batch_forward(self, x, internals, batch_size=None):
         print(
-            'WARNING: calling forward multiple times is actually'
-            'faster than this and takes less memory'
+            "WARNING: calling forward multiple times is actually"
+            "faster than this and takes less memory"
         )
         batch_size = batch_size if batch_size is not None else x.shape[0]
         x = x.unsqueeze(1)
@@ -91,8 +91,9 @@ class NoisyLinear(nn.Linear):
         batch_w += eps_w
         # permute to b x m x p
         batch_w = batch_w.permute(0, 2, 1)
-        batch_b = self.bias.expand(batch_size, -1) \
-                  + self.sigma_bias.expand(batch_size, -1)
+        batch_b = self.bias.expand(batch_size, -1) + self.sigma_bias.expand(
+            batch_size, -1
+        )
         batch_b += eps_b
 
         bmm = torch.bmm(x, batch_w).squeeze(1)
@@ -104,16 +105,17 @@ class NoisyLinear(nn.Linear):
         if not gpu:
             return (
                 torch.randn(self.out_features, self.in_features).detach(),
-                torch.randn(self.out_features).detach()
+                torch.randn(self.out_features).detach(),
             )
         else:
             return (
-                torch.randn(self.out_features,
-                            self.in_features).cuda(device,
-                                                   non_blocking=True).detach(),
-                torch.randn(self.out_features).cuda(device,
-                                                    non_blocking=True).detach()
+                torch.randn(self.out_features, self.in_features)
+                .cuda(device, non_blocking=True)
+                .detach(),
+                torch.randn(self.out_features)
+                .cuda(device, non_blocking=True)
+                .detach(),
             )
 
     def get_parameter_names(self):
-        return ['W', 'b', 'sigma_W', 'sigma_b']
+        return ["W", "b", "sigma_W", "sigma_b"]

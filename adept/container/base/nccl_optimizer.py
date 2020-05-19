@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 class NCCLOptimizer:
     def __init__(self, optimizer_fn, network, world_size, param_sync_rate=1000):
         self.network = network
@@ -28,12 +29,11 @@ class NCCLOptimizer:
     def step(self):
         handles = []
         for param in self.network.parameters():
-            handles.append(
-            self.process_group.allreduce(param.grad))
+            handles.append(self.process_group.allreduce(param.grad))
         for handle in handles:
             handle.wait()
         for param in self.network.parameters():
-            param.grad.mul_(1. / self.world_size)
+            param.grad.mul_(1.0 / self.world_size)
         self.optimizer.step()
         self._opt_count += 1
 
@@ -46,12 +46,12 @@ class NCCLOptimizer:
     def sync_parameters(self):
         for param in self.network.parameters():
             self.process_group.allreduce(param.data)
-            param.data.mul_(1. / self.world_size)
+            param.data.mul_(1.0 / self.world_size)
 
     def sync_buffers(self):
         for b in self.network.buffers():
             self.process_group.allreduce(b.data)
-            b.data.mul_(1. / self.world_size)
+            b.data.mul_(1.0 / self.world_size)
 
     def zero_grad(self):
         self.optimizer.zero_grad()
@@ -61,4 +61,3 @@ class NCCLOptimizer:
 
     def load_state_dict(self, d):
         return self.optimizer.load_state_dict(d)
-

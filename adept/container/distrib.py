@@ -32,19 +32,21 @@ class DistribHost(Container):
     """
 
     def __init__(
-            self,
-            args,
-            logger,
-            log_id_dir,
-            initial_step_count,
-            local_rank,
-            global_rank,
-            world_size
+        self,
+        args,
+        logger,
+        log_id_dir,
+        initial_step_count,
+        local_rank,
+        global_rank,
+        world_size,
     ):
-        seed = args.seed \
-            if global_rank == 0 \
+        seed = (
+            args.seed
+            if global_rank == 0
             else args.seed + args.nb_env * global_rank
-        logger.info('Using {} for rank {} seed.'.format(seed, global_rank))
+        )
+        logger.info("Using {} for rank {} seed.".format(seed, global_rank))
 
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
@@ -56,7 +58,8 @@ class DistribHost(Container):
         torch.manual_seed(args.seed)
         device = torch.device("cuda:{}".format(local_rank))
         output_space = REGISTRY.lookup_output_space(
-            args.agent, env_mgr.action_space)
+            args.agent, env_mgr.action_space
+        )
         if args.custom_network:
             net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
@@ -66,28 +69,26 @@ class DistribHost(Container):
             env_mgr.observation_space,
             output_space,
             env_mgr.gpu_preprocessor,
-            REGISTRY
+            REGISTRY,
         )
-        logger.info('Network parameters: ' + str(self.count_parameters(net)))
+        logger.info("Network parameters: " + str(self.count_parameters(net)))
 
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
 
         # AGENT
-        rwd_norm = REGISTRY.lookup_reward_normalizer(
-            args.rwd_norm).from_args(args)
+        rwd_norm = REGISTRY.lookup_reward_normalizer(args.rwd_norm).from_args(
+            args
+        )
         agent_cls = REGISTRY.lookup_agent(args.agent)
         builder = agent_cls.exp_spec_builder(
             env_mgr.observation_space,
             env_mgr.action_space,
             net.internal_space(),
-            env_mgr.nb_env
+            env_mgr.nb_env,
         )
         agent = agent_cls.from_args(
-            args,
-            rwd_norm,
-            env_mgr.action_space,
-            builder
+            args, rwd_norm, env_mgr.action_space, builder
         )
 
         self.agent = agent
@@ -103,7 +104,7 @@ class DistribHost(Container):
         self.summary_freq = args.summary_freq
         self.logger = logger
         self.summary_writer = SummaryWriter(
-            os.path.join(log_id_dir, 'rank{}'.format(global_rank))
+            os.path.join(log_id_dir, "rank{}".format(global_rank))
         )
         self.saver = SimpleModelSaver(log_id_dir)
         self.local_rank = local_rank
@@ -112,10 +113,10 @@ class DistribHost(Container):
 
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
-            logger.info('Reloaded network from {}'.format(args.load_network))
+            logger.info("Reloaded network from {}".format(args.load_network))
         if args.load_optim:
             self.optimizer = self.load_optim(self.optimizer, args.load_optim)
-            logger.info('Reloaded optimizer from {}'.format(args.load_optim))
+            logger.info("Reloaded optimizer from {}".format(args.load_optim))
 
         self.network.train()
 
@@ -126,10 +127,12 @@ class DistribHost(Container):
         ep_rewards = torch.zeros(self.nb_env)
 
         obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
-        internals = listd_to_dlist([
-            self.network.new_internals(self.device) for _ in
-            range(self.nb_env)
-        ])
+        internals = listd_to_dlist(
+            [
+                self.network.new_internals(self.device)
+                for _ in range(self.nb_env)
+            ]
+        )
         start_time = time()
         while global_step_count < self.nb_step:
             actions, internals = self.agent.act(self.network, obs, internals)
@@ -140,7 +143,7 @@ class DistribHost(Container):
                 obs,
                 rewards.to(self.device).float(),
                 terminals.to(self.device).float(),
-                infos
+                infos,
             )
             for i, terminal in enumerate(terminals):
                 if terminal:
@@ -165,20 +168,20 @@ class DistribHost(Container):
                 term_reward = np.mean(term_rewards)
                 delta_t = time() - start_time
                 self.logger.info(
-                    'RANK: {} '
-                    'GLOBAL STEP: {} '
-                    'REWARD: {} '
-                    'GLOBAL STEP/S: {} '
-                    'LOCAL STEP/S: {}'.format(
+                    "RANK: {} "
+                    "GLOBAL STEP: {} "
+                    "REWARD: {} "
+                    "GLOBAL STEP/S: {} "
+                    "LOCAL STEP/S: {}".format(
                         self.global_rank,
                         global_step_count,
                         term_reward,
                         (global_step_count - self.initial_step_count) / delta_t,
-                        (local_step_count - self.initial_step_count) / delta_t
+                        (local_step_count - self.initial_step_count) / delta_t,
                     )
                 )
                 self.summary_writer.add_scalar(
-                    'reward', term_reward, global_step_count
+                    "reward", term_reward, global_step_count
                 )
 
             if global_step_count >= next_save:
@@ -201,8 +204,7 @@ class DistribHost(Container):
                 dist.barrier()
                 handles = []
                 for param in self.network.parameters():
-                    handles.append(
-                        dist.all_reduce(param.grad, async_op=True))
+                    handles.append(dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
                 # for param in self.network.parameters():
@@ -217,8 +219,12 @@ class DistribHost(Container):
                 cur_step_t = time()
                 if cur_step_t - prev_step_t > self.summary_freq:
                     self.write_summaries(
-                        self.summary_writer, global_step_count, total_loss,
-                        loss_dict, metric_dict, self.network.named_parameters()
+                        self.summary_writer,
+                        global_step_count,
+                        total_loss,
+                        loss_dict,
+                        metric_dict,
+                        self.network.named_parameters(),
                     )
                     prev_step_t = cur_step_t
 
@@ -233,19 +239,21 @@ class DistribWorker(Container):
     """
 
     def __init__(
-            self,
-            args,
-            logger,
-            log_id_dir,
-            initial_step_count,
-            local_rank,
-            global_rank,
-            world_size
+        self,
+        args,
+        logger,
+        log_id_dir,
+        initial_step_count,
+        local_rank,
+        global_rank,
+        world_size,
     ):
-        seed = args.seed \
-            if global_rank == 0 \
+        seed = (
+            args.seed
+            if global_rank == 0
             else args.seed + args.nb_env * global_rank
-        logger.info('Using {} for rank {} seed.'.format(seed, global_rank))
+        )
+        logger.info("Using {} for rank {} seed.".format(seed, global_rank))
 
         # ENV
         engine = REGISTRY.lookup_engine(args.env)
@@ -256,7 +264,8 @@ class DistribWorker(Container):
         torch.manual_seed(args.seed)
         device = torch.device("cuda:{}".format(local_rank))
         output_space = REGISTRY.lookup_output_space(
-            args.agent, env_mgr.action_space)
+            args.agent, env_mgr.action_space
+        )
         if args.custom_network:
             net_cls = REGISTRY.lookup_network(args.custom_network)
         else:
@@ -266,27 +275,25 @@ class DistribWorker(Container):
             env_mgr.observation_space,
             output_space,
             env_mgr.gpu_preprocessor,
-            REGISTRY
+            REGISTRY,
         )
 
         def optim_fn(x):
             return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
 
         # AGENT
-        rwd_norm = REGISTRY.lookup_reward_normalizer(
-            args.rwd_norm).from_args(args)
+        rwd_norm = REGISTRY.lookup_reward_normalizer(args.rwd_norm).from_args(
+            args
+        )
         agent_cls = REGISTRY.lookup_agent(args.agent)
         builder = agent_cls.exp_spec_builder(
             env_mgr.observation_space,
             env_mgr.action_space,
             net.internal_space(),
-            env_mgr.nb_env
+            env_mgr.nb_env,
         )
         agent = agent_cls.from_args(
-            args,
-            rwd_norm,
-            env_mgr.action_space,
-            builder
+            args, rwd_norm, env_mgr.action_space, builder
         )
 
         self.agent = agent
@@ -307,10 +314,10 @@ class DistribWorker(Container):
 
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
-            logger.info('Reloaded network from {}'.format(args.load_network))
+            logger.info("Reloaded network from {}".format(args.load_network))
         if args.load_optim:
             self.optimizer = self.load_optim(self.optimizer, args.load_optim)
-            logger.info('Reloaded optimizer from {}'.format(args.load_optim))
+            logger.info("Reloaded optimizer from {}".format(args.load_optim))
 
         self.network.train()
 
@@ -319,10 +326,12 @@ class DistribWorker(Container):
         ep_rewards = torch.zeros(self.nb_env)
 
         obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
-        internals = listd_to_dlist([
-            self.network.new_internals(self.device) for _ in
-            range(self.nb_env)
-        ])
+        internals = listd_to_dlist(
+            [
+                self.network.new_internals(self.device)
+                for _ in range(self.nb_env)
+            ]
+        )
         start_time = time()
         while global_step_count < self.nb_step:
             actions, internals = self.agent.act(self.network, obs, internals)
@@ -333,7 +342,7 @@ class DistribWorker(Container):
                 obs,
                 rewards.to(self.device).float(),
                 terminals.to(self.device).float(),
-                infos
+                infos,
             )
             for i, terminal in enumerate(terminals):
                 if terminal:
@@ -358,16 +367,16 @@ class DistribWorker(Container):
                 term_reward = np.mean(term_rewards)
                 delta_t = time() - start_time
                 self.logger.info(
-                    'RANK: {} '
-                    'GLOBAL STEP: {} '
-                    'REWARD: {} '
-                    'GLOBAL STEP/S: {} '
-                    'LOCAL STEP/S: {}'.format(
+                    "RANK: {} "
+                    "GLOBAL STEP: {} "
+                    "REWARD: {} "
+                    "GLOBAL STEP/S: {} "
+                    "LOCAL STEP/S: {}".format(
                         self.global_rank,
                         global_step_count,
                         term_reward,
                         (global_step_count - self.initial_step_count) / delta_t,
-                        (local_step_count - self.initial_step_count) / delta_t
+                        (local_step_count - self.initial_step_count) / delta_t,
                     )
                 )
 
@@ -385,8 +394,7 @@ class DistribWorker(Container):
                 dist.barrier()
                 handles = []
                 for param in self.network.parameters():
-                    handles.append(
-                        dist.all_reduce(param.grad, async_op=True))
+                    handles.append(dist.all_reduce(param.grad, async_op=True))
                 for handle in handles:
                     handle.wait()
                 # for param in self.network.parameters():

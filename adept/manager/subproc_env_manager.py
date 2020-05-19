@@ -25,7 +25,7 @@ from torch import multiprocessing as mp
 from adept.utils.util import listd_to_dlist, dlist_to_listd
 from .base.manager_module import EnvManagerModule
 
-ZMQ_CONNECT_METHOD = 'tcp'
+ZMQ_CONNECT_METHOD = "tcp"
 
 
 class WorkerError(BaseException):
@@ -66,20 +66,21 @@ class SubProcEnvManager(EnvManagerModule):
             pipe, w_pipe = mp.Pipe()
             socket, port = zmq_robust_bind_socket(self._zmq_context)
 
-            process = mp.Process(target=worker, args=(
-                w_pipe, pipe, port, CloudpickleWrapper(env_fns[w_ind])
-            ))
+            process = mp.Process(
+                target=worker,
+                args=(w_pipe, pipe, port, CloudpickleWrapper(env_fns[w_ind])),
+            )
             process.daemon = True
             process.start()
             self.processes.append(process)
 
             self._zmq_sockets.append(socket)
 
-            pipe.send(('get_shared_memory', None))
+            pipe.send(("get_shared_memory", None))
             shared_memories.append(pipe.recv())
 
             # switch to zmq socket and close pipes
-            pipe.send(('switch_zmq', None))
+            pipe.send(("switch_zmq", None))
             pipe.close()
             w_pipe.close()
 
@@ -124,22 +125,30 @@ class SubProcEnvManager(EnvManagerModule):
         obs, rews, dones, infos = zip(*results)
 
         obs = listd_to_dlist(obs)
-        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
+        shared_mems = {
+            k: torch.stack(v) for k, v in self.shared_memories.items()
+        }
         obs = {**obs, **shared_mems}
         return obs, torch.tensor(rews), torch.tensor(dones), infos
 
     def reset(self):
         for socket in self._zmq_sockets:
-            socket.send('reset'.encode())
-        obs = listd_to_dlist([json.loads(remote.recv().decode()) for remote in self._zmq_sockets])
-        shared_mems = {k: torch.stack(v) for k, v in self.shared_memories.items()}
+            socket.send("reset".encode())
+        obs = listd_to_dlist(
+            [json.loads(remote.recv().decode()) for remote in self._zmq_sockets]
+        )
+        shared_mems = {
+            k: torch.stack(v) for k, v in self.shared_memories.items()
+        }
         obs = {**obs, **shared_mems}
         return obs
 
     def reset_task(self):
         for socket in self._zmq_sockets:
-            socket.send('reset_task'.encode())
-        return [json.loads(remote.recv().decode()) for remote in self._zmq_sockets]
+            socket.send("reset_task".encode())
+        return [
+            json.loads(remote.recv().decode()) for remote in self._zmq_sockets
+        ]
 
     def close(self):
         if self.closed:
@@ -148,7 +157,7 @@ class SubProcEnvManager(EnvManagerModule):
             for remote in self._zmq_sockets:
                 remote.recv()
         for socket in self._zmq_sockets:
-            socket.send('close'.encode())
+            socket.send("close".encode())
         for p in self.processes:
             p.join()
         self.closed = True
@@ -158,9 +167,9 @@ class SubProcEnvManager(EnvManagerModule):
         del_inds = []
         # multiple workers can fail on the same step
         for i, r in enumerate(results):
-            if r[:5] == b'error':
+            if r[:5] == b"error":
                 del_inds.append(i)
-                errors.append('Worker {} has an error {}'.format(i, r))
+                errors.append("Worker {} has an error {}".format(i, r))
         if len(errors) > 0:
             # have to delete from last to first, otherwise inds are invalid
             for d in reversed(sorted(del_inds)):
@@ -192,9 +201,9 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
     python_pipe = True
     while python_pipe:
         cmd, _ = remote.recv()
-        if cmd == 'get_shared_memory':
+        if cmd == "get_shared_memory":
             remote.send(shared_memory)
-        elif cmd == 'switch_zmq':
+        elif cmd == "switch_zmq":
             # close python pipes
             remote.close()
             python_pipe = False
@@ -204,9 +213,9 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
     # zmq setup
     context = zmq.Context()
     socket = context.socket(zmq.PAIR)
-    if ZMQ_CONNECT_METHOD == 'tcp':
+    if ZMQ_CONNECT_METHOD == "tcp":
         socket.connect("tcp://localhost:{}".format(port))
-    if ZMQ_CONNECT_METHOD == 'ipc':
+    if ZMQ_CONNECT_METHOD == "ipc":
         socket.connect("ipc:///tmp/adeptzmq/{}".format(port))
 
     running = True
@@ -216,17 +225,27 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
             socket_parsed = socket_data.decode()
 
             # commands that aren't action dictionaries
-            if socket_parsed == 'reset':
+            if socket_parsed == "reset":
                 ob = env.reset()
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
-                socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
-            elif cmd == 'reset_task':
+                socket.send(
+                    json.dumps(ob).encode(),
+                    zmq.NOBLOCK,
+                    copy=False,
+                    track=False,
+                )
+            elif cmd == "reset_task":
                 ob = env.reset_task()
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
-                socket.send(json.dumps(ob).encode(), zmq.NOBLOCK, copy=False, track=False)
-            elif socket_parsed == 'close':
+                socket.send(
+                    json.dumps(ob).encode(),
+                    zmq.NOBLOCK,
+                    copy=False,
+                    track=False,
+                )
+            elif socket_parsed == "close":
                 env.close()
                 running = False
             # else action dictionary
@@ -276,10 +295,10 @@ def zmq_robust_bind_socket(zmq_context):
         try:
             socket = zmq_context.socket(zmq.PAIR)
             port = np.random.randint(5000, 30000)
-            if ZMQ_CONNECT_METHOD == 'tcp':
+            if ZMQ_CONNECT_METHOD == "tcp":
                 socket.bind("tcp://*:{}".format(port))
-            if ZMQ_CONNECT_METHOD == 'ipc':
-                os.makedirs('/tmp/adeptzmq/', exist_ok=True)
+            if ZMQ_CONNECT_METHOD == "ipc":
+                os.makedirs("/tmp/adeptzmq/", exist_ok=True)
                 socket.bind("ipc:///tmp/adeptzmq/{}".format(port))
         except zmq.error.ZMQError as e:
             try_count += 1
@@ -288,5 +307,7 @@ def zmq_robust_bind_socket(zmq_context):
             continue
         break
     if socket is None:
-        raise Exception("ZMQ couldn't bind socket after 3 tries. {}".format(last_error))
+        raise Exception(
+            "ZMQ couldn't bind socket after 3 tries. {}".format(last_error)
+        )
     return socket, port
