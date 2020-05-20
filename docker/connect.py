@@ -1,13 +1,13 @@
 # Copyright (C) 2020 Heron Systems, Inc.
-#
-# Sample command:
-# python connect.py --dockerfile ./Dockerfile --username gburdell \
-#                   --email gburdell@heronsystems.com \
-#                   --fullname "George P. Burdell"
-#
-# Given a path to a Dockerfile, this script (1) builds a Docker image from the
-# Dockerfile and (2) outputs a command that can directly be pasted into a shell
-# that connects to a Docker instance spawned from the Docker image built in (1).
+"""
+Sample command:
+python connect.py --dockerfile ./Dockerfile --username gburdell \
+                  --email gburdell@heronsystems.com \
+                  --fullname "George P. Burdell"
+Given a path to a Dockerfile, this script (1) builds a Docker image from the
+Dockerfile and (2) outputs a command that can directly be pasted into a shell
+that connects to a Docker instance spawned from the Docker image built in (1).
+"""
 import argparse
 import os
 import sys
@@ -70,7 +70,7 @@ def connect_local(args):
             "Please run the following before running connect.py. This is to "
             "allow your Docker instance to be able to pull/push from "
             "private github repositories:\n"
-            "ln -s /mnt/users/{username}/.ssh ~/.ssh".format(
+            "ln -s ~/.ssh /mnt/users/{username}/.ssh".format(
                 username=args.username
             )
         )
@@ -79,7 +79,7 @@ def connect_local(args):
     # Build the docker image
     dockerfile_dir = os.path.dirname(os.path.abspath(args.dockerfile))
     cmd = (
-        "cd {dockerfile_dir}; nvidia-docker build "
+        "cd {dockerfile_dir}; docker build "
         "-f {dockerfile} "
         "--build-arg USERNAME={username} "
         "--build-arg EMAIL={email} "
@@ -100,7 +100,9 @@ def connect_local(args):
 
     # Construct the docker instance creation command
     cmd = (
-        'xhost +"local:docker"; nvidia-docker run -it --rm '
+        'xhost +"local:docker"; docker run -it --rm '
+        # Attach gpus
+        "--gpus=all "
         # Take care of ctrl-p issues
         '--detach-keys="ctrl-@" '
         # Configure X

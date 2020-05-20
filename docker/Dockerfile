@@ -126,8 +126,8 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         tensorflow==1.14.0 \
         tensorboardX==2.0 \
         threadpoolctl==2.0.0 \
-        torch==1.4.0 \
-        torchvision==0.5.0 \
+        torch==1.5.0 \
+        torchvision==0.6.0 \
         tqdm==4.43.0
 
 # ==================================================================

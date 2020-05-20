@@ -25,7 +25,10 @@ mkdir -p /mnt/users/$USERNAME/data
 # symlink these files to the persistent versions
 persistents=".bashrc .bash_logout .zshrc .zhistory .tmux.conf .ssh clients data"
 for f in ${persistents};
-    do rm -f ${f} && ln -s "/mnt/users/${USERNAME}/$f" $f;
+    do if [ -e "/mnt/users/${USERNAME}/$f" ];
+    then
+        rm -f ${f} && ln -s "/mnt/users/${USERNAME}/$f" $f;
+    fi
 done
 
 # git setup
