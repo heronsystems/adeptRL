@@ -44,7 +44,7 @@ xhost +"local:docker"; docker run -it --rm --detach-keys="ctrl-@" -e DISPLAY=$DI
 cd clients; git clone https://github.com/heronsystems/adeptRL
 cd adeptRL
 sudo python setup.py develop
-python -m adept.scripts.local ActorCritic
+python -m adept.scripts.local
 ```
 
 # Features

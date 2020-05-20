@@ -48,7 +48,7 @@ def runcmd(cmd):
     return os.system(cmd)
 
 
-def connectLocal(args):
+def connect_local(args):
     # Check for .ssh under /mnt directory; this is important to be able to pull
     # from github within Docker instances.
     if not os.path.exists(
@@ -124,7 +124,7 @@ def connectLocal(args):
 
 
 def main():
-    connectLocal(parse_args())
+    connect_local(parse_args())
 
 
 if __name__ == "__main__":
