@@ -8,5 +8,5 @@ ACTOR_REG = [
     ACActorEval,
     ACActorEvalSample,
     ImpalaHostActor,
-    ImpalaWorkerActor
+    ImpalaWorkerActor,
 ]

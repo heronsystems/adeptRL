@@ -34,8 +34,8 @@ class LSTMCellLayerNorm(Module):
             self.ih.bias.data.fill_(0)
             self.hh.bias.data.fill_(0)
             # forget bias init
-            self.ih.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
-            self.hh.bias.data[hidden_size:hidden_size * 2].fill_(forget_bias)
+            self.ih.bias.data[hidden_size : hidden_size * 2].fill_(forget_bias)
+            self.hh.bias.data[hidden_size : hidden_size * 2].fill_(forget_bias)
 
         self.ln_cell = LayerNorm(hidden_size)
 
@@ -54,11 +54,11 @@ class LSTMCellLayerNorm(Module):
         preact = i2h + h2h
 
         # activations
-        gates = preact[:, :3 * self.hidden_size].sigmoid()
-        g_t = preact[:, 3 * self.hidden_size:].tanh()
-        i_t = gates[:, :self.hidden_size]
-        f_t = gates[:, self.hidden_size:2 * self.hidden_size]
-        o_t = gates[:, -self.hidden_size:]
+        gates = preact[:, : 3 * self.hidden_size].sigmoid()
+        g_t = preact[:, 3 * self.hidden_size :].tanh()
+        i_t = gates[:, : self.hidden_size]
+        f_t = gates[:, self.hidden_size : 2 * self.hidden_size]
+        o_t = gates[:, -self.hidden_size :]
 
         # cell computations
         c_t = torch.mul(c, f_t) + torch.mul(i_t, g_t)

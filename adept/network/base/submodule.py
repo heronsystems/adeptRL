@@ -9,6 +9,7 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
     """
     SubModule of a ModularNetwork.
     """
+
     dim = None
 
     def __init__(self, input_shape, id):
@@ -92,7 +93,7 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
         :return:
         """
         if dim <= 0 or dim > 4:
-            raise ValueError('Invalid dim: {}'.format(dim))
+            raise ValueError("Invalid dim: {}".format(dim))
         elif dim == 1:
             return self._to_1d(submodule_output)
         elif dim == 2:
@@ -115,7 +116,7 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
         elif dim == 4:
             return self._to_4d(submodule_output), self._id_internals(internals)
         else:
-            raise ValueError('Invalid dim: {}'.format(dim))
+            raise ValueError("Invalid dim: {}".format(dim))
 
     def _id_internals(self, internals):
         return {self.id + k: v for k, v in internals.items()}

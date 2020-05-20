@@ -29,12 +29,14 @@ from adept.container.base import Container
 
 class ActorLearnerWorker(Container):
     @classmethod
-    def as_remote(cls,
-                  num_cpus=None,
-                  num_gpus=None,
-                  memory=None,
-                  object_store_memory=None,
-                  resources=None):
+    def as_remote(
+        cls,
+        num_cpus=None,
+        num_gpus=None,
+        memory=None,
+        object_store_memory=None,
+        resources=None,
+    ):
         # Worker can't use more than 1 gpu, but can also be cpu only
         assert num_gpus is None or num_gpus <= 1
         return ray.remote(
@@ -42,19 +44,12 @@ class ActorLearnerWorker(Container):
             num_gpus=num_gpus,
             memory=memory,
             object_store_memory=object_store_memory,
-            resources=resources)(cls)
+            resources=resources,
+        )(cls)
 
-    def __init__(
-            self,
-            args,
-            log_id_dir,
-            initial_step_count,
-            rank
-    ):
-        seed = args.seed \
-            if rank == 0 \
-            else args.seed + args.nb_env * rank
-        print('Worker {} using seed {}'.format(rank, seed))
+    def __init__(self, args, log_id_dir, initial_step_count, rank):
+        seed = args.seed if rank == 0 else args.seed + args.nb_env * rank
+        print("Worker {} using seed {}".format(rank, seed))
 
         # load saved registry classes
         REGISTRY.load_extern_classes(log_id_dir)
@@ -67,11 +62,7 @@ class ActorLearnerWorker(Container):
 
         # NETWORK
         torch.manual_seed(args.seed)
-        device = torch.device(
-            "cuda"
-            if (torch.cuda.is_available())
-            else "cpu"
-        )
+        device = torch.device("cuda" if (torch.cuda.is_available()) else "cpu")
         output_space = REGISTRY.lookup_output_space(
             args.actor_worker, env_mgr.action_space
         )
@@ -84,7 +75,7 @@ class ActorLearnerWorker(Container):
             env_mgr.observation_space,
             output_space,
             env_mgr.gpu_preprocessor,
-            REGISTRY
+            REGISTRY,
         )
         actor_cls = REGISTRY.lookup_actor(args.actor_worker)
         actor = actor_cls.from_args(args, env_mgr.action_space)
@@ -92,7 +83,7 @@ class ActorLearnerWorker(Container):
             env_mgr.observation_space,
             env_mgr.action_space,
             net.internal_space(),
-            env_mgr.nb_env
+            env_mgr.nb_env,
         )
         exp = REGISTRY.lookup_exp(args.exp).from_args(args, builder)
 
@@ -115,10 +106,12 @@ class ActorLearnerWorker(Container):
         self.rank = rank
 
         self.obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
-        self.internals = listd_to_dlist([
-            self.network.new_internals(self.device) for _ in
-            range(self.nb_env)
-        ])
+        self.internals = listd_to_dlist(
+            [
+                self.network.new_internals(self.device)
+                for _ in range(self.nb_env)
+            ]
+        )
         self.start_time = time()
         self._weights_synced = False
 
@@ -133,17 +126,16 @@ class ActorLearnerWorker(Container):
         # loop to generate a rollout
         while not self.exp.is_ready():
             with torch.no_grad():
-                actions, exp, self.internals = self.actor.act(self.network, self.obs, self.internals)
+                actions, exp, self.internals = self.actor.act(
+                    self.network, self.obs, self.internals
+                )
 
             self.exp.write_actor(exp)
 
             next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
             self.exp.write_env(
-                self.obs,
-                rewards.float(),
-                terminals.float(),
-                infos
+                self.obs, rewards.float(), terminals.float(), infos
             )
 
             # Perform state updates
@@ -172,14 +164,14 @@ class ActorLearnerWorker(Container):
 
                 delta_t = time() - self.start_time
                 print(
-                    'RANK: {} '
-                    'LOCAL STEP: {} '
-                    'REWARD: {} '
-                    'LOCAL STEP/S: {:.2f}'.format(
+                    "RANK: {} "
+                    "LOCAL STEP: {} "
+                    "REWARD: {} "
+                    "LOCAL STEP/S: {:.2f}".format(
                         self.rank,
                         self.step_count,
                         term_reward,
-                        (self.step_count - self.initial_step_count) / delta_t
+                        (self.step_count - self.initial_step_count) / delta_t,
                     )
                 )
 
@@ -187,14 +179,19 @@ class ActorLearnerWorker(Container):
         self.exp.write_next_obs(self.obs)
         # TODO: compression?
         if len(all_terminal_rewards) > 0:
-            return {'rollout': self._ray_pack(self.exp),
-                    'terminal_rewards': np.mean(all_terminal_rewards),
-                    'terminal_infos': {k: np.mean(v) for k, v in all_terminal_infos.items()}
-                    }
+            return {
+                "rollout": self._ray_pack(self.exp),
+                "terminal_rewards": np.mean(all_terminal_rewards),
+                "terminal_infos": {
+                    k: np.mean(v) for k, v in all_terminal_infos.items()
+                },
+            }
         else:
-            return {'rollout': self._ray_pack(self.exp),
-                    'terminal_rewards': None,
-                    'terminal_infos': None}
+            return {
+                "rollout": self._ray_pack(self.exp),
+                "terminal_rewards": None,
+                "terminal_infos": None,
+            }
 
     def set_weights(self, weights):
         for w, local_w in zip(weights, self.get_parameters()):
@@ -230,22 +227,38 @@ class ActorLearnerWorker(Container):
                 first_v = next(iter(var[0].values()))
                 # observations/actions
                 if isinstance(first_v, torch.Tensor):
-                    return {k: torch.stack(v).cpu() for k, v in listd_to_dlist(var).items()}
+                    return {
+                        k: torch.stack(v).cpu()
+                        for k, v in listd_to_dlist(var).items()
+                    }
                 # internals
                 elif isinstance(first_v, list):
                     # TODO: there's gotta be a better way to do this
                     assert len(var) == 1
-                    return {k: torch.stack(v).cpu().unsqueeze(0) for k, v in var[0].items()}
+                    return {
+                        k: torch.stack(v).cpu().unsqueeze(0)
+                        for k, v in var[0].items()
+                    }
             # other actor stuff
             elif isinstance(var[0], torch.Tensor):
                 return torch.stack(var).cpu()
             else:
-                raise NotImplementedError("Expected rollout item to be a Tensor or dict(Tensors) got {}".format(type(var[0])))
+                raise NotImplementedError(
+                    "Expected rollout item to be a Tensor or dict(Tensors) got {}".format(
+                        type(var[0])
+                    )
+                )
         elif isinstance(var, dict):
             # next obs
             if isinstance(first_v, torch.Tensor):
                 return {k: v.cpu() for k, v in var.items()}
             else:
-                raise NotImplementedError("Expected rollout dict item to be a tensor got {}".format(type(var)))
+                raise NotImplementedError(
+                    "Expected rollout dict item to be a tensor got {}".format(
+                        type(var)
+                    )
+                )
         else:
-            raise NotImplementedError("Expected rollout object to be a list got {}".format(type(var)))
+            raise NotImplementedError(
+                "Expected rollout object to be a list got {}".format(type(var))
+            )

@@ -27,7 +27,7 @@ class EvaluationThread(LogsAndSummarizesRewards):
         logger,
         summary_writer,
         step_rate_limit,
-        override_step_count_fn=None
+        override_step_count_fn=None,
     ):
         self._training_network = training_network
         self._agent = agent
@@ -73,18 +73,16 @@ class EvaluationThread(LogsAndSummarizesRewards):
                 )
 
     def log_episode_results(
-        self,
-        terminal_rewards,
-        terminal_infos,
-        step_count,
-        initial_step_count=0
+        self, terminal_rewards, terminal_infos, step_count, initial_step_count=0
     ):
         if terminal_rewards:
             ep_reward = np.mean(terminal_rewards)
             self.logger.info(
-                'eval_frames: {} reward: {} avg_eval_fps: {}'.format(
-                    step_count, ep_reward, (step_count - initial_step_count) /
-                    (time() - self.start_time)
+                "eval_frames: {} reward: {} avg_eval_fps: {}".format(
+                    step_count,
+                    ep_reward,
+                    (step_count - initial_step_count)
+                    / (time() - self.start_time),
                 )
             )
         return terminal_rewards
@@ -115,7 +113,7 @@ class EvaluationThread(LogsAndSummarizesRewards):
 
     @property
     def summary_name(self):
-        return 'reward/eval'
+        return "reward/eval"
 
     @property
     def local_step_count(self):

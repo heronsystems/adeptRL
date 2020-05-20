@@ -33,11 +33,13 @@ class Residual2DPreact(nn.Module):
             nb_out_chan, nb_out_chan, 3, stride=1, padding=1, bias=False
         )
 
-        relu_gain = nn.init.calculate_gain('relu')
+        relu_gain = nn.init.calculate_gain("relu")
         self.conv1.weight.data.mul_(relu_gain)
         self.conv2.weight.data.mul_(relu_gain)
 
-        self.do_projection = self.nb_in_chan != self.nb_out_chan or self.stride > 1
+        self.do_projection = (
+            self.nb_in_chan != self.nb_out_chan or self.stride > 1
+        )
         if self.do_projection:
             self.projection = nn.Conv2d(
                 nb_in_chan, nb_out_chan, 3, stride=stride, padding=1

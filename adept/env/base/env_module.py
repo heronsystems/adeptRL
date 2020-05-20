@@ -25,6 +25,7 @@ class EnvModule(EnvBase, RequiresArgsMixin, metaclass=abc.ABCMeta):
     Implement this class to add your custom environment. Don't forget to
     implement args.
     """
+
     def __init__(self, action_space, cpu_preprocessor, gpu_preprocessor):
         """
         :param observation_space: ._spaces.Spaces

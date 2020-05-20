@@ -2,7 +2,11 @@
 Custom submodule stub
 """
 from adept.networks import (
-    SubModule1D, SubModule2D, SubModule3D, SubModule4D, NetworkRegistry
+    SubModule1D,
+    SubModule2D,
+    SubModule3D,
+    SubModule4D,
+    NetworkRegistry,
 )
 from adept.scripts.local import parse_args, main
 
@@ -12,10 +16,7 @@ from adept.scripts.local import parse_args, main
 # ie. (F, ) = 1D, (F, L) = 2D, (F, H, W) = 3D, (F, D, H, W) = 4D
 class MyCustomSubModule1D(SubModule1D):
     # You will be prompted for these when training script starts
-    args = {
-        'example_arg1': True,
-        'example_arg2': 5
-    }
+    args = {"example_arg1": True, "example_arg2": 5}
 
     def __init__(self, input_shape, id):
         super(MyCustomSubModule1D, self).__init__(input_shape, id)
@@ -66,7 +67,7 @@ class MyCustomSubModule1D(SubModule1D):
         pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     network_reg = NetworkRegistry()
     network_reg.register_submodule(MyCustomSubModule1D)

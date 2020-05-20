@@ -50,7 +50,7 @@ class CircularDND(torch.nn.Module):
         return top_k_inds, weights
 
     def _kernel(self, query_key, all_keys):
-        return 1. / (
+        return 1.0 / (
             torch.pow(query_key - all_keys, 2).sum(CHANNEL_AXIS) + self.delta
         )
 
@@ -58,7 +58,7 @@ class CircularDND(torch.nn.Module):
         self.load_state_dict(shared_dnd.state_dict())
 
     def sync_to_shared(self, shared_dnd):
-        is_cpu = self.keys.device.type == 'cpu'
+        is_cpu = self.keys.device.type == "cpu"
         if shared_dnd.keys.grad is not None and is_cpu:
             return
         elif is_cpu:
@@ -86,24 +86,28 @@ class PruningDND(torch.nn.Module):
         self.query_width = query_width
         self.keys = torch.nn.Parameter(torch.rand(max_len, nb_key_chan))
         self.values = torch.nn.Parameter(torch.zeros(max_len, nb_v_chan))
-        self.register_buffer('weight_buff', torch.zeros(max_len))
+        self.register_buffer("weight_buff", torch.zeros(max_len))
 
     def forward(self, key):
         inds, weights = self._k_nearest(key, self.query_width)
-        return torch.sum(
-            self.values[inds, :] * weights.unsqueeze(CHANNEL_AXIS),
-            BATCH_AXIS,
-            keepdim=True
-        ), inds, weights
+        return (
+            torch.sum(
+                self.values[inds, :] * weights.unsqueeze(CHANNEL_AXIS),
+                BATCH_AXIS,
+                keepdim=True,
+            ),
+            inds,
+            weights,
+        )
 
     def _k_nearest(self, key, k):
         lookup_weights = self._kernel(key, self.keys)
         top_ks, top_k_inds = torch.topk(lookup_weights, k)
-        weights = (top_ks / torch.sum(lookup_weights))
+        weights = top_ks / torch.sum(lookup_weights)
         return top_k_inds, weights
 
     def _kernel(self, query_key, all_keys):
-        return 1. / (
+        return 1.0 / (
             torch.pow(query_key - all_keys, 2).sum(CHANNEL_AXIS) + self.delta
         )
 
@@ -111,7 +115,7 @@ class PruningDND(torch.nn.Module):
         self.load_state_dict(shared_dnd.state_dict())
 
     def sync_to_shared(self, shared_dnd):
-        is_cpu = self.keys.device.type == 'cpu'
+        is_cpu = self.keys.device.type == "cpu"
         if shared_dnd.keys.grad is not None and is_cpu:
             return
         elif is_cpu:
@@ -143,7 +147,7 @@ class FreqPruningLTM(torch.nn.Module):
         self.query_breadth = query_breadth
         self.keys = torch.nn.Parameter(torch.randn(max_len, nb_key_chan))
         self.values = torch.nn.Parameter(torch.randn(max_len, nb_v_chan))
-        self.register_buffer('weight_buff', torch.zeros(max_len))
+        self.register_buffer("weight_buff", torch.zeros(max_len))
 
     def forward(self, queries):
         """
@@ -173,7 +177,7 @@ class FreqPruningLTM(torch.nn.Module):
         self.load_state_dict(shared_dnd.state_dict())
 
     def sync_to_shared(self, shared_dnd):
-        is_cpu = self.keys.device.type == 'cpu'
+        is_cpu = self.keys.device.type == "cpu"
         if shared_dnd.keys.grad is not None and is_cpu:
             return
         elif is_cpu:

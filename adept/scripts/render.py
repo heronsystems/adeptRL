@@ -51,10 +51,11 @@ from adept.utils.util import DotDict
 
 def parse_args():
     from docopt import docopt
+
     args = docopt(__doc__)
-    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
-    del args['h']
-    del args['help']
+    args = {k.strip("--").replace("-", "_"): v for k, v in args.items()}
+    del args["h"]
+    del args["help"]
     args = DotDict(args)
 
     args.logdir = parse_path(args.logdir)
@@ -83,7 +84,7 @@ def main(args):
     args = DotDict(args)
 
     Init.print_ascii_logo()
-    logger = Init.setup_logger(args.logdir, 'eval')
+    logger = Init.setup_logger(args.logdir, "eval")
     Init.log_args(logger, args)
     R.load_extern_classes(args.logdir)
 
@@ -96,7 +97,7 @@ def main(args):
         args.logdir,
         args.gpu_id,
         args.seed,
-        args.manager
+        args.manager,
     )
     try:
         container.run()
@@ -104,5 +105,5 @@ def main(args):
         container.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())

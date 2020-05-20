@@ -5,20 +5,15 @@ class Container:
     @staticmethod
     def load_network(network, path):
         network.load_state_dict(
-            torch.load(
-                path, map_location=lambda storage, loc: storage
-            )
+            torch.load(path, map_location=lambda storage, loc: storage)
         )
         return network
 
     @staticmethod
     def load_optim(optimizer, path):
         optimizer.load_state_dict(
-                torch.load(
-                    path,
-                    map_location=lambda storage, loc: storage
-                )
-            )
+            torch.load(path, map_location=lambda storage, loc: storage)
+        )
         return optimizer
 
     @staticmethod
@@ -35,20 +30,17 @@ class Container:
 
     @staticmethod
     def write_summaries(
-            writer, step_count, total_loss, loss_dict, metric_dict, n_params
+        writer, step_count, total_loss, loss_dict, metric_dict, n_params
     ):
-        writer.add_scalar(
-            'loss/total_loss', total_loss.item(), step_count
-        )
+        writer.add_scalar("loss/total_loss", total_loss.item(), step_count)
         for l_name, loss in loss_dict.items():
-            writer.add_scalar('loss/' + l_name, loss.item(), step_count)
+            writer.add_scalar("loss/" + l_name, loss.item(), step_count)
         for m_name, metric in metric_dict.items():
-            writer.add_scalar('metric/' + m_name, metric.item(), step_count)
+            writer.add_scalar("metric/" + m_name, metric.item(), step_count)
         for p_name, param in n_params:
-            p_name = p_name.replace('.', '/')
+            p_name = p_name.replace(".", "/")
             writer.add_scalar(p_name, torch.norm(param).item(), step_count)
             if param.grad is not None:
                 writer.add_scalar(
-                    p_name + '.grad',
-                    torch.norm(param.grad).item(), step_count
+                    p_name + ".grad", torch.norm(param.grad).item(), step_count
                 )

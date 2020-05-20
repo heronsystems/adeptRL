@@ -34,9 +34,10 @@ class MultiHeadSelfAttention(torch.nn.Module):
         # [switch nx => n_state from Block to Attention to keep identical to TF implem]
         assert nb_qk_chan % nb_head == 0
         self.register_buffer(
-            'b',
-            torch.tril(torch.ones(nb_embed,
-                                  nb_embed)).view(1, 1, nb_embed, nb_embed)
+            "b",
+            torch.tril(torch.ones(nb_embed, nb_embed)).view(
+                1, 1, nb_embed, nb_embed
+            ),
         )
         self.nb_head = nb_head
         self.split_size = nb_qk_chan
@@ -56,7 +57,7 @@ class MultiHeadSelfAttention(torch.nn.Module):
 
     def merge_heads(self, x):
         x = x.permute(0, 2, 1, 3).contiguous()
-        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1), )
+        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
         return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
 
     def split_heads(self, x, k=False):
@@ -105,7 +106,7 @@ class RMCCell(torch.nn.Module):
         nb_block=1,
         nb_mlp=2,
         input_bias=0,
-        forget_bias=1
+        forget_bias=1,
     ):
         super(RMCCell, self).__init__()
         self._mem_slots = nb_memory_embed
@@ -129,7 +130,7 @@ class RMCCell(torch.nn.Module):
             nb_channel,
             nb_channel,
             1,
-            scale=True
+            scale=True,
         )
         self.mlp = torch.nn.ModuleList(
             [
@@ -172,7 +173,7 @@ class RMCCell(torch.nn.Module):
             [prev_memory, input], dim=1
         )  # Tensor{B, Ei + Em, Cm}
         next_memory = self._attend(memory_plus_input)
-        next_memory = next_memory[:, :-prev_memory.size(1), :]
+        next_memory = next_memory[:, : -prev_memory.size(1), :]
 
         # calc gates
         i2h = self.ih(input)
@@ -204,9 +205,10 @@ class RelationalMHDPA(nn.Module):
         assert nb_channel % nb_head == 0
         seq_len = height * width
         self.register_buffer(
-            'b',
-            torch.tril(torch.ones(seq_len,
-                                  seq_len)).view(1, 1, seq_len, seq_len)
+            "b",
+            torch.tril(torch.ones(seq_len, seq_len)).view(
+                1, 1, seq_len, seq_len
+            ),
         )
         self.nb_head = nb_head
         self.split_size = nb_channel
@@ -216,7 +218,7 @@ class RelationalMHDPA(nn.Module):
 
     def _attn(self, q, k, v):
         w = torch.matmul(q, k)
-        print('q', q.shape, 'k', k.shape, 'v', v.shape, 'w', w.shape)
+        print("q", q.shape, "k", k.shape, "v", v.shape, "w", w.shape)
         if self.scale:
             w = w / math.sqrt(v.size(-1))
         w = w * self.b + -1e9 * (
@@ -227,7 +229,7 @@ class RelationalMHDPA(nn.Module):
 
     def merge_heads(self, x):
         x = x.permute(0, 2, 1, 3).contiguous()
-        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1), )
+        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
         return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
 
     def split_heads(self, x, k=False):
@@ -246,7 +248,7 @@ class RelationalMHDPA(nn.Module):
         :param x: A tensor with a shape of [batch, seq_len, nb_channel]
         :return: A tensor with a shape of [batch, seq_len, nb_channel]
         """
-        size_out = x.size()[:-1] + (self.split_size * 3, )
+        size_out = x.size()[:-1] + (self.split_size * 3,)
         x = self.projection(x.view(-1, x.size(-1)))
         x = x.view(*size_out)
 
@@ -262,8 +264,8 @@ class RelationalMHDPA(nn.Module):
 
     def get_parameter_names(self, layer):
         return [
-            'Proj{}_W'.format(layer),
-            'Proj{}_b'.format(layer),
-            'MLP{}_W'.format(layer),
-            'MLP{}_b'.format(layer),
+            "Proj{}_W".format(layer),
+            "Proj{}_b".format(layer),
+            "MLP{}_W".format(layer),
+            "MLP{}_b".format(layer),
         ]

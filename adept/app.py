@@ -44,56 +44,49 @@ import os
 
 def parse_args():
     args = docopt(
-        __doc__,
-        version='adept version ' + VERSION,
-        options_first=True
+        __doc__, version="adept version " + VERSION, options_first=True
     )
 
     env = os.environ
-    argv = args['<args>']
-    if args['<command>'] == 'local':
-        exit(call(['python', '-m', 'adept.scripts.local'] + argv, env=env))
-    elif args['<command>'] == 'distrib':
-        exit(call([
-            'python',
-            '-m',
-            'adept.scripts.distrib'
-        ] + argv, env=env))
-    elif args['<command>'] == 'actorlearner':
-        exit(call([
-              'python',
-              '-m',
-              'adept.scripts.actorlearner'
-          ] + argv, env=env))
-    elif args['<command>'] == 'evaluate':
-        exit(call(['python', '-m', 'adept.scripts.evaluate'] + argv, env=env))
-    elif args['<command>'] == 'render':
-        exit(call([
-            'python', '-m', 'adept.scripts.render'
-        ] + argv, env=env))
-    elif args['<command>'] == 'replay_gen_sc2':
-        exit(call([
-            'python', '-m', 'adept.scripts.replay_gen_sc2'
-        ] + argv, env=env))
-    elif args['<command>'] == 'help':
-        if 'local' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.local', '-h']))
-        elif 'distrib' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.distrib', '-h']))
-        elif 'actorlearner' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.actorlearner', '-h']))
-        elif 'evaluate' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.evaluate', '-h']))
-        elif 'render' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.render', '-h']))
-        elif 'replay_gen_sc2' in args['<args>']:
-            exit(call(['python', '-m', 'adept.scripts.replay_gen_sc2', '-h']))
+    argv = args["<args>"]
+    if args["<command>"] == "local":
+        exit(call(["python", "-m", "adept.scripts.local"] + argv, env=env))
+    elif args["<command>"] == "distrib":
+        exit(call(["python", "-m", "adept.scripts.distrib"] + argv, env=env))
+    elif args["<command>"] == "actorlearner":
+        exit(
+            call(["python", "-m", "adept.scripts.actorlearner"] + argv, env=env)
+        )
+    elif args["<command>"] == "evaluate":
+        exit(call(["python", "-m", "adept.scripts.evaluate"] + argv, env=env))
+    elif args["<command>"] == "render":
+        exit(call(["python", "-m", "adept.scripts.render"] + argv, env=env))
+    elif args["<command>"] == "replay_gen_sc2":
+        exit(
+            call(
+                ["python", "-m", "adept.scripts.replay_gen_sc2"] + argv, env=env
+            )
+        )
+    elif args["<command>"] == "help":
+        if "local" in args["<args>"]:
+            exit(call(["python", "-m", "adept.scripts.local", "-h"]))
+        elif "distrib" in args["<args>"]:
+            exit(call(["python", "-m", "adept.scripts.distrib", "-h"]))
+        elif "actorlearner" in args["<args>"]:
+            exit(call(["python", "-m", "adept.scripts.actorlearner", "-h"]))
+        elif "evaluate" in args["<args>"]:
+            exit(call(["python", "-m", "adept.scripts.evaluate", "-h"]))
+        elif "render" in args["<args>"]:
+            exit(call(["python", "-m", "adept.scripts.render", "-h"]))
+        elif "replay_gen_sc2" in args["<args>"]:
+            exit(call(["python", "-m", "adept.scripts.replay_gen_sc2", "-h"]))
     else:
         exit(
-            "{} is not a valid command. See 'adept.app --help'.".
-                format(args['<command>'])
+            "{} is not a valid command. See 'adept.app --help'.".format(
+                args["<command>"]
+            )
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parse_args()

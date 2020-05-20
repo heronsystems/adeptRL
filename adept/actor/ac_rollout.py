@@ -29,11 +29,11 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
 
     @staticmethod
     def output_space(action_space):
-        head_dict = {'critic': (1,), **action_space}
+        head_dict = {"critic": (1,), **action_space}
         return head_dict
 
     def compute_action_exp(self, preds, internals, obs, available_actions):
-        values = preds['critic'].squeeze(1)
+        values = preds["critic"].squeeze(1)
 
         actions = OrderedDict()
         log_probs = []
@@ -53,20 +53,19 @@ class ACRolloutActorTrain(ActorModule, ACActorHelperMixin):
         log_probs = torch.cat(log_probs, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
-        return actions, {
-            'log_probs': log_probs,
-            'entropies': entropies,
-            'values': values
-        }
+        return (
+            actions,
+            {"log_probs": log_probs, "entropies": entropies, "values": values},
+        )
 
     @classmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         act_key_len = len(act_space.keys())
 
         spec = {
-            'log_probs': (exp_len, batch_sz, act_key_len),
-            'entropies': (exp_len, batch_sz, act_key_len),
-            'values': (exp_len, batch_sz)
+            "log_probs": (exp_len, batch_sz, act_key_len),
+            "entropies": (exp_len, batch_sz, act_key_len),
+            "values": (exp_len, batch_sz),
         }
 
         return spec

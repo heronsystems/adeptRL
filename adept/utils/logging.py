@@ -23,7 +23,7 @@ from adept.utils.util import HeapQueue
 
 class ModelSaver:
     BufferEntry = namedtuple(
-        'BufferEntry', ['reward', 'priority', 'network', 'optimizer']
+        "BufferEntry", ["reward", "priority", "network", "optimizer"]
     )
 
     def __init__(self, nb_top_model, log_id_dir):
@@ -47,15 +47,15 @@ class ModelSaver:
                 buff_entry.network,
                 os.path.join(
                     save_dir,
-                    'model_{}_{}.pth'.format(j + 1, int(buff_entry.reward))
-                )
+                    "model_{}_{}.pth".format(j + 1, int(buff_entry.reward)),
+                ),
             )
             torch.save(
                 buff_entry.optimizer,
                 os.path.join(
                     save_dir,
-                    'optimizer_{}_{}.pth'.format(j + 1, int(buff_entry.reward))
-                )
+                    "optimizer_{}_{}.pth".format(j + 1, int(buff_entry.reward)),
+                ),
             )
 
 
@@ -68,10 +68,10 @@ class SimpleModelSaver:
         os.makedirs(save_dir)
         torch.save(
             network.state_dict(),
-            os.path.join(save_dir, 'model_{}.pth'.format(step_count))
+            os.path.join(save_dir, "model_{}.pth".format(step_count)),
         )
         if optimizer is not None:
             torch.save(
                 optimizer.state_dict(),
-                os.path.join(save_dir, 'optimizer_{}.pth'.format(step_count))
+                os.path.join(save_dir, "optimizer_{}.pth".format(step_count)),
             )

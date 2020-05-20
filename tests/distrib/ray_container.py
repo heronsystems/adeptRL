@@ -10,15 +10,14 @@ from itertools import chain
 
 @ray.remote(num_gpus=0.25)
 class Learner:
-
     def __init__(self, rank, learner_ranks, worker_ranks, ip, port):
         world_size = len(learner_ranks) + len(worker_ranks)
 
         dist.init_process_group(
-            'nccl',
-            init_method='tcp://{}:{}'.format(ip, port),
+            "nccl",
+            init_method="tcp://{}:{}".format(ip, port),
             rank=rank,
-            world_size=world_size
+            world_size=world_size,
         )
         groups = {}
         for learner_rank in learner_ranks:
@@ -30,12 +29,11 @@ class Learner:
 
         self.groups = groups
         self.learner_group = learner_group
-        self.device = torch.device(f'cuda:{ray.get_gpu_ids()[0]}')
+        self.device = torch.device(f"cuda:{ray.get_gpu_ids()[0]}")
         self.rank = rank
 
         self.exps = {
-            w_rank: torch.zeros(2).to(self.device)
-            for w_rank in worker_ranks
+            w_rank: torch.zeros(2).to(self.device) for w_rank in worker_ranks
         }
         self.network = torch.ones(3).to(self.device)
         self.network_grads = [torch.ones(3).to(self.device)]
@@ -46,12 +44,12 @@ class Learner:
             self.exps[worker_rank],
             worker_rank,
             self.groups[worker_rank],
-            async_op=True
+            async_op=True,
         )
         return handle
 
     def sync_exps(self, worker_ranks):
-        print(f'learner {self.rank} syncing exps from {worker_ranks}')
+        print(f"learner {self.rank} syncing exps from {worker_ranks}")
         handles = []
         for worker_rank in worker_ranks:
             h = self.sync_exp(worker_rank)
@@ -60,18 +58,15 @@ class Learner:
         return self.rank
 
     def sync_network(self, worker_ranks):
-        print(f'learner {self.rank} sending network to {worker_ranks}')
+        print(f"learner {self.rank} sending network to {worker_ranks}")
         for worker_rank in worker_ranks:
             dist.broadcast(
-                self.network,
-                self.rank,
-                self.groups[worker_rank],
-                async_op=True
+                self.network, self.rank, self.groups[worker_rank], async_op=True
             )
         return self.rank
 
     def step(self):
-        print(f'learner {self.rank} step')
+        print(f"learner {self.rank} step")
 
         # make sure exp_handles are done
         for handle in self.exp_handles:
@@ -84,20 +79,19 @@ class Learner:
         dist.barrier(self.learner_group)
         for p in self.network_grads:
             dist.all_reduce(p, group=self.learner_group)
-        print(f'learner {self.rank} shared gradients')
+        print(f"learner {self.rank} shared gradients")
         return True
 
 
 @ray.remote(num_gpus=0.25)
 class Worker:
-
     def __init__(self, rank, learner_ranks, worker_ranks, ip, port):
         world_size = len(learner_ranks) + len(worker_ranks)
         dist.init_process_group(
-            'nccl',
-            init_method='tcp://{}:{}'.format(ip, port),
+            "nccl",
+            init_method="tcp://{}:{}".format(ip, port),
             rank=rank,
-            world_size=world_size
+            world_size=world_size,
         )
         groups = {}
         for learner_rank in learner_ranks:
@@ -108,18 +102,18 @@ class Worker:
         dist.new_group(learner_ranks)
 
         self.groups = groups
-        self.device = torch.device(f'cuda:{ray.get_gpu_ids()[0]}')
+        self.device = torch.device(f"cuda:{ray.get_gpu_ids()[0]}")
         self.rank = rank
         self.network = torch.zeros(3).to(self.device)
         self.exp = None
         self.network_handle = None
 
     def step(self):
-        print(f'worker {self.rank} stepping')
+        print(f"worker {self.rank} stepping")
         # block if a network is copied
         if self.network_handle:
             self.network_handle.wait()
-        print(f'worker {self.rank} network {self.network}')
+        print(f"worker {self.rank} network {self.network}")
 
         self.exp = torch.zeros(2).to(self.device)
         self.exp.fill_(self.rank)
@@ -127,19 +121,13 @@ class Worker:
 
     def sync_exp(self, host_rank):
         handle = dist.broadcast(
-            self.exp,
-            self.rank,
-            self.groups[host_rank],
-            async_op=True
+            self.exp, self.rank, self.groups[host_rank], async_op=True
         )
         return self.rank
 
     def sync_network(self, host_rank):
         handle = dist.broadcast(
-            self.network,
-            host_rank,
-            self.groups[host_rank],
-            async_op=True
+            self.network, host_rank, self.groups[host_rank], async_op=True
         )
         return self.rank
 
@@ -148,7 +136,7 @@ def flatten(items):
     return chain.from_iterable(items)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     nb_host = 2
     nb_worker = 2
     ip = "127.0.0.1"
@@ -194,9 +182,7 @@ if __name__ == '__main__':
 
         # sync networks
         for w_ranks, l_rank, learner in zip(
-                all_w_ranks,
-                range(len(learners)),
-                learners
+            all_w_ranks, range(len(learners)), learners
         ):
             learner_sync = learner.sync_network.remote(w_ranks)
             for rank in w_ranks:
