@@ -36,42 +36,42 @@ class ACPPOActorTrain(ActorModule, ACActorHelperMixin):
         values = preds['critic'].squeeze(1)
 
         actions = OrderedDict()
+        actions_gpu = OrderedDict()
         log_probs = []
-        entropies = []
 
         for key in self.action_keys:
             logit = self.flatten_logits(preds[key])
 
             log_softmax, softmax = self.log_softmax(logit), self.softmax(logit)
-            entropy = self.entropy(log_softmax, softmax)
             action = self.sample_action(softmax)
 
-            entropies.append(entropy)
             log_probs.append(self.log_probability(log_softmax, action))
+            actions_gpu[key] = action
             actions[key] = action.cpu()
 
         log_probs = torch.cat(log_probs, dim=1)
-        entropies = torch.cat(entropies, dim=1)
+        internals = {k: torch.stack(vs) for k, vs in internals.items()}
 
         return actions, {
             'log_probs': log_probs,
-            'entropies': entropies,
             'values': values,
-            'internals': internals
+            **internals,
+            **actions_gpu
         }
 
     @classmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         act_key_len = len(act_space.keys())
+        action_spec = {k: (exp_len, batch_sz) for k in act_space.keys()}
         internal_spec = {
             k: (exp_len, batch_sz, *shape) for k, shape in internal_space.items()
         }
 
         spec = {
             'log_probs': (exp_len, batch_sz, act_key_len),
-            'entropies': (exp_len, batch_sz, act_key_len),
             'values': (exp_len, batch_sz),
-            'internals': internal_spec
+            **action_spec,
+            **internal_spec
         }
 
         return spec
