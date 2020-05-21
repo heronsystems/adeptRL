@@ -10,5 +10,5 @@ ACTOR_REG = [
     ACActorEvalSample,
     PPOActorTrain,
     ImpalaHostActor,
-    ImpalaWorkerActor,
+    ImpalaWorkerActor
 ]
