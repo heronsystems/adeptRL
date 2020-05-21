@@ -25,16 +25,16 @@ class SubModule2D(SubModule, metaclass=abc.ABCMeta):
 
     def output_shape(self, dim=None):
         if dim == 1:
-            f, l = self._output_shape
-            return (f * l,)
+            f, s = self._output_shape
+            return (f * s,)
         elif dim == 2 or dim is None:
             return self._output_shape
         elif dim == 3:
-            f, l = self._output_shape
-            return (f, math.sqrt(l), math.sqrt(l))
+            f, s = self._output_shape
+            return (f * s, 1, 1)
         elif dim == 4:
-            f, l = self._output_shape
-            return (f, l, 1, 1)
+            f, s = self._output_shape
+            return (f, s, 1, 1)
         else:
             raise ValueError("Invalid dim: {}".format(dim))
 
@@ -43,8 +43,8 @@ class SubModule2D(SubModule, metaclass=abc.ABCMeta):
         :param submodule_output: torch.Tensor (Batch + 2D)
         :return: torch.Tensor (Batch + 1D)
         """
-        n, f, l = submodule_output.size()
-        return submodule_output.view(n, f * l)
+        n, f, s = submodule_output.size()
+        return submodule_output.view(n, f * s)
 
     def _to_2d(self, submodule_output):
         """
@@ -66,5 +66,5 @@ class SubModule2D(SubModule, metaclass=abc.ABCMeta):
         :param submodule_output: torch.Tensor (Batch + 2D)
         :return: torch.Tensor (Batch + 4D)
         """
-        n, f, l = submodule_output.size()
-        return submodule_output.view(n, f, l, 1, 1)
+        n, f, s = submodule_output.size()
+        return submodule_output.view(n, f, s, 1, 1)
