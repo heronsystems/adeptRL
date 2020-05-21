@@ -241,6 +241,11 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
                 socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
         except KeyboardInterrupt:
             pass
+        except Exception as e:
+            running = False
+            e_str = '{}: {}'.format(type(e).__name__, e)
+            print('Subprocess environment has an error', e_str)
+            socket.send('error. {}'.format(e_str).encode(), zmq.NOBLOCK, copy=False, track=False)
 
 
 def handle_ob(ob, shared_memory):
