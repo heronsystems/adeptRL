@@ -23,92 +23,17 @@ class SubModule2D(SubModule, metaclass=abc.ABCMeta):
     def __init__(self, input_shape, id):
         super(SubModule2D, self).__init__(input_shape, id)
 
-    def output_shape(self, dim=None):
-        """Output shape casted to requested dimension
+    def _to_1d_shape(self):
+        f, s = self._output_shape
+        return (f * s,)
 
-        Parameters
-        ----------
-        dim : int, optional
-            Desired dimensionality, defaults to 2
+    def _to_2d_shape(self):
+        return self._output_shape
 
-        Returns
-        -------
-        tuple[int]
-            Output shape
-        """
-        if dim == 1:
-            f, s = self._output_shape
-            return (f * s,)
-        elif dim == 2 or dim is None:
-            return self._output_shape
-        elif dim == 3:
-            f, s = self._output_shape
-            return (f * s, 1, 1)
-        elif dim == 4:
-            f, s = self._output_shape
-            return (f, s, 1, 1)
-        else:
-            raise ValueError("Invalid dim: {}".format(dim))
+    def _to_3d_shape(self):
+        f, s = self._output_shape
+        return (f * s, 1, 1)
 
-    def _to_1d(self, submodule_output):
-        """Convert to Batch + 1D
-
-        Parameters
-        ----------
-        submodule_output : torch.Tensor
-            Batch + 2D Tensor
-
-        Returns
-        -------
-        torch.Tensor
-            Batch + 1D Tensor
-        """
-        n, f, s = submodule_output.size()
-        return submodule_output.view(n, f * s)
-
-    def _to_2d(self, submodule_output):
-        """Convert to Batch + 2D
-
-        Parameters
-        ----------
-        submodule_output : torch.Tensor
-            Batch + 2D Tensor (B, S, F)
-
-        Returns
-        -------
-        torch.Tensor
-            Batch + 2D Tensor (B, S, F)
-        """
-        return submodule_output
-
-    def _to_3d(self, submodule_output):
-        """Convert to Batch + 3D
-
-        Parameters
-        ----------
-        submodule_output : torch.Tensor
-            Batch + 2D Tensor (B, S, F)
-
-        Returns
-        -------
-        torch.Tensor
-            Batch + 3D Tensor
-        """
-        n, f, s = submodule_output.size()
-        return submodule_output.view(n, f * s, 1, 1)
-
-    def _to_4d(self, submodule_output):
-        """Convert to Batch + 4D
-
-        Parameters
-        ----------
-        submodule_output : torch.Tensor
-            Batch + 2D Tensor (B, S, F)
-
-        Returns
-        -------
-        torch.Tensor
-            Batch + 4D Tensor (B, F, S, H, W)
-        """
-        n, f, s = submodule_output.size()
-        return submodule_output.view(n, f, s, 1, 1)
+    def _to_4d_shape(self):
+        f, s = self._output_shape
+        return (f, s, 1, 1)
