@@ -1,11 +1,11 @@
 ![banner](images/banner.png)
 
 adept is a reinforcement learning framework designed to accelerate research 
-by providing:
+by abstracting away engineering challenges associated with deep reinforcement
+learning. adept provides:
+* multi-GPU training
 * a modular interface for using custom networks, agents, and environments
 * baseline reinforcement learning models and algorithms for PyTorch
-* multi-GPU support
-* access to various environments
 * built-in tensorboard logging, model saving, reloading, evaluation, and 
 rendering
 * proven hyperparameter defaults
@@ -28,26 +28,15 @@ We're happy to accept feedback and contributions.
 
 ### Examples
 * Custom Network ([stub](examples/custom_network_stub.py) | example)
-* Custom SubModule ([stub](examples/custom_submodule_stub.py) | [example](adept/networks/net1d/lstm.py))
-* Custom Agent ([stub](examples/custom_agent_stub.py) | [example](adept/agents/actor_critic.py))
-* Custom Environment ([stub](examples/custom_environment_stub.py) | [example](adept/environments/openai_gym.py))
+* Custom SubModule ([stub](examples/custom_submodule_stub.py) | [example](adept/network/net1d/lstm.py))
+* Custom Agent ([stub](examples/custom_agent_stub.py) | [example](adept/agent/actor_critic.py))
+* Custom Environment ([stub](examples/custom_environment_stub.py) | [example](adept/env/openai_gym.py))
 
 ## Installation
-**Dependencies:**
-* gym
-* PyTorch 1.x
-* Python 3.5+
-* We recommend CUDA 10, pytorch 1.0, python 3.6
-
-**From source:**
-* Follow instructions for [PyTorch](https://pytorch.org/)
-* (Optional) Follow instructions for 
-[StarCraft 2](https://github.com/Blizzard/s2client-proto#downloads)
 ```bash
 git clone https://github.com/heronsystems/adeptRL
 cd adeptRL
-# Remove mpi, sc2, profiler if you don't plan on using these features:
-pip install .[mpi,sc2,profiler]
+pip install .
 ```
 
 **From docker:**
@@ -67,13 +56,9 @@ python -m adept.app local --env BeamRiderNoFrameskip-v4
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
 python -m adept.app distrib --env BeamRiderNoFrameskip-v4
 
-# IMPALA (requires mpi4py and is resource intensive)
+# IMPALA (requires ray, resource intensive)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
 python -m adept.app impala --agent ActorCriticVtrace --env BeamRiderNoFrameskip-v4
-
-# StarCraft 2 (IMPALA not supported yet)
-# Warning: much more resource intensive than Atari
-python -m adept.app local --env CollectMineralShards
 
 # To see a full list of options:
 python -m adept.app -h
@@ -88,9 +73,9 @@ my_script.py
 Train an agent on a single GPU.
 """
 from adept.scripts.local import parse_args, main
-from adept.networks import NetworkModule, NetworkRegistry, SubModule1D
-from adept.agents import AgentModule, AgentRegistry
-from adept.environments import EnvModule, EnvRegistry
+from adept.network import NetworkModule, SubModule1D
+from adept.agent import AgentModule
+from adept.env import EnvModule
 
 
 class MyAgent(AgentModule):
@@ -110,22 +95,12 @@ class MySubModule1D(SubModule1D):
 
 
 if __name__ == '__main__':
-    agent_registry = AgentRegistry()
-    agent_registry.register_agent(MyAgent)
-    
-    env_registry = EnvRegistry()
-    env_registry.register_env(MyEnv, ['env-id-1', 'env-id-2'])
-    
-    network_registry = NetworkRegistry()
-    network_registry.register_custom_net(MyNet)
-    network_registry.register_submodule(MySubModule1D)
-    
-    main(
-        parse_args(),
-        agent_registry=agent_registry,
-        env_registry=env_registry,
-        net_registry=network_registry
-    )
+    import adept
+    adept.register_agent(MyAgent)
+    adept.register_env(MyEnv)
+    adept.register_network(MyNet)
+    adept.register_submodule(MySubModule1D)
+    main(parse_args())
 ```
 * Call your script like this: `python my_script.py --agent MyAgent --env 
 env-id-1 --custom-network MyNet`
@@ -164,8 +139,8 @@ million frames in less than one hour."
 * Batch normalization ([paper](https://arxiv.org/pdf/1502.03167.pdf))
 
 ### Environments
-* OpenAI Gym
-* StarCraft 2 (unstable)
+* OpenAI Gym Atari
+* StarCraft 2 (under development)
 
 ## Performance
 * ~ 3,000 Steps/second = 12,000 FPS (Atari)
