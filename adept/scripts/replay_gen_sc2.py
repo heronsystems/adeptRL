@@ -45,23 +45,22 @@ from absl import flags
 
 from adept.manager import SubProcEnvManager
 from adept.utils.logging import print_ascii_logo
-from adept.utils.script_helpers import (
-    LogDirHelper
-)
+from adept.utils.script_helpers import LogDirHelper
 from adept.network.modular_network import ModularNetwork
 from adept.utils.util import DotDict
 
 # hack to use argparse for SC2
 FLAGS = flags.FLAGS
-FLAGS(['local.py'])
+FLAGS(["local.py"])
 
 
 def parse_args():
     from docopt import docopt
+
     args = docopt(__doc__)
-    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
-    del args['h']
-    del args['help']
+    args = {k.strip("--").replace("-", "_"): v for k, v in args.items()}
+    del args["h"]
+    del args["help"]
     args = DotDict(args)
     args.epoch = int(float(args.epoch))
     args.gpu_id = int(args.gpu_id)
@@ -78,15 +77,15 @@ def main(args):
     """
 
     print_ascii_logo()
-    print('Saving replays... Press Ctrl+C to stop.')
+    print("Saving replays... Press Ctrl+C to stop.")
 
     log_dir_helper = LogDirHelper(args.log_id_dir)
 
-    with open(log_dir_helper.args_file_path(), 'r') as args_file:
+    with open(log_dir_helper.args_file_path(), "r") as args_file:
         train_args = DotDict(json.load(args_file))
 
     engine = env_registry.lookup_engine(train_args.env)
-    assert engine == 'AdeptSC2Env', "replay_gen_sc2.py is only for SC2."
+    assert engine == "AdeptSC2Env", "replay_gen_sc2.py is only for SC2."
 
     # construct env
     env = SubProcEnvManager.from_args(
@@ -95,7 +94,7 @@ def main(args):
         nb_env=1,
         registry=env_registry,
         sc2_replay_dir=log_dir_helper.epoch_path_at_epoch(args.epoch),
-        sc2_render=args.render
+        sc2_render=args.render,
     )
 
     output_space = agent_registry.lookup_output_space(
@@ -105,17 +104,11 @@ def main(args):
         network = net_registry.lookup_custom_net(
             train_args.custom_network
         ).from_args(
-            train_args,
-            env.observation_space,
-            output_space,
-            net_registry
+            train_args, env.observation_space, output_space, net_registry
         )
     else:
         network = ModularNetwork.from_args(
-            train_args,
-            env.observation_space,
-            output_space,
-            net_registry
+            train_args, env.observation_space, output_space, net_registry
         )
 
     # create an agent (add act_eval method)
@@ -132,7 +125,7 @@ def main(args):
         env_registry.lookup_reward_normalizer(train_args.env),
         env.gpu_preprocessor,
         env_registry.lookup_policy(env.engine)(env.action_space),
-        nb_env=1
+        nb_env=1,
     )
 
     # create a rendering container
@@ -144,5 +137,5 @@ def main(args):
         env.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())

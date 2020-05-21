@@ -3,11 +3,11 @@ import torch
 rollout_len = 20
 
 rewards = torch.zeros(rollout_len)
-rewards[-1] = 1.
+rewards[-1] = 1.0
 terminals = torch.zeros(rollout_len)
-terminals[-1] = 1.
-terminal_masks = 1. - terminals
-bootstrap_value = 0.
+terminals[-1] = 1.0
+terminal_masks = 1.0 - terminals
+bootstrap_value = 0.0
 
 target = bootstrap_value
 nsteps = []

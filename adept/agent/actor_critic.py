@@ -19,27 +19,20 @@ from .base.agent_module import AgentModule
 
 
 class ActorCritic(AgentModule):
-    args = {
-        **Rollout.args,
-        **ACRolloutActorTrain.args,
-        **ACRolloutLearner.args
-    }
+    args = {**Rollout.args, **ACRolloutActorTrain.args, **ACRolloutLearner.args}
 
     def __init__(
-            self,
-            reward_normalizer,
-            action_space,
-            spec_builder,
-            rollout_len,
-            discount,
-            normalize_advantage,
-            entropy_weight,
-            return_scale
+        self,
+        reward_normalizer,
+        action_space,
+        spec_builder,
+        rollout_len,
+        discount,
+        normalize_advantage,
+        entropy_weight,
+        return_scale,
     ):
-        super(ActorCritic, self).__init__(
-            reward_normalizer,
-            action_space
-        )
+        super(ActorCritic, self).__init__(reward_normalizer, action_space)
         self.discount = discount
         self.normalize_advantage = normalize_advantage
         self.entropy_weight = entropy_weight
@@ -51,21 +44,22 @@ class ActorCritic(AgentModule):
             discount,
             normalize_advantage,
             entropy_weight,
-            return_scale
+            return_scale,
         )
 
     @classmethod
     def from_args(
-        cls, args, reward_normalizer,
-        action_space, spec_builder, **kwargs
+        cls, args, reward_normalizer, action_space, spec_builder, **kwargs
     ):
         return cls(
-            reward_normalizer, action_space, spec_builder,
+            reward_normalizer,
+            action_space,
+            spec_builder,
             rollout_len=args.rollout_len,
             discount=args.discount,
             normalize_advantage=args.normalize_advantage,
             entropy_weight=args.entropy_weight,
-            return_scale=args.return_scale
+            return_scale=args.return_scale,
         )
 
     @property
@@ -82,9 +76,14 @@ class ActorCritic(AgentModule):
     def output_space(action_space):
         return ACRolloutActorTrain.output_space(action_space)
 
-    def compute_action_exp(self, predictions, internals, obs, available_actions):
-        return self._actor.compute_action_exp(predictions, internals, obs, available_actions)
+    def compute_action_exp(
+        self, predictions, internals, obs, available_actions
+    ):
+        return self._actor.compute_action_exp(
+            predictions, internals, obs, available_actions
+        )
 
     def compute_loss(self, network, next_obs, internals):
-        return self._learner.compute_loss(network, self.exp_cache.read(),
-                                          next_obs, internals)
+        return self._learner.compute_loss(
+            network, self.exp_cache.read(), next_obs, internals
+        )

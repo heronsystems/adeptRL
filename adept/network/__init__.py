@@ -18,8 +18,11 @@ from .net4d.identity_4d import Identity4D
 
 NET_REG = []
 SUBMOD_REG = [
-    Identity1D, Linear, LSTM,
+    Identity1D,
+    Linear,
+    LSTM,
     Identity2D,
-    Identity3D, FourConv,
-    Identity4D
+    Identity3D,
+    FourConv,
+    Identity4D,
 ]

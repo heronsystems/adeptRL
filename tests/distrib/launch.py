@@ -16,11 +16,7 @@ def main(args):
         current_env["RANK"] = str(dist_rank)
         current_env["LOCAL_RANK"] = str(local_rank)
 
-        cmd = [
-            sys.executable,
-            "-u",
-            args.script
-        ]
+        cmd = [sys.executable, "-u", args.script]
 
         proc = subprocess.Popen(cmd, env=current_env)
         processes.append(proc)
@@ -29,11 +25,12 @@ def main(args):
         process.wait()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from argparse import ArgumentParser
+
     parser = ArgumentParser()
-    parser.add_argument('--script', default='exp_sync_broadcast.py')
-    parser.add_argument('--nb-proc', type=int, default=2)
+    parser.add_argument("--script", default="exp_sync_broadcast.py")
+    parser.add_argument("--nb-proc", type=int, default=2)
     args = parser.parse_args()
 
     dist_world_size = args.nb_proc * NB_NODE

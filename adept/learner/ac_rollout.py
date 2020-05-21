@@ -8,20 +8,21 @@ class ACRolloutLearner(LearnerModule):
     """
     Actor Critic Rollout Learner
     """
+
     args = {
-        'discount': 0.99,
-        'normalize_advantage': False,
-        'entropy_weight': 0.01,
-        'return_scale': False
+        "discount": 0.99,
+        "normalize_advantage": False,
+        "entropy_weight": 0.01,
+        "return_scale": False,
     }
 
     def __init__(
-            self,
-            reward_normalizer,
-            discount,
-            normalize_advantage,
-            entropy_weight,
-            return_scale
+        self,
+        reward_normalizer,
+        discount,
+        normalize_advantage,
+        entropy_weight,
+        return_scale,
     ):
         self.reward_normalizer = reward_normalizer
         self.discount = discount
@@ -29,7 +30,7 @@ class ACRolloutLearner(LearnerModule):
         self.entropy_weight = entropy_weight
         self.return_scale = return_scale
         if return_scale:
-            self.dm_scaler = DeepMindReturnScaler(10. ** -3)
+            self.dm_scaler = DeepMindReturnScaler(10.0 ** -3)
 
     @classmethod
     def from_args(cls, args, reward_normalizer):
@@ -38,7 +39,7 @@ class ACRolloutLearner(LearnerModule):
             args.discount,
             args.normalize_advantage,
             args.entropy_weight,
-            args.return_scale
+            args.return_scale,
         )
 
     def compute_loss(self, network, experiences, next_obs, internals):
@@ -53,7 +54,7 @@ class ACRolloutLearner(LearnerModule):
         # estimate value of next state
         with torch.no_grad():
             results, _, _ = network(next_obs, internals)
-            last_values = results['critic'].squeeze(1).data
+            last_values = results["critic"].squeeze(1).data
 
         # compute nstep return and advantage over batch
         r_tgt_returns = self.compute_returns(
@@ -64,8 +65,9 @@ class ACRolloutLearner(LearnerModule):
         # normalize advantage so that an even number
         # of actions are reinforced and penalized
         if self.normalize_advantage:
-            r_advantages = (r_advantages - r_advantages.mean()) \
-                               / (r_advantages.std() + 1e-5)
+            r_advantages = (r_advantages - r_advantages.mean()) / (
+                r_advantages.std() + 1e-5
+            )
 
         # batched losses
         policy_loss = -(r_log_probs_action) * r_advantages.unsqueeze(-1)
@@ -75,9 +77,9 @@ class ACRolloutLearner(LearnerModule):
         value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
 
         losses = {
-            'value_loss': value_loss,
-            'policy_loss': policy_loss,
-            'entropy_loss': entropy_loss
+            "value_loss": value_loss,
+            "policy_loss": policy_loss,
+            "entropy_loss": entropy_loss,
         }
         metrics = {}
         return losses, metrics
@@ -89,18 +91,18 @@ class ACRolloutLearner(LearnerModule):
         nstep_target_returns = []
         for i in reversed(range(rollout_len)):
             reward = rewards[i]
-            terminal_mask = 1. - terminals[i].float()
+            terminal_mask = 1.0 - terminals[i].float()
 
             if self.return_scale:
                 target_return = self.dm_scaler.calc_scale(
-                    reward +
-                    self.discount *
-                    self.dm_scaler.calc_inverse_scale(target_return) *
-                    terminal_mask
+                    reward
+                    + self.discount
+                    * self.dm_scaler.calc_inverse_scale(target_return)
+                    * terminal_mask
                 )
             else:
                 target_return = reward + (
-                        self.discount * target_return * terminal_mask
+                    self.discount * target_return * terminal_mask
                 )
             nstep_target_returns.append(target_return)
 

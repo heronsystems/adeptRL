@@ -25,7 +25,7 @@ class SubModule4D(SubModule, metaclass=abc.ABCMeta):
     def output_shape(self, dim=None):
         if dim == 1:
             f, d, h, w = self._output_shape
-            return (f * d * h * w, )
+            return (f * d * h * w,)
         elif dim == 2:
             f, d, h, w = self._output_shape
             return (f, d * h * w)
@@ -35,7 +35,7 @@ class SubModule4D(SubModule, metaclass=abc.ABCMeta):
         elif dim == 4 or dim is None:
             return self._output_shape
         else:
-            raise ValueError('Invalid dim: {}'.format(dim))
+            raise ValueError("Invalid dim: {}".format(dim))
 
     def _to_1d(self, submodule_output):
         """

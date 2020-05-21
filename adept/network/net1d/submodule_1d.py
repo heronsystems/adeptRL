@@ -26,13 +26,13 @@ class SubModule1D(SubModule, metaclass=abc.ABCMeta):
         if dim is None or dim == 1:
             return self._output_shape
         elif dim == 2:
-            return self._output_shape + (1, )
+            return self._output_shape + (1,)
         elif dim == 3:
             return self._output_shape + (1, 1)
         elif dim == 4:
             return self._output_shape + (1, 1, 1)
         else:
-            raise ValueError('Invalid dim: {}'.format(dim))
+            raise ValueError("Invalid dim: {}".format(dim))
 
     def _to_1d(self, submodule_output):
         """

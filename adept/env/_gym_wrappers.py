@@ -32,7 +32,7 @@ class NoopResetEnv(gym.Wrapper):
         self.noop_max = noop_max
         self.override_num_noops = None
         self.noop_action = 0
-        assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
+        assert env.unwrapped.get_action_meanings()[0] == "NOOP"
 
     def reset(self, **kwargs):
         """ Do no-op action for a number of steps in [1, noop_max]."""
@@ -40,7 +40,9 @@ class NoopResetEnv(gym.Wrapper):
         if self.override_num_noops is not None:
             noops = self.override_num_noops
         else:
-            noops = self.unwrapped.np_random.randint(1, self.noop_max + 1)  #pylint: disable=E1101
+            noops = self.unwrapped.np_random.randint(
+                1, self.noop_max + 1
+            )  # pylint: disable=E1101
         assert noops > 0
         obs = None
         for _ in range(noops):
@@ -64,8 +66,8 @@ class FireResetEnv(gym.Wrapper):
         """Take action on reset for env that are fixed until firing."""
         gym.Wrapper.__init__(self, env)
         self.lives = 0
-        self.fire_action = env.unwrapped.get_action_meanings().index('FIRE')
-        assert env.unwrapped.get_action_meanings()[1] == 'FIRE'
+        self.fire_action = env.unwrapped.get_action_meanings().index("FIRE")
+        assert env.unwrapped.get_action_meanings()[1] == "FIRE"
         assert len(env.unwrapped.get_action_meanings()) >= 3
 
     def reset(self, **kwargs):
@@ -141,7 +143,7 @@ class MaxAndSkipEnv(gym.Wrapper):
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
         self._obs_buffer = np.zeros(
-            (2, ) + env.observation_space.shape, dtype=np.uint8
+            (2,) + env.observation_space.shape, dtype=np.uint8
         )
         self._skip = skip
 

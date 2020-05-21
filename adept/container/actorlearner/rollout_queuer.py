@@ -41,7 +41,7 @@ class RolloutQueuerAsync:
             # if ray returns an empty list that means all objects have been gotten
             # this should never happen?
             if len(ready_ids) == 0:
-                print('WARNING: ray returned no ready rollouts')
+                print("WARNING: ray returned no ready rollouts")
             # otherwise rollout was returned
             else:
                 for ready in ready_ids:
@@ -62,10 +62,12 @@ class RolloutQueuerAsync:
                 self._restart_idle_workers()
 
         # done, wait for all remaining to finish
-        dones, not_dones = ray.wait(self.futures, len(self.futures), timeout=self.queue_timeout)
+        dones, not_dones = ray.wait(
+            self.futures, len(self.futures), timeout=self.queue_timeout
+        )
 
         if len(not_dones) > 0:
-            print('WARNING: Not all rollout workers finished')
+            print("WARNING: Not all rollout workers finished")
 
     def _add_to_queue(self, rollout):
         st = time()
@@ -75,12 +77,16 @@ class RolloutQueuerAsync:
 
     def start(self):
         self._should_stop = False
-        self.background_thread = threading.Thread(target=self._background_queing_thread)
+        self.background_thread = threading.Thread(
+            target=self._background_queing_thread
+        )
         self.background_thread.start()
 
     def get(self):
         st = time()
-        worker_data = [self.rollout_queue.get(True) for _ in range(self.num_rollouts)]
+        worker_data = [
+            self.rollout_queue.get(True) for _ in range(self.num_rollouts)
+        ]
         et = time()
         self._host_wait_time += et - st
 
@@ -88,7 +94,7 @@ class RolloutQueuerAsync:
         terminal_rewards = []
         terminal_infos = []
         for w in worker_data:
-            r, t, i = w['rollout'], w['terminal_rewards'], w['terminal_infos']
+            r, t, i = w["rollout"], w["terminal_rewards"], w["terminal_infos"]
             rollouts.append(r)
             terminal_rewards.append(t)
             terminal_infos.append(i)
@@ -103,8 +109,8 @@ class RolloutQueuerAsync:
 
     def metrics(self):
         return {
-            'Host wait time': self._host_wait_time,
-            'Worker wait time': self._worker_wait_time
+            "Host wait time": self._host_wait_time,
+            "Worker wait time": self._worker_wait_time,
         }
 
     def _restart_idle_workers(self):
@@ -120,4 +126,3 @@ class RolloutQueuerAsync:
 
     def __len__(self):
         return len(self.rollout_queue)
-

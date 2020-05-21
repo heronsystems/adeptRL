@@ -27,17 +27,17 @@ from adept.utils.util import listd_to_dlist, dtensor_to_dev
 
 class EvalContainer:
     def __init__(
-            self,
-            eval_actor,
-            epoch_id,
-            logger,
-            log_id_dir,
-            gpu_id,
-            nb_episode,
-            start,
-            end,
-            seed,
-            manager
+        self,
+        eval_actor,
+        epoch_id,
+        logger,
+        log_id_dir,
+        gpu_id,
+        nb_episode,
+        start,
+        end,
+        seed,
+        manager,
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
@@ -49,7 +49,7 @@ class EvalContainer:
         else:
             epoch_ids = self.log_dir_helper.epochs()
             epoch_ids = filter(lambda eid: eid >= start, epoch_ids)
-            if end != -1.:
+            if end != -1.0:
                 epoch_ids = filter(lambda eid: eid <= end, epoch_ids)
             epoch_ids = list(epoch_ids)
         self.epoch_ids = epoch_ids
@@ -58,23 +58,16 @@ class EvalContainer:
         env_cls = REGISTRY.lookup_env(train_args.env)
         mgr_cls = REGISTRY.lookup_manager(manager)
         self.env_mgr = env_mgr = SubProcEnvManager.from_args(
-            self.train_args,
-            engine,
-            env_cls,
-            seed=seed,
-            nb_env=nb_episode
+            self.train_args, engine, env_cls, seed=seed, nb_env=nb_episode
         )
         if train_args.agent:
             agent = train_args.agent
         else:
             agent = train_args.actor_host
-        output_space = REGISTRY.lookup_output_space(
-            agent, env_mgr.action_space
-        )
+        output_space = REGISTRY.lookup_output_space(agent, env_mgr.action_space)
         actor_cls = REGISTRY.lookup_actor(eval_actor)
         self.actor = actor_cls.from_args(
-            actor_cls.prompt(),
-            env_mgr.action_space
+            actor_cls.prompt(), env_mgr.action_space
         )
 
         self.network = self._init_network(
@@ -82,7 +75,7 @@ class EvalContainer:
             env_mgr.observation_space,
             env_mgr.gpu_preprocessor,
             output_space,
-            REGISTRY
+            REGISTRY,
         ).to(device)
 
     @staticmethod
@@ -95,11 +88,7 @@ class EvalContainer:
 
     @staticmethod
     def _init_network(
-            train_args,
-            obs_space,
-            gpu_preprocessor,
-            output_space,
-            net_reg
+        train_args, obs_space, gpu_preprocessor, output_space, net_reg
     ):
         if train_args.custom_network:
             net_cls = net_reg.lookup_network(train_args.custom_network)
@@ -107,43 +96,46 @@ class EvalContainer:
             net_cls = ModularNetwork
 
         return net_cls.from_args(
-            train_args,
-            obs_space,
-            output_space,
-            gpu_preprocessor,
-            net_reg
+            train_args, obs_space, output_space, gpu_preprocessor, net_reg
         )
 
     def run(self):
         nb_env = self.env_mgr.nb_env
         best_epoch_id = None
-        overall_mean = -float('inf')
+        overall_mean = -float("inf")
         for epoch_id in self.epoch_ids:
-            best_mean = -float('inf')
+            best_mean = -float("inf")
             best_std = None
             selected_model = None
             reward_buf = torch.zeros(nb_env)
-            for net_path in self.log_dir_helper.network_paths_at_epoch(epoch_id):
+            for net_path in self.log_dir_helper.network_paths_at_epoch(
+                epoch_id
+            ):
                 self.network.load_state_dict(
                     torch.load(
-                        net_path,
-                        map_location=lambda storage, loc: storage
+                        net_path, map_location=lambda storage, loc: storage
                     )
                 )
                 self.network.eval()
 
-                internals = listd_to_dlist([
-                    self.network.new_internals(self.device) for _ in
-                    range(nb_env)
-                ])
+                internals = listd_to_dlist(
+                    [
+                        self.network.new_internals(self.device)
+                        for _ in range(nb_env)
+                    ]
+                )
                 episode_completes = [False for _ in range(nb_env)]
                 next_obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
 
                 while not all(episode_completes):
                     obs = next_obs
                     with torch.no_grad():
-                        actions, _, internals = self.actor.act(self.network, obs, internals)
-                    next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
+                        actions, _, internals = self.actor.act(
+                            self.network, obs, internals
+                        )
+                    next_obs, rewards, terminals, infos = self.env_mgr.step(
+                        actions
+                    )
                     next_obs = dtensor_to_dev(next_obs, self.device)
 
                     for i in range(self.env_mgr.nb_env):
@@ -164,21 +156,25 @@ class EvalContainer:
                     selected_model = os.path.split(net_path)[-1]
 
             self.logger.info(
-                f'EPOCH_ID: {epoch_id} '
-                f'MEAN_REWARD: {best_mean} '
-                f'STD_DEV: {best_std} '
-                f'SELECTED_MODEL: {selected_model}'
+                f"EPOCH_ID: {epoch_id} "
+                f"MEAN_REWARD: {best_mean} "
+                f"STD_DEV: {best_std} "
+                f"SELECTED_MODEL: {selected_model}"
             )
-            with open(self.log_dir_helper.eval_path(), 'a') as eval_f:
-                eval_f.write(f'{epoch_id},'
-                             f'{best_mean},'
-                             f'{best_std},'
-                             f'{selected_model}\n')
+            with open(self.log_dir_helper.eval_path(), "a") as eval_f:
+                eval_f.write(
+                    f"{epoch_id},"
+                    f"{best_mean},"
+                    f"{best_std},"
+                    f"{selected_model}\n"
+                )
 
             if best_mean >= overall_mean:
                 best_epoch_id = epoch_id
                 overall_mean = best_mean
-        self.logger.info(f'*** EPOCH_ID: {best_epoch_id} MEAN_REWARD: {overall_mean} ***')
+        self.logger.info(
+            f"*** EPOCH_ID: {best_epoch_id} MEAN_REWARD: {overall_mean} ***"
+        )
 
     def close(self):
         self.env_mgr.close()

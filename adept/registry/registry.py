@@ -54,7 +54,7 @@ class Registry:
             self._reward_norm_class_by_id.items(),
             self._net_class_by_id.items(),
             self._submod_class_by_id.items(),
-            self._manager_class_by_id.items()
+            self._manager_class_by_id.items(),
         )
 
     def save_extern_classes(self, log_id_dir):
@@ -66,69 +66,81 @@ class Registry:
         for k, v in self._iter_all_classes():
             if k not in self._internal_modules:
                 if k in self._agent_class_by_id:
-                    self._write_cls(v, log_id_dir, 'agent')
+                    self._write_cls(v, log_id_dir, "agent")
                 elif k in self._actor_class_by_id:
-                    self._write_cls(v, log_id_dir, 'actor')
+                    self._write_cls(v, log_id_dir, "actor")
                 elif k in self._exp_class_by_id:
-                    self._write_cls(v, log_id_dir, 'exp')
+                    self._write_cls(v, log_id_dir, "exp")
                 elif k in self._learner_class_by_id:
-                    self._write_cls(v, log_id_dir, 'learner')
+                    self._write_cls(v, log_id_dir, "learner")
                 elif k in self._env_class_by_engine_id:
-                    self._write_cls(v, log_id_dir, 'env')
+                    self._write_cls(v, log_id_dir, "env")
                 elif k in self._reward_norm_class_by_id:
-                    self._write_cls(v, log_id_dir, 'reward_norm')
+                    self._write_cls(v, log_id_dir, "reward_norm")
                 elif k in self._net_class_by_id:
-                    self._write_cls(v, log_id_dir, 'net')
+                    self._write_cls(v, log_id_dir, "net")
                 elif k in self._submod_class_by_id:
-                    self._write_cls(v, log_id_dir, 'submod')
+                    self._write_cls(v, log_id_dir, "submod")
                 elif k in self._manager_class_by_id:
-                    self._write_cls(v, log_id_dir, 'manager')
+                    self._write_cls(v, log_id_dir, "manager")
                 else:
-                    raise Exception('Unreachable.')
+                    raise Exception("Unreachable.")
 
-    def load_extern_classes(self, log_id_dir, extern_modules=
-                            ['agent', 'actor', 'exp', 'learner', 'env',
-                             'reward_norm', 'net', 'submod', 'manager'
-                            ]):
+    def load_extern_classes(
+        self,
+        log_id_dir,
+        extern_modules=[
+            "agent",
+            "actor",
+            "exp",
+            "learner",
+            "env",
+            "reward_norm",
+            "net",
+            "submod",
+            "manager",
+        ],
+    ):
         def join(d):
             return os.path.join(log_id_dir, d)
+
         cls_dirs = [join(x) for x in extern_modules]
         for cls_dir in cls_dirs:
             if os.path.exists(cls_dir):
                 dirname = os.path.split(cls_dir)[-1]
-                for cls_path in glob(os.path.join(cls_dir, '*.cls')):
+                for cls_path in glob(os.path.join(cls_dir, "*.cls")):
                     cls = self._load_cls(cls_path)
-                    if 'agent' in dirname:
+                    if "agent" in dirname:
                         self.register_agent(cls)
-                    elif 'actor' in dirname:
+                    elif "actor" in dirname:
                         self.register_actor(cls)
-                    elif 'exp' in dirname:
+                    elif "exp" in dirname:
                         self.register_exp(cls)
-                    elif 'learner' in dirname:
+                    elif "learner" in dirname:
                         self.register_learner(cls)
-                    elif 'env' in dirname:
+                    elif "env" in dirname:
                         self.register_env(cls)
-                    elif 'reward_norm' in dirname:
+                    elif "reward_norm" in dirname:
                         self.register_reward_normalizer(cls)
-                    elif 'net' in dirname:
+                    elif "net" in dirname:
                         self.register_network(cls)
-                    elif 'submod' in dirname:
+                    elif "submod" in dirname:
                         self.register_submodule(cls)
-                    elif 'manager' in dirname:
+                    elif "manager" in dirname:
                         self.register_manager(cls)
                     else:
-                        raise Exception('Unreachable.')
+                        raise Exception("Unreachable.")
 
     @staticmethod
     def _write_cls(cls, log_id_dir, dirname):
         os.makedirs(os.path.join(log_id_dir, dirname), exist_ok=True)
-        filepath = os.path.join(log_id_dir, dirname, cls.__name__ + '.cls')
-        with open(filepath, 'wb') as f:
+        filepath = os.path.join(log_id_dir, dirname, cls.__name__ + ".cls")
+        with open(filepath, "wb") as f:
             pickle.dump(cls, f)
 
     @staticmethod
     def _load_cls(cls_path):
-        with open(cls_path, 'rb') as f:
+        with open(cls_path, "rb") as f:
             return pickle.load(f)
 
     # AGENT METHODS
@@ -160,7 +172,7 @@ class Registry:
         elif _id in self._actor_class_by_id:
             return self._actor_class_by_id[_id].output_space(action_space)
         else:
-            raise IndexError('Agent or Actor not found: {}'.format(_id))
+            raise IndexError("Agent or Actor not found: {}".format(_id))
 
     # ACTOR METHODS
     def register_actor(self, actor_class):
@@ -224,7 +236,9 @@ class Registry:
         assert issubclass(env_module_class, EnvModule)
         env_module_class.check_args_implemented()
         env_module_class.check_ids_implemented()
-        self._engine_ids_by_env_id_set[frozenset(env_module_class.ids)] = engine_id
+        self._engine_ids_by_env_id_set[
+            frozenset(env_module_class.ids)
+        ] = engine_id
         self._env_class_by_engine_id[engine_id] = env_module_class
         return self
 
@@ -238,7 +252,7 @@ class Registry:
             if env_id in env_id_set:
                 eng = engine_id
         if eng is None:
-            raise Exception('Environment not registered: ' + env_id)
+            raise Exception("Environment not registered: " + env_id)
         return eng
 
     # REWARD NORM METHODS
@@ -318,8 +332,7 @@ class Registry:
         :return: Dict[str, Any]
         """
         return RequiresArgsMixin._prompt(
-            'ModularNetwork',
-            self.lookup_modular_args(args)
+            "ModularNetwork", self.lookup_modular_args(args)
         )
 
     def register_manager(self, manager_cls):
@@ -332,45 +345,54 @@ class Registry:
 
     def _register_agents(self):
         from adept.agent import AGENT_REG
+
         for agent in AGENT_REG:
             self.register_agent(agent)
 
     def _register_actors(self):
         from adept.actor import ACTOR_REG
+
         for actor in ACTOR_REG:
             self.register_actor(actor)
 
     def _register_learners(self):
         from adept.learner import LEARNER_REG
+
         for learner in LEARNER_REG:
             self.register_learner(learner)
 
     def _register_exps(self):
         from adept.exp import EXP_REG
+
         for exp in EXP_REG:
             self.register_exp(exp)
 
     def _register_envs(self):
         from adept.env import ENV_REG
+
         for env in ENV_REG:
             self.register_env(env)
 
     def _register_reward_norms(self):
         from adept.rewardnorm import REWARD_NORM_REG
+
         for rewardnorm in REWARD_NORM_REG:
             self.register_reward_normalizer(rewardnorm)
 
     def _register_networks(self):
         from adept.network import NET_REG
+
         for net in NET_REG:
             self.register_network(net)
 
     def _register_submodules(self):
         from adept.network import SUBMOD_REG
+
         for submod in SUBMOD_REG:
             self.register_submodule(submod)
 
     def _register_managers(self):
         from adept.manager import MANAGER_REG
+
         for manager in MANAGER_REG:
             self.register_manager(manager)

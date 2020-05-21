@@ -31,7 +31,7 @@ Usage:
     local (-h | --help)
 
 Agent Options:
-    --agent <str>           Name of agent class [default: ActorCritic]
+    --agent <str>           Name of agent class [default: PPO]
 
 Environment Options:
     --env <str>             Environment name [default: PongNoFrameskip-v4]
@@ -65,7 +65,7 @@ Network Options:
 Optimizer Options:
     --optim <str>           Name of optimizer [default: RMSprop]
     --lr <float>            Learning rate [default: 0.0007]
-    --warmup <int>          Number of steps to warm up for [default: 100]
+    --warmup <int>          Number of steps to warm up for [default: 0]
 
 Logging Options:
     --tag <str>             Name your run [default: None]
@@ -80,26 +80,28 @@ Troubleshooting Options:
 import os
 
 from absl import flags
-
-from adept.container import Init, Local
-from adept.utils.script_helpers import parse_none, parse_path
+import ray
+from adept.container import Init
+from adept.trainables.local import Trainable
+from adept.utils.script_helpers import (
+    parse_none, parse_path
+)
 from adept.utils.util import DotDict
 from adept.registry import REGISTRY as R
 
 # hack to use bypass pysc2 flags
 FLAGS = flags.FLAGS
-FLAGS(["local.py"])
+FLAGS(['local.py'])
 
-MODE = "Local"
-
-
+MODE = 'Local'
+from ray import tune
+import numpy as np
 def parse_args():
     from docopt import docopt
-
     args = docopt(__doc__)
-    args = {k.strip("--").replace("-", "_"): v for k, v in args.items()}
-    del args["h"]
-    del args["help"]
+    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
+    del args['h']
+    del args['help']
     args = DotDict(args)
 
     # Ignore other args if resuming
@@ -124,47 +126,61 @@ def parse_args():
     args.profile = bool(args.profile)
     return args
 
-
 def main(args):
     """
     Run local training.
     :param args: Dict[str, Any]
     :return:
     """
+
     args, log_id_dir, initial_step, logger = Init.main(MODE, args)
     R.save_extern_classes(log_id_dir)
+    args.log_id_dir = log_id_dir
+    args.initial_step = initial_step
+    args.logger = logger
 
-    container = Local(args, logger, log_id_dir, initial_step)
+    from ray.tune.suggest.hyperopt import HyperOptSearch
+    from hyperopt import hp
+    from hyperopt.pyll import scope
+    from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
+    ray.init(num_cpus=8, num_gpus=1)
 
-    if args.profile:
-        try:
-            from pyinstrument import Profiler
-        except:
-            raise ImportError("You must install pyinstrument to use profiling.")
-        container.nb_step = 10e3
-        profiler = Profiler()
-        profiler.start()
+    space = {
+        "lr": hp.loguniform("lr", 1e-10, .01) - 1,
+        "warmup": scope.int(hp.quniform('warmup', 0, 100, q=1)),
+
+    }
+    algo = HyperOptSearch(space, metric="term_reward", mode="max")
 
     try:
-        container.run()
-    finally:
-        if args.profile:
-            profiler.stop()
-            print(profiler.output_text(unicode=True, color=True))
-        container.close()
+        analysis = tune.run(Trainable,
+                        config=args,
+                        search_alg=algo,
+                        num_samples=4,
+                        scheduler=ASHAScheduler(metric="term_reward", mode="max", grace_period=1),
+                        resources_per_trial={"cpu": 4, "gpu": .5},
+                        reuse_actors=True,
+                        stop={"training_iteration": 5}
+                            )
+        print(analysis.dataframe('term_reward'))
+    except Exception as e:
+        print(e)
 
     if args.eval:
         from adept.scripts.evaluate import main
-
         eval_args = {
-            "log_id_dir": log_id_dir,
-            "gpu_id": 0,
-            "nb_episode": 30,
+            'log_id_dir': log_id_dir,
+            'gpu_id': 0,
+            'nb_episode': 30,
         }
         if args.custom_network:
-            eval_args["custom_network"] = args.custom_network
+            eval_args['custom_network'] = args.custom_network
         main(eval_args)
 
 
-if __name__ == "__main__":
-    main(parse_args())
+if __name__ == '__main__':
+
+    args = parse_args()
+
+    analysis = main(args)
+

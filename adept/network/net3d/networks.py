@@ -19,8 +19,15 @@ from torch.nn import Conv2d, BatchNorm2d, init, functional as F, Linear
 
 from adept.modules import MultiHeadSelfAttention, Identity
 from ._resnets import (
-    resnet18, resnet18v2, resnet34, resnet34v2, resnet50v2, resnet101,
-    resnet101v2, resnet152, resnet152v2
+    resnet18,
+    resnet18v2,
+    resnet34,
+    resnet34v2,
+    resnet50v2,
+    resnet101,
+    resnet101v2,
+    resnet152,
+    resnet152v2,
 )
 from ..base.submodule import SubModule
 
@@ -47,7 +54,7 @@ class Nature(SubModule):
             self.bn2 = Identity()
             self.bn3 = Identity()
 
-        relu_gain = init.calculate_gain('relu')
+        relu_gain = init.calculate_gain("relu")
         self.conv1.weight.data.mul_(relu_gain)
         self.conv2.weight.data.mul_(relu_gain)
         self.conv3.weight.data.mul_(relu_gain)
@@ -85,7 +92,7 @@ class Mnih2013(SubModule):
             self.bn1 = Identity()
             self.bn2 = Identity()
 
-        relu_gain = init.calculate_gain('relu')
+        relu_gain = init.calculate_gain("relu")
         self.conv1.weight.data.mul_(relu_gain)
         self.conv2.weight.data.mul_(relu_gain)
 
@@ -144,7 +151,7 @@ class FourConvSpatialAttention(SubModule):
             self.bn3 = Identity()
             self.bn4 = Identity()
 
-        relu_gain = init.calculate_gain('relu')
+        relu_gain = init.calculate_gain("relu")
         self.conv1.weight.data.mul_(relu_gain)
         self.conv2.weight.data.mul_(relu_gain)
         self.conv3.weight.data.mul_(relu_gain)
@@ -162,14 +169,18 @@ class FourConvSpatialAttention(SubModule):
         x = F.relu(self.bn1(self.conv1(input)))
         x = F.relu(self.bn2(self.conv2(x)))
 
-        xs_chan = torch.linspace(-1, 1, 20)\
-            .view(1, 1, 1, 20)\
-            .expand(input.size(0), 1, 20, 20)\
+        xs_chan = (
+            torch.linspace(-1, 1, 20)
+            .view(1, 1, 1, 20)
+            .expand(input.size(0), 1, 20, 20)
             .to(input.device)
-        ys_chan = torch.linspace(-1, 1, 20)\
-            .view(1, 1, 20, 1)\
-            .expand(input.size(0), 1, 20, 20)\
+        )
+        ys_chan = (
+            torch.linspace(-1, 1, 20)
+            .view(1, 1, 20, 1)
+            .expand(input.size(0), 1, 20, 20)
             .to(input.device)
+        )
         x = torch.cat([x, xs_chan, ys_chan], dim=1)
         h = x.size(2)
         w = x.size(3)
@@ -210,7 +221,7 @@ class FourConvLarger(SubModule):
             self.bn3 = Identity()
             self.bn4 = Identity()
 
-        relu_gain = init.calculate_gain('relu')
+        relu_gain = init.calculate_gain("relu")
         self.conv1.weight.data.mul_(relu_gain)
         self.conv2.weight.data.mul_(relu_gain)
         self.conv3.weight.data.mul_(relu_gain)
@@ -242,7 +253,7 @@ class BaseResNet(SubModule, metaclass=abc.ABCMeta):
         self.conv1 = Conv2d(
             in_shape[0], 64, 7, stride=2, padding=1, bias=bias
         )  # 40x40
-        relu_gain = init.calculate_gain('relu')
+        relu_gain = init.calculate_gain("relu")
         self.conv1.weight.data.mul_(relu_gain)
 
         if normalize:

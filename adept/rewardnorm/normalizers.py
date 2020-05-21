@@ -17,10 +17,7 @@ from .base import RewardNormModule
 
 
 class Clip(RewardNormModule):
-    args = {
-        'floor': -1,
-        'ceil': 1
-    }
+    args = {"floor": -1, "ceil": 1}
 
     def __init__(self, floor, ceil):
         self.floor = floor
@@ -35,9 +32,7 @@ class Clip(RewardNormModule):
 
 
 class Scale(RewardNormModule):
-    args = {
-        'coefficient': 0.1
-    }
+    args = {"coefficient": 0.1}
 
     def __init__(self, coefficient):
         self.coefficient = coefficient

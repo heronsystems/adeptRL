@@ -71,14 +71,18 @@ class RMC(NetworkModule):
 
         h = x.size(2)
         w = x.size(3)
-        xs_chan = torch.linspace(-1, 1, w)\
-            .view(1, 1, 1, w)\
-            .expand(input.size(0), 1, w, w)\
+        xs_chan = (
+            torch.linspace(-1, 1, w)
+            .view(1, 1, 1, w)
+            .expand(input.size(0), 1, w, w)
             .to(input.device)
-        ys_chan = torch.linspace(-1, 1, h)\
-            .view(1, 1, h, 1)\
-            .expand(input.size(0), 1, h, h)\
+        )
+        ys_chan = (
+            torch.linspace(-1, 1, h)
+            .view(1, 1, h, 1)
+            .expand(input.size(0), 1, h, h)
             .to(input.device)
+        )
         x = torch.cat([x, xs_chan, ys_chan], dim=1)
 
         # need to transpose because attention expects

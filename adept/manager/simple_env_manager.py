@@ -65,13 +65,19 @@ class SimpleEnvManager(EnvManagerModule):
 
     def step_async(self, actions):
         actions_tensor = dlist_to_listd(actions)
-        self.actions = [{k: v.item() for k, v in a_ten.items()} for a_ten in actions_tensor]
+        self.actions = [
+            {k: v.item() for k, v in a_ten.items()} for a_ten in actions_tensor
+        ]
 
     def step_wait(self):
         obs = []
         for e in range(self.nb_env):
-            ob, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = \
-                self.envs[e].step(self.actions[e])
+            (
+                ob,
+                self.buf_rews[e],
+                self.buf_dones[e],
+                self.buf_infos[e],
+            ) = self.envs[e].step(self.actions[e])
             if self.buf_dones[e]:
                 ob = self.envs[e].reset()
             obs.append(ob)
@@ -84,7 +90,12 @@ class SimpleEnvManager(EnvManagerModule):
                 new_obs[k] = v
         self.buf_obs = new_obs
 
-        return self.buf_obs, torch.tensor(self.buf_rews), torch.tensor(self.buf_dones), self.buf_infos
+        return (
+            self.buf_obs,
+            torch.tensor(self.buf_rews),
+            torch.tensor(self.buf_dones),
+            self.buf_infos,
+        )
 
     def reset(self):
         obs = []
@@ -104,7 +115,7 @@ class SimpleEnvManager(EnvManagerModule):
     def close(self):
         return [e.close() for e in self.envs]
 
-    def render(self, mode='human'):
+    def render(self, mode="human"):
         return [e.render(mode=mode) for e in self.envs]
 
     def _is_tensor_key(self, key):

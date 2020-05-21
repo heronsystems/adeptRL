@@ -23,7 +23,7 @@
 # It's important to ensure that username, email, and fullname all match across
 # all Docker instances that you wish to all be associated with the same user
 # for persistence reasons.
-FROM nvidia/cudagl:10.1-devel-ubuntu18.04
+FROM ubuntu:18.04
 
 ARG USERNAME
 ARG EMAIL
@@ -129,25 +129,6 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         torch==1.5.0 \
         torchvision==0.6.0 \
         tqdm==4.43.0
-
-# ==================================================================
-# cuDNN
-# ==================================================================
-RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
-    rm -rf /var/lib/apt/lists/* \
-           /etc/apt/sources.list.d/cuda.list \
-           /etc/apt/sources.list.d/nvidia-ml.list && \
-    apt-get update && \
-    mkdir -p /opt/cudnn7 && \
-    cd /opt/cudnn7/ && \
-    wget http://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb && \
-    dpkg -i nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb && \
-    apt-get update && \
-    $APT_INSTALL libcudnn7-dev && \
-    ldconfig && \
-    apt-get clean && \
-    apt-get autoremove && \
-    rm -rf /var/lib/apt/lists/* /tmp/* ~/*
 
 # ==================================================================
 # OpenAI Gym
