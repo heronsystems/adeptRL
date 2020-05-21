@@ -23,48 +23,17 @@ class SubModule2D(SubModule, metaclass=abc.ABCMeta):
     def __init__(self, input_shape, id):
         super(SubModule2D, self).__init__(input_shape, id)
 
-    def output_shape(self, dim=None):
-        if dim == 1:
-            f, l = self._output_shape
-            return (f * l,)
-        elif dim == 2 or dim is None:
-            return self._output_shape
-        elif dim == 3:
-            f, l = self._output_shape
-            return (f, math.sqrt(l), math.sqrt(l))
-        elif dim == 4:
-            f, l = self._output_shape
-            return (f, l, 1, 1)
-        else:
-            raise ValueError("Invalid dim: {}".format(dim))
+    def _to_1d_shape(self):
+        f, s = self._output_shape
+        return (f * s,)
 
-    def _to_1d(self, submodule_output):
-        """
-        :param submodule_output: torch.Tensor (Batch + 2D)
-        :return: torch.Tensor (Batch + 1D)
-        """
-        n, f, l = submodule_output.size()
-        return submodule_output.view(n, f * l)
+    def _to_2d_shape(self):
+        return self._output_shape
 
-    def _to_2d(self, submodule_output):
-        """
-        :param submodule_output: torch.Tensor (Batch + 2D)
-        :return: torch.Tensor (Batch + 2D)
-        """
-        return submodule_output
+    def _to_3d_shape(self):
+        f, s = self._output_shape
+        return (f * s, 1, 1)
 
-    def _to_3d(self, submodule_output):
-        """
-        :param submodule_output: torch.Tensor (Batch + 2D)
-        :return: torch.Tensor (Batch + 3D)
-        """
-        n, f, l = submodule_output.size()
-        return submodule_output.view(n, f, int(math.sqrt(l)), int(math.sqrt(l)))
-
-    def _to_4d(self, submodule_output):
-        """
-        :param submodule_output: torch.Tensor (Batch + 2D)
-        :return: torch.Tensor (Batch + 4D)
-        """
-        n, f, l = submodule_output.size()
-        return submodule_output.view(n, f, l, 1, 1)
+    def _to_4d_shape(self):
+        f, s = self._output_shape
+        return (f, s, 1, 1)
