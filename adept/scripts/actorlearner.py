@@ -245,7 +245,9 @@ def main(args):
     finally:
         closes = [main_learner.close.remote()]
         closes.extend([f.close.remote() for f in peer_learners])
+        closes.extend([w.close.remote() for w in workers])
         done_closing = ray.wait(closes)
+
 
     if args.eval:
         from adept.scripts.evaluate import main
