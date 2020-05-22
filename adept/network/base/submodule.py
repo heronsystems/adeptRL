@@ -14,8 +14,12 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     def __init__(self, input_shape, id):
         """
-        :param input_shape: Tuple[*Dim] Input shape excluding batch dimension
-        :param id: str Unique identifier for this instance
+        Parameters
+        ----------
+        input_shape : tuple[int]
+            Input shape excluding batch dimension
+        id : str
+            Unique identifier for this instance
         """
         super(SubModule, self).__init__()
         self._input_shape = input_shape
@@ -29,14 +33,40 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def _output_shape(self):
-        """
-        :return: Tuple[*Dim] Output shape excluding batch dimension
+        """Output shape excluding batch dimension
+
+        Returns
+        -------
+        tuple[int]
+            Output shape exlcuding batch dimension
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def output_shape(self, dim=None):
-        raise NotImplementedError
+        """Output shape casted to requested dimension
+
+        Parameters
+        ----------
+        dim : int, optional
+            Desired dimensionality, defaults to native
+
+        Returns
+        -------
+        tuple[int]
+            Output shape
+        """
+        if dim is None:
+            dim = len(self._output_shape)
+        if dim == 1:
+            return self._to_1d_shape()
+        elif dim == 2 or dim is None:
+            return self._to_2d_shape()
+        elif dim == 3:
+            return self._to_3d_shape()
+        elif dim == 4:
+            return self._to_4d_shape()
+        else:
+            raise ValueError("Invalid dim: {}".format(dim))
 
     @abc.abstractmethod
     def _forward(self, input, internals, **kwargs):
@@ -46,20 +76,84 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def _to_1d(self, submodule_output):
-        raise NotImplementedError
+        """Convert to Batch + 1D
 
-    @abc.abstractmethod
+        Parameters
+        ----------
+        submodule_output : torch.Tensor
+            Batch + 2D Tensor
+
+        Returns
+        -------
+        torch.Tensor
+            Batch + 1D Tensor
+        """
+        b = submodule_output.size()[0]
+        return submodule_output.view(b, *self._to_1d_shape())
+
     def _to_2d(self, submodule_output):
-        raise NotImplementedError
+        """Convert to Batch + 2D
 
-    @abc.abstractmethod
+        Parameters
+        ----------
+        submodule_output : torch.Tensor
+            Batch + 2D Tensor (B, S, F)
+
+        Returns
+        -------
+        torch.Tensor
+            Batch + 2D Tensor (B, S, F)
+        """
+        b = submodule_output.size()[0]
+        return submodule_output.view(b, *self._to_2d_shape())
+
     def _to_3d(self, submodule_output):
+        """Convert to Batch + 3D
+
+        Parameters
+        ----------
+        submodule_output : torch.Tensor
+            Batch + 2D Tensor (B, S, F)
+
+        Returns
+        -------
+        torch.Tensor
+            Batch + 3D Tensor
+        """
+        b = submodule_output.size()[0]
+        return submodule_output.view(b, *self._to_3d_shape())
+
+    def _to_4d(self, submodule_output):
+        """Convert to Batch + 4D
+
+        Parameters
+        ----------
+        submodule_output : torch.Tensor
+            Batch + 2D Tensor (B, S, F)
+
+        Returns
+        -------
+        torch.Tensor
+            Batch + 4D Tensor (B, F, S, H, W)
+        """
+        b = submodule_output.size()[0]
+        return submodule_output.view(b, *self._to_4d_shape())
+
+    @abc.abstractmethod
+    def _to_1d_shape(self):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _to_4d(self, submodule_output):
+    def _to_2d_shape(self):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _to_3d_shape(self):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _to_4d_shape(self):
         raise NotImplementedError
 
     @abc.abstractmethod
