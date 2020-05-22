@@ -44,17 +44,11 @@ Options:
     --custom-network <str>  Name of custom network class
     --manager <str>         Name of manager [default: SubProcEnvManager]
 """
-from absl import flags
-
 from adept.container import EvalContainer
-from adept.utils.script_helpers import parse_path, parse_none
-from adept.utils.util import DotDict
 from adept.container import Init
 from adept.registry import REGISTRY as R
-
-# hack to use argparse for SC2
-FLAGS = flags.FLAGS
-FLAGS(["local.py"])
+from adept.utils.script_helpers import parse_path, parse_none
+from adept.utils.util import DotDict
 
 
 def parse_args():

@@ -77,18 +77,10 @@ Logging Options:
 Troubleshooting Options:
     --profile               Profile this script
 """
-import os
-
-from absl import flags
-
 from adept.container import Init, Local
+from adept.registry import REGISTRY as R
 from adept.utils.script_helpers import parse_none, parse_path
 from adept.utils.util import DotDict
-from adept.registry import REGISTRY as R
-
-# hack to use bypass pysc2 flags
-FLAGS = flags.FLAGS
-FLAGS(["local.py"])
 
 MODE = "Local"
 
