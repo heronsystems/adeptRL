@@ -95,11 +95,13 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         setuptools \
         && \
     $PIP_INSTALL \
+        black==19.10b0 \
         cloudpickle==1.4.1 \
         cmake==3.15.3 \
         Cython==0.29.13 \
         deepdiff==4.3.2 \
         defusedxml==0.6.0 \
+        docopt==0.6.2 \
         flake8==3.7.8 \
         glances==3.1.4.1 \
         h5py==2.10.0 \
