@@ -45,15 +45,12 @@ class Trainable(tune.Trainable):
         self.local.network.load_state_dict(torch.load(checkpoint_path))
 
     def reset_config(self, config):
-        for param_group in self.optimizer.param_groups:
-            if "lr" in config:
-                param_group["lr"] = config["lr"]
-                print("REUSING ACTOR IS UPDATING LR----\n\n\---\n\n\n--\n". config['r'])
+        logger = config['logger']
+        log_id_dir = config['log_id_dir']
+        initial_step = config['initial_step']
+        config.gpu_id = torch.cuda.current_device()
+        self.local = Local(config, logger, log_id_dir, initial_step)
 
-
-
-        self.model = ConvNet()
-        self.config = new_config
         return True
 
     # def _save(self, checkpoint_dir):
