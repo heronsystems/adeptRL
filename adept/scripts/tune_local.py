@@ -39,7 +39,11 @@ Environment Options:
     --manager <str>         Manager to use [default: SubProcEnvManager]
 
 Script Options:
-    --gpu-id <int>          CUDA device ID of GPU [default: 0]
+    --num-cpu <int>         Number of cpus to give ray tune [default: 6]
+    --cpu-per-trial <int>   Number of cpu cores to give to each trial [default: 3]
+    --gpu-per-trial <float>   Number of gpus to gives to each trial [default: 1.0]
+    --num-gpu <int>         Number of gpus to give ray tune [default: 1]
+    --num-trials <int>      Number of Tune samples to run [default: 10]
     --nb-env <int>          Number of parallel env [default: 64]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
@@ -82,7 +86,7 @@ import os
 from absl import flags
 import ray
 from adept.container import Init
-from adept.trainables.local import Trainable
+from adept.trainables.ray_tune_local import Trainable
 from adept.utils.script_helpers import (
     parse_none, parse_path
 )
@@ -91,7 +95,7 @@ from adept.registry import REGISTRY as R
 
 # hack to use bypass pysc2 flags
 FLAGS = flags.FLAGS
-FLAGS(['local.py'])
+FLAGS(['ray_tune_local.py'])
 
 MODE = 'Local'
 from ray import tune
@@ -111,9 +115,7 @@ def parse_args():
 
     if args.config:
         args.config = parse_path(args.config)
-
     args.logdir = parse_path(args.logdir)
-    args.gpu_id = int(args.gpu_id)
     args.nb_env = int(args.nb_env)
     args.seed = int(args.seed)
     args.nb_step = int(float(args.nb_step))
@@ -124,6 +126,12 @@ def parse_args():
     args.warmup = int(float(args.warmup))
     args.epoch_len = int(float(args.epoch_len))
     args.profile = bool(args.profile)
+    args.num_cpu = int(args.num_cpu)
+    args.num_gpu = int(args.num_gpu)
+    args.gpu_per_trial = float(args.gpu_per_trial)
+    args.cpu_per_trial = float(args.cpu_per_trial)
+    args.num_trials = int(args.num_trials)
+
     return args
 
 def main(args):
@@ -138,33 +146,42 @@ def main(args):
     args.log_id_dir = log_id_dir
     args.initial_step = initial_step
     args.logger = logger
-
     from ray.tune.suggest.hyperopt import HyperOptSearch
     from hyperopt import hp
     from hyperopt.pyll import scope
     from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
-    ray.init(num_cpus=8, num_gpus=1)
+    ray.init(num_cpus=args.num_cpu, num_gpus=args.num_gpu)
 
     space = {
-        "lr": hp.loguniform("lr", 1e-10, .01) - 1,
-        "warmup": scope.int(hp.quniform('warmup', 0, 100, q=1)),
-
+        'lr': hp.loguniform('lr', 1e-10, .01) - 1,
+        'warmup': scope.int(hp.quniform('warmup', 0, 100, q=10)),
+        'lstm_nb_hidden' : scope.int(hp.quniform('lstm_nb_hidden', 32, 33, q=30)),
+        'linear_nb_hidden' : scope.int(hp.quniform('linear_nb_hidden', 32, 33, q=30)),
+        'discount' : hp.quniform('max_depth', .985, .999, .001),
+        'rollout_minibatch_len': scope.int(hp.quniform('rollout_minibatch_len', 64, 128, q=64)),
+        'rollout_len': scope.int(hp.quniform('rollout_len', 128, 256, q=128)),
+        'net1d' : hp.choice('net1d' ,['Linear', 'Identity1D']),
+        'head1d': hp.choice('head1d',['Linear', 'Identity1D']),
+        'nb_layer': hp.choice('nb_layer', list(range(1,4)))
     }
+
+
     algo = HyperOptSearch(space, metric="term_reward", mode="max")
 
-    try:
-        analysis = tune.run(Trainable,
-                        config=args,
-                        search_alg=algo,
-                        num_samples=4,
-                        scheduler=ASHAScheduler(metric="term_reward", mode="max", grace_period=1),
-                        resources_per_trial={"cpu": 4, "gpu": .5},
-                        reuse_actors=True,
-                        stop={"training_iteration": 5}
-                            )
-        print(analysis.dataframe('term_reward'))
-    except Exception as e:
-        print(e)
+    analysis = tune.run(Trainable,
+                    config=args,
+                    search_alg=algo,
+                    num_samples=args.num_trials,
+                    scheduler=ASHAScheduler(metric="term_reward", mode="max", grace_period=1),
+                    resources_per_trial={"cpu": args.cpu_per_trial, "gpu": args.gpu_per_trial},
+                    reuse_actors=True,
+                    stop={"training_iteration": 2,
+                          "term_reward": 21.0}
+                        )
+    print(analysis.dataframe('term_reward'))
+    print(analysis.get_best_config('term_reward'))
+    logger.log(analysis.dataframe('term_reward'))
+    logger.log(analysis.get_best_config('term_reward'))
 
     if args.eval:
         from adept.scripts.evaluate import main

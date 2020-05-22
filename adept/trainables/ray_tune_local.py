@@ -22,6 +22,7 @@ class Trainable(tune.Trainable):
         logger = config['logger']
         log_id_dir = config['log_id_dir']
         initial_step = config['initial_step']
+        config.gpu_id = torch.cuda.current_device()
         self.local = Local(config, logger, log_id_dir, initial_step)
 
     def _train(self):
@@ -60,7 +61,6 @@ class Trainable(tune.Trainable):
 class Local(Local):
     def __init__(self, args, logger, log_id_dir, initial_step_count):
         super().__init__(args, logger, log_id_dir, initial_step_count)
-
 
     def run(self):
         epochs_passed = 0
