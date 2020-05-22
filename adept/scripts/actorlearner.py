@@ -236,18 +236,21 @@ def main(args):
         )
     )
 
+    def close():
+        closes = [main_learner.close.remote()]
+        closes.extend([f.close.remote() for f in peer_learners])
+        closes.extend([w.close.remote() for w in workers])
+        return ray.wait(closes)
+
     try:
         # startup the run method of all containers
         runs = [main_learner.run.remote(workers, args.profile)]
         runs.extend([f.run.remote(workers) for f in peer_learners])
         done_training = ray.wait(runs)
-
+    except KeyboardInterrupt:
+        done_closing = close()
     finally:
-        closes = [main_learner.close.remote()]
-        closes.extend([f.close.remote() for f in peer_learners])
-        closes.extend([w.close.remote() for w in workers])
-        done_closing = ray.wait(closes)
-
+        done_closing = close()
 
     if args.eval:
         from adept.scripts.evaluate import main
