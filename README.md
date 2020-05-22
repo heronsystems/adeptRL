@@ -58,7 +58,7 @@ python -m adept.app distrib --env BeamRiderNoFrameskip-v4
 
 # IMPALA (requires ray, resource intensive)
 # We recommend 2+ GPUs, 8GB+ GPU memory, 32GB+ RAM, 4+ Cores
-python -m adept.app impala --agent ActorCriticVtrace --env BeamRiderNoFrameskip-v4
+python -m adept.app actorlearner --env BeamRiderNoFrameskip-v4
 
 # To see a full list of options:
 python -m adept.app -h
