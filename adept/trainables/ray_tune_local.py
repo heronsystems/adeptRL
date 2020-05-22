@@ -1,19 +1,10 @@
-import ray
 from ray import tune
-from ray.tune import track
 from time import time
 import numpy as np
 import torch
-from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.tensorboard import SummaryWriter
-from adept.network import ModularNetwork
-from adept.registry import REGISTRY
-from adept.utils.logging import SimpleModelSaver
 from adept.utils.util import dtensor_to_dev, listd_to_dlist
-from adept.container.base import Container
 from adept.container.local import Local
 import os
-from adept.utils.util import DotDict
 
 
 class Trainable(tune.Trainable):
@@ -53,29 +44,12 @@ class Trainable(tune.Trainable):
 
         return True
 
-    # def _save(self, checkpoint_dir):
-    #     self.local.saver.save_state_dicts(
-    #             self.local.network, self.local.step_count, self.local.optimizer
-    #         )
-    #     self.model_dir = os.path.join(self._log_id_dir,
-    #                                   str(self.local.step_count),
-    #                                   'model_{}.pth'.format(self.local.step_count))
-    #
-    # def _restore(self, checkpoint_path):
-    #     self.model_dir
-    #     self.local.network = self.local.load_network(self.local.network, os.path.join(self.args.logdir, str(self.local.step_count)))
-    #     self.local.logger.info('Loaded network from {}'.format(self.args.logdir))
-
-
 class Local(Local):
     def __init__(self, args, logger, log_id_dir, initial_step_count):
         super().__init__(args, logger, log_id_dir, initial_step_count)
         self.step_count = self.initial_step_count
 
     def run(self):
-        epochs_passed = 0
-        # next_save = self.init_next_save(self.initial_step_count, self.epoch_len)
-        prev_step_t = time()
         ep_rewards = torch.zeros(self.nb_env)
 
         obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
@@ -84,7 +58,6 @@ class Local(Local):
             range(self.nb_env)
         ])
         step_count = 0
-        start_time = time()
         term_rewards_list = []
         while step_count < self.nb_step:
             actions, internals = self.agent.act(self.network, obs, internals)
@@ -117,7 +90,6 @@ class Local(Local):
             if term_rewards:
                 term_reward = np.mean(term_rewards)
                 term_rewards_list.append(term_reward.item())
-                delta_t = time() - start_time
 
                 if term_infos:
                     float_keys = [
@@ -143,13 +115,6 @@ class Local(Local):
                 for k, vs in internals.items():
                     internals[k] = [v.detach() for v in vs]
 
-                # write summaries
-                cur_step_t = time()
-                if cur_step_t - prev_step_t > self.summary_freq:
-                    self.write_summaries(
-                        self.summary_writer, self.step_count, total_loss, loss_dict,
-                        metric_dict, self.network.named_parameters()
-                    )
-                    prev_step_t = cur_step_t
+
         return np.mean(term_rewards_list)
 

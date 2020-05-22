@@ -102,8 +102,7 @@ FLAGS = flags.FLAGS
 FLAGS(['ray_tune_local.py'])
 
 MODE = 'Local'
-from ray import tune
-import numpy as np
+
 def parse_args():
     from docopt import docopt
     args = docopt(__doc__)
@@ -136,7 +135,6 @@ def parse_args():
     args.cpu_per_trial = float(args.cpu_per_trial)
     args.num_trials = int(args.num_trials)
     args.training_iter = int(args.training_iter)
-    print(args)
     return args
 
 def main(args):
@@ -151,10 +149,13 @@ def main(args):
     args.log_id_dir = log_id_dir
     args.initial_step = initial_step
     args.logger = logger
+
+    from ray import tune
     from ray.tune.suggest.hyperopt import HyperOptSearch
     from hyperopt import hp
     from hyperopt.pyll import scope
-    from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
+    from ray.tune.schedulers import ASHAScheduler
+
     ray.init(num_cpus=args.num_cpu, num_gpus=args.num_gpu)
 
     space = {
@@ -169,7 +170,6 @@ def main(args):
         'nb_layer': hp.choice('nb_layer', list(range(1,4)))
     }
 
-
     algo = HyperOptSearch(space, metric="term_reward", mode="max")
 
     analysis = tune.run(Trainable,
@@ -183,26 +183,12 @@ def main(args):
                     stop={"training_iteration": args.training_iter,
                           "term_reward": 21.0}
                         )
-    print("\nBEST_CONFIG:")
-    print(analysis.dataframe('term_reward')['logdir'].astype(str).get(0))
-
-
-
-    if args.eval:
-        from adept.scripts.evaluate import main
-        eval_args = {
-            'log_id_dir': log_id_dir,
-            'gpu_id': 0,
-            'nb_episode': 30,
-        }
-        if args.custom_network:
-            eval_args['custom_network'] = args.custom_network
-        main(eval_args)
+    return analysis
 
 
 if __name__ == '__main__':
 
     args = parse_args()
-
     analysis = main(args)
+    print("\nBEST_CONFIG:", analysis.dataframe('term_reward')['logdir'].astype(str).get(0))
 
