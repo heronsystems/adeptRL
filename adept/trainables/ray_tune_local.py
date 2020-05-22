@@ -31,18 +31,30 @@ class Trainable(tune.Trainable):
         Returns:
             A dict of training metrics.
         """
-        term_reward, steps_ps = self.local.run()
-        return {'term_reward': term_reward,
-                'steps /s': steps_ps}
+        term_reward = float(self.local.run())
+        return {'term_reward': term_reward}
 
     def _save(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        torch.save(self.model.state_dict(), checkpoint_path)
-        return tmp_checkpoint_dir
+        torch.save(self.local.network.state_dict(), checkpoint_path)
+        print('SAVING MODEL ---------------------', checkpoint_path)
+        return checkpoint_path
 
     def _restore(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        self.model.load_state_dict(torch.load(checkpoint_path))
+        self.local.network.load_state_dict(torch.load(checkpoint_path))
+
+    def reset_config(self, config):
+        for param_group in self.optimizer.param_groups:
+            if "lr" in config:
+                param_group["lr"] = config["lr"]
+                print("REUSING ACTOR IS UPDATING LR----\n\n\---\n\n\n--\n". config['r'])
+
+
+
+        self.model = ConvNet()
+        self.config = new_config
+        return True
 
     # def _save(self, checkpoint_dir):
     #     self.local.saver.save_state_dicts(
@@ -61,10 +73,10 @@ class Trainable(tune.Trainable):
 class Local(Local):
     def __init__(self, args, logger, log_id_dir, initial_step_count):
         super().__init__(args, logger, log_id_dir, initial_step_count)
+        self.step_count = self.initial_step_count
 
     def run(self):
         epochs_passed = 0
-        self.step_count = self.initial_step_count
         # next_save = self.init_next_save(self.initial_step_count, self.epoch_len)
         prev_step_t = time()
         ep_rewards = torch.zeros(self.nb_env)
@@ -74,8 +86,10 @@ class Local(Local):
             self.network.new_internals(self.device) for _ in
             range(self.nb_env)
         ])
+        step_count = 0
         start_time = time()
-        while self.step_count < self.nb_step:
+        term_rewards_list = []
+        while step_count < self.nb_step:
             actions, internals = self.agent.act(self.network, obs, internals)
             next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
             next_obs = dtensor_to_dev(next_obs, self.device)
@@ -89,6 +103,7 @@ class Local(Local):
 
             # Perform state updates
             self.step_count += self.nb_env
+            step_count += self.nb_env
             ep_rewards += rewards.float()
             obs = next_obs
 
@@ -104,18 +119,9 @@ class Local(Local):
 
             if term_rewards:
                 term_reward = np.mean(term_rewards)
+                term_rewards_list.append(term_reward.item())
                 delta_t = time() - start_time
-                self.logger.info(
-                    'STEP: {} REWARD: {} STEP/S: {}'.format(
-                        self.step_count,
-                        term_reward,
-                        (self.step_count - self.initial_step_count) / delta_t,
-                    )
-                )
 
-                self.summary_writer.add_scalar(
-                    'reward', term_reward, self.step_count
-                )
                 if term_infos:
                     float_keys = [
                         k for k, v in term_infos[0].items() if type(v) == float
@@ -127,12 +133,6 @@ class Local(Local):
                             np.mean(term_infos_dlist[k]),
                             self.step_count
                         )
-
-            # if step_count >= next_save:
-            #     self.saver.save_state_dicts(
-            #         self.network, step_count, self.optimizer
-            #     )
-            #     next_save += self.epoch_len
 
             # Learn
             if self.agent.is_ready():
@@ -154,6 +154,5 @@ class Local(Local):
                         metric_dict, self.network.named_parameters()
                     )
                     prev_step_t = cur_step_t
-        if term_reward:
-            delta_time = time() - start_time
-            return term_reward.item(), (self.step_count - self.initial_step_count) / delta_time
+        return np.mean(term_rewards_list)
+

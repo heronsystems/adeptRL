@@ -39,12 +39,8 @@ Environment Options:
     --manager <str>         Manager to use [default: SubProcEnvManager]
 
 Script Options:
-    --num-cpu <int>         Number of cpus to give ray tune [default: 6]
-    --cpu-per-trial <int>   Number of cpu cores to give to each trial [default: 3]
-    --gpu-per-trial <float>   Number of gpus to gives to each trial [default: 1.0]
-    --num-gpu <int>         Number of gpus to give ray tune [default: 1]
-    --num-trials <int>      Number of Tune samples to run [default: 10]
     --nb-env <int>          Number of parallel env [default: 64]
+    --checkpoint-freq <int>  How often to checkpoint models [default: 5]
     --seed <int>            Seed for random variables [default: 0]
     --nb-step <int>         Number of steps to train for [default: 10e6]
     --load-network <path>   Path to network file (for pretrained weights)
@@ -53,6 +49,14 @@ Script Options:
     --config <path>         Use a JSON config file for arguments
     --eval                  Run an evaluation after training
     --prompt                Prompt to modify arguments
+
+Tune Options:
+    --num-cpu <int>         Number of cpus to give ray tune [default: 2]
+    --cpu-per-trial <int>   Number of cpu cores to give to each trial [default: 1]
+    --num-gpu <int>         Number of gpus to give ray tune [default: 1]
+    --gpu-per-trial <float>   Number of gpus to gives to each trial [default: .5]
+    --num-trials <int>      Number of Tune samples to run [default: 2]
+    --training-iter <int>  Number of times to call train() per trial [default: 20]
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
@@ -131,7 +135,8 @@ def parse_args():
     args.gpu_per_trial = float(args.gpu_per_trial)
     args.cpu_per_trial = float(args.cpu_per_trial)
     args.num_trials = int(args.num_trials)
-
+    args.training_iter = int(args.training_iter)
+    print(args)
     return args
 
 def main(args):
@@ -155,12 +160,11 @@ def main(args):
     space = {
         'lr': hp.loguniform('lr', 1e-10, .01) - 1,
         'warmup': scope.int(hp.quniform('warmup', 0, 100, q=10)),
-        'lstm_nb_hidden' : scope.int(hp.quniform('lstm_nb_hidden', 32, 33, q=30)),
-        'linear_nb_hidden' : scope.int(hp.quniform('linear_nb_hidden', 32, 33, q=30)),
+        'lstm_nb_hidden' : scope.int(hp.quniform('lstm_nb_hidden', 32, 1024, q=30)),
+        'linear_nb_hidden' : scope.int(hp.quniform('linear_nb_hidden', 32, 1024, q=30)),
         'discount' : hp.quniform('max_depth', .985, .999, .001),
         'rollout_minibatch_len': scope.int(hp.quniform('rollout_minibatch_len', 64, 128, q=64)),
         'rollout_len': scope.int(hp.quniform('rollout_len', 128, 256, q=128)),
-        'net1d' : hp.choice('net1d' ,['Linear', 'Identity1D']),
         'head1d': hp.choice('head1d',['Linear', 'Identity1D']),
         'nb_layer': hp.choice('nb_layer', list(range(1,4)))
     }
@@ -174,14 +178,15 @@ def main(args):
                     num_samples=args.num_trials,
                     scheduler=ASHAScheduler(metric="term_reward", mode="max", grace_period=1),
                     resources_per_trial={"cpu": args.cpu_per_trial, "gpu": args.gpu_per_trial},
-                    reuse_actors=True,
-                    stop={"training_iteration": 2,
+                    reuse_actors=False,
+                    checkpoint_freq=args.checkpoint_freq,
+                    stop={"training_iteration": args.training_iter,
                           "term_reward": 21.0}
                         )
-    print(analysis.dataframe('term_reward'))
-    print(analysis.get_best_config('term_reward'))
-    logger.log(analysis.dataframe('term_reward'))
-    logger.log(analysis.get_best_config('term_reward'))
+    print("\nBEST_CONFIG:")
+    print(analysis.dataframe('term_reward')['logdir'].astype(str).get(0))
+
+
 
     if args.eval:
         from adept.scripts.evaluate import main
