@@ -12,15 +12,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import abc
 import os
-import time
 
 import torch
 
-from adept.registry import REGISTRY
 from adept.manager import SubProcEnvManager
 from adept.network import ModularNetwork
+from adept.registry import REGISTRY
 from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import listd_to_dlist, dtensor_to_dev
 
@@ -37,7 +35,6 @@ class EvalContainer:
         start,
         end,
         seed,
-        manager,
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
@@ -56,7 +53,6 @@ class EvalContainer:
 
         engine = REGISTRY.lookup_engine(train_args.env)
         env_cls = REGISTRY.lookup_env(train_args.env)
-        mgr_cls = REGISTRY.lookup_manager(manager)
         self.env_mgr = env_mgr = SubProcEnvManager.from_args(
             self.train_args, engine, env_cls, seed=seed, nb_env=nb_episode
         )

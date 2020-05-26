@@ -42,7 +42,6 @@ Options:
     --end <float>           Epoch to end on [default: -1]
     --seed <int>            Seed for random variables [default: 512]
     --custom-network <str>  Name of custom network class
-    --manager <str>         Name of manager [default: SubProcEnvManager]
 """
 from absl import flags
 
@@ -103,7 +102,6 @@ def main(args):
         args.start,
         args.end,
         args.seed,
-        args.manager,
     )
     try:
         eval_container.run()
