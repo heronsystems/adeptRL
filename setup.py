@@ -8,8 +8,6 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 extras = {
-    "mpi": ["mpi4py>=3.0"],
-    "sc2": ["pysc2>=2.0"],
     "profiler": ["pyinstrument>=2.0"],
 }
 test_deps = ["pytest"]
