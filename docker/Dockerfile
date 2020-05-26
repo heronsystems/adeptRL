@@ -95,11 +95,13 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         setuptools \
         && \
     $PIP_INSTALL \
+        black==19.10b0 \
         cloudpickle==1.4.1 \
         cmake==3.15.3 \
         Cython==0.29.13 \
         deepdiff==4.3.2 \
         defusedxml==0.6.0 \
+        docopt==0.6.2 \
         flake8==3.7.8 \
         glances==3.1.4.1 \
         h5py==2.10.0 \
@@ -117,6 +119,7 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         pycodestyle==2.5.0 \
         pyflakes==2.1.1 \
         ray==0.8.5 \
+        requests==2.23.0 \
         scipy==1.3.1 \
         six==1.12.0 \
         scikit-learn==0.20.1 \
