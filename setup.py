@@ -34,7 +34,6 @@ setup(
     install_requires=[
         "numpy>=1.14",
         "gym[atari]>=0.10",
-        "absl-py>=0.2",
         "tensorboard>=1.14",
         "cloudpickle>=0.5",
         "opencv-python-headless>=3.4",
