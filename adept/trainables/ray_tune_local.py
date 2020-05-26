@@ -23,17 +23,24 @@ class Trainable(tune.Trainable):
             A dict of training metrics.
         """
         term_reward = float(self.local.run())
-        return {'term_reward': term_reward}
+        return {'term_reward': term_reward,
+                "steps": self.local.step_count}
 
     def _save(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        torch.save(self.local.network.state_dict(), checkpoint_path)
-        print('SAVING MODEL ---------------------', checkpoint_path)
+        state = {
+            'state_dict': self.local.network.state_dict(),
+            'optimizer': self.local.optimizer.state_dict(),
+        }
+        torch.save(state, checkpoint_path)
         return checkpoint_path
 
     def _restore(self, tmp_checkpoint_dir):
         checkpoint_path = os.path.join(tmp_checkpoint_dir, "model.pth")
-        self.local.network.load_state_dict(torch.load(checkpoint_path))
+        state = torch.load(checkpoint_path)
+        self.local.network.load_state_dict()
+        self.local.network.load_state_dict(state['state_dict'])
+        self.local.optimizer.load_state_dict(state['optimizer'])
 
     def reset_config(self, config):
         logger = config['logger']

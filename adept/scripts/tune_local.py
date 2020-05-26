@@ -181,7 +181,7 @@ def main(args):
                     reuse_actors=False,
                     checkpoint_freq=args.checkpoint_freq,
                     stop={"training_iteration": args.training_iter,
-                          "term_reward": 21.0}
+                          "steps": 1000000}
                         )
     return analysis
 
