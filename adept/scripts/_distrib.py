@@ -19,11 +19,10 @@ Distributed worker script. Called from launcher (distrib.py).
 import argparse
 import json
 import os
-
 import torch.distributed as dist
 
-from adept.registry import REGISTRY as R
 from adept.container import Init, DistribHost, DistribWorker
+from adept.registry import REGISTRY as R
 from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import DotDict
 
@@ -31,12 +30,6 @@ MODE = "Distrib"
 WORLD_SIZE = int(os.environ["WORLD_SIZE"])
 GLOBAL_RANK = int(os.environ["RANK"])
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
-
-# hack to use bypass pysc2 flags
-from absl import flags
-
-FLAGS = flags.FLAGS
-FLAGS(["local.py"])
 
 
 def str2bool(v):

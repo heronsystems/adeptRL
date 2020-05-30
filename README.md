@@ -140,7 +140,6 @@ million frames in less than one hour."
 
 ### Environments
 * OpenAI Gym Atari
-* StarCraft 2 (under development)
 
 ## Performance
 * ~ 3,000 Steps/second = 12,000 FPS (Atari)
