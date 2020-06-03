@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import random
 from time import time
 
 import queue
@@ -21,7 +22,16 @@ import torch
 
 
 class RolloutQueuerAsync:
-    def __init__(self, workers, num_rollouts, queue_max_size, timeout=15.0):
+    def __init__(
+        self,
+        workers,
+        num_rollouts,
+        queue_max_size,
+        timeout=15.0,
+        shared_exp=None,
+        p_draw_earlier_exp=0.1,
+        draw_earlier_exp_if_rollout_queue_empty=True,
+    ):
         self.workers = workers
         self.num_rollouts = num_rollouts
         self.queue_max_size = queue_max_size
@@ -33,6 +43,21 @@ class RolloutQueuerAsync:
         self.rollout_queue = queue.Queue(self.queue_max_size)
         self._worker_wait_time = 0
         self._host_wait_time = 0
+
+        # Here, we store an experience replay cache. When get() is invoked, we
+        # probabilistically either get() from the queue or retrieve an earlier instance.
+        # The advantage of this approach is that workers won't continue to produce
+        # episodes in the background unless absolutely needed (this is to avoid) memory
+        # from exploding.
+        #
+        # The idea is that workers can continue to push results to the queue, and we can
+        # continue having a maximum queue length; and, workers can thus be idle when the
+        # queue is really large.
+        self.shared_exp = shared_exp
+        self.p_draw_earlier_exp = p_draw_earlier_exp
+        self.draw_earlier_exp_if_rollout_queue_empty = (
+            draw_earlier_exp_if_rollout_queue_empty
+        )
 
     def _background_queing_thread(self):
         while not self._should_stop:
@@ -82,22 +107,66 @@ class RolloutQueuerAsync:
         )
         self.background_thread.start()
 
+    def sample_from_earlier_exp(self):
+        rollout = self.shared_exp.sample()
+        return (
+            rollout["rollout"],
+            rollout["metas"]["terminal_rewards"],
+            rollout["metas"]["terminal_infos"],
+        )
+
+    def draw_from_rollout_queue(self):
+        datum = self.rollout_queue.get(True)
+        rollout, terminal_rewards, terminal_infos = (
+            datum["rollout"],
+            datum["terminal_rewards"],
+            datum["terminal_infos"],
+        )
+
+        return rollout, terminal_rewards, terminal_infos
+
     def get(self):
         st = time()
-        worker_data = [
-            self.rollout_queue.get(True) for _ in range(self.num_rollouts)
-        ]
-        et = time()
-        self._host_wait_time += et - st
-
+        # For each of our samples, sample from earlier experience if:
+        # 1. The shared experience cache has elements AND
+        #   a. We're asked randomly asked to draw from earlier experience OR
+        #   b. The rollout queue is empty, and we're authorized to draw from earlier
+        #      experience in the event that the rollout queue is empty
+        # Otherwise, draw from the rollout_queue.
         rollouts = []
         terminal_rewards = []
         terminal_infos = []
-        for w in worker_data:
-            r, t, i = w["rollout"], w["terminal_rewards"], w["terminal_infos"]
-            rollouts.append(r)
-            terminal_rewards.append(t)
-            terminal_infos.append(i)
+        new_samples = []
+        for _ in range(self.num_rollouts):
+            if len(self.shared_exp) > 0 and (
+                random.random() < self.p_draw_earlier_exp
+                or (
+                    self.rollout_queue.empty()
+                    and self.draw_earlier_exp_if_rollout_queue_empty
+                )
+            ):
+                sample = self.sample_from_earlier_exp()
+            else:
+                sample = self.draw_from_rollout_queue()
+                new_samples.append(sample)
+
+            rollouts.append(sample[0])
+            terminal_rewards.append(sample[1])
+            terminal_infos.append(sample[2])
+
+        et = time()
+
+        # Add all of the new samples to shared_exp; note that we don't do this as a part
+        # of draw_from_rollout_queue() to avoid sample_from_earlier_exp() sampling from
+        # a rollout that was just added.
+        for sample in new_samples:
+            self.shared_exp.start_next_rollout()
+            self.shared_exp.write_exps([sample[0]])
+            self.shared_exp.write_meta(
+                {"terminal_rewards": sample[1], "terminal_infos": sample[2]}
+            )
+
+        self._host_wait_time += et - st
 
         return rollouts, terminal_rewards, terminal_infos
 

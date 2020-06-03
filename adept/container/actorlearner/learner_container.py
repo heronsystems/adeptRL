@@ -27,6 +27,7 @@ from adept.container.base import Container, NCCLOptimizer
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.container.actorlearner.rollout_queuer import RolloutQueuerAsync
+from adept.exp.multirollout import MultiRollout
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
 
@@ -126,12 +127,13 @@ class ActorLearnerHost(Container):
             net.internal_space(),
             args.nb_env * args.nb_learn_batch,
         )
-        w_builder = REGISTRY.lookup_actor(args.actor_worker).exp_spec_builder(
-            env.observation_space,
-            env.action_space,
-            net.internal_space(),
-            args.nb_env,
-        )
+
+        # w_builder = REGISTRY.lookup_actor(args.actor_worker).exp_spec_builder(
+        #     env.observation_space,
+        #     env.action_space,
+        #     net.internal_space(),
+        #     args.nb_env,
+        # )
         actor = actor_cls.from_args(args, env.action_space)
         learner = REGISTRY.lookup_learner(args.learner).from_args(
             args, rwd_norm
@@ -142,6 +144,10 @@ class ActorLearnerHost(Container):
         self.actor = actor
         self.learner = learner
         self.exp = exp_cls.from_args(args, builder).to(device)
+
+        # TODO: move this to an argument
+        MAX_CACHE_SIZE = 3
+        self.shared_exp = MultiRollout.from_args(args, builder, MAX_CACHE_SIZE)
 
         # Rank 0 setup, load network/optimizer and create SummaryWriter/Saver
         if rank == 0:
@@ -173,7 +179,10 @@ class ActorLearnerHost(Container):
 
         # setup queuer
         rollout_queuer = RolloutQueuerAsync(
-            workers, self.nb_learn_batch, self.rollout_queue_size
+            workers,
+            self.nb_learn_batch,
+            self.rollout_queue_size,
+            shared_exp=self.shared_exp,
         )
         rollout_queuer.start()
 
