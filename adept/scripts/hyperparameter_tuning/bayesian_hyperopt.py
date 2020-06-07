@@ -57,6 +57,7 @@ Tune Options:
     --gpu-per-trial <float>   Number of gpus to gives to each trial [default: .5]
     --num-trials <int>      Number of Tune samples to run [default: 2]
     --training-iter <int>  Number of times to call train() per trial [default: 20]
+    --max-reward <float>   Reward to consider a training iteration "done" [default: 120.0]
 
 Network Options:
     --net1d <str>           Network to use for 1d input [default: Identity1D]
@@ -90,7 +91,7 @@ import os
 from absl import flags
 import ray
 from adept.container import Init
-from adept.trainables.ray_tune_local import Trainable
+from adept.trainables.ray_tune_base import Trainable
 from adept.utils.script_helpers import (
     parse_none, parse_path
 )
@@ -99,7 +100,7 @@ from adept.registry import REGISTRY as R
 
 # hack to use bypass pysc2 flags
 FLAGS = flags.FLAGS
-FLAGS(['ray_tune_local.py'])
+FLAGS(['ray_tune_base.py'])
 
 MODE = 'Local'
 
@@ -135,6 +136,7 @@ def parse_args():
     args.cpu_per_trial = float(args.cpu_per_trial)
     args.num_trials = int(args.num_trials)
     args.training_iter = int(args.training_iter)
+    args.max_reward = float(args.max_reward)
     return args
 
 def main(args):
@@ -175,14 +177,13 @@ def main(args):
     analysis = tune.run(Trainable,
                     config=args,
                     search_alg=algo,
-                    num_samples=args.num_trials,
-                    scheduler=ASHAScheduler(metric="term_reward", mode="max", grace_period=1),
+                    num_samples=8,
+                    scheduler=ASHAScheduler(metric="term_reward", mode="max", grace_period=5, time_attr="training_iteration"),
                     resources_per_trial={"cpu": args.cpu_per_trial, "gpu": args.gpu_per_trial},
                     reuse_actors=False,
                     checkpoint_freq=args.checkpoint_freq,
                     stop={"training_iteration": args.training_iter,
-                          "steps": 1000000}
-                        )
+                          "term_reward": 100000})
     return analysis
 
 
