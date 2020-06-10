@@ -19,9 +19,7 @@ from .submodule_3d import SubModule3D
 
 
 class FourConv(SubModule3D):
-    args = {
-        'fourconv_norm': 'bn'
-    }
+    args = {"fourconv_norm": "bn"}
 
     def __init__(self, in_shape, id, normalize):
         super().__init__(in_shape, id)
@@ -33,12 +31,12 @@ class FourConv(SubModule3D):
         self.conv3 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
         self.conv4 = Conv2d(32, 32, 3, stride=2, padding=1, bias=bias)
 
-        if normalize == 'bn':
+        if normalize == "bn":
             self.bn1 = BatchNorm2d(32)
             self.bn2 = BatchNorm2d(32)
             self.bn3 = BatchNorm2d(32)
             self.bn4 = BatchNorm2d(32)
-        elif normalize == 'gn':
+        elif normalize == "gn":
             self.bn1 = GroupNorm(8, 32)
             self.bn2 = GroupNorm(8, 32)
             self.bn3 = GroupNorm(8, 32)
@@ -49,7 +47,7 @@ class FourConv(SubModule3D):
             self.bn3 = Identity()
             self.bn4 = Identity()
 
-        relu_gain = init.calculate_gain('relu')
+        relu_gain = init.calculate_gain("relu")
         self.conv1.weight.data.mul_(relu_gain)
         self.conv2.weight.data.mul_(relu_gain)
         self.conv3.weight.data.mul_(relu_gain)
@@ -86,7 +84,7 @@ def calc_output_dim(dim_size, kernel_size, stride, padding, dilation):
     return numerator // stride + 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     output_dim = 84
     output_dim = calc_output_dim(output_dim, 7, 2, 1, 1)
     output_dim = calc_output_dim(output_dim, 3, 2, 1, 1)

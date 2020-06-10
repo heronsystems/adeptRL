@@ -23,11 +23,7 @@ from .submodule_1d import SubModule1D
 
 
 class Linear(SubModule1D):
-    args = {
-        'linear_normalize': 'bn',
-        'linear_nb_hidden': 512,
-        'nb_layer': 3
-    }
+    args = {"linear_normalize": "bn", "linear_nb_hidden": 512, "nb_layer": 3}
 
     def __init__(self, input_shape, id, normalize, nb_hidden, nb_layer):
         super().__init__(input_shape, id)
@@ -36,34 +32,40 @@ class Linear(SubModule1D):
         nb_input_channel = input_shape[0]
 
         bias = not normalize
-        self.linears = nn.ModuleList([
-            nn.Linear(
-                nb_input_channel if i == 0 else nb_hidden,
-                nb_hidden,
-                bias
+        self.linears = nn.ModuleList(
+            [
+                nn.Linear(
+                    nb_input_channel if i == 0 else nb_hidden, nb_hidden, bias
+                )
+                for i in range(nb_layer)
+            ]
+        )
+        if normalize == "bn":
+            self.norms = nn.ModuleList(
+                [nn.BatchNorm1d(nb_hidden) for _ in range(nb_layer)]
             )
-            for i in range(nb_layer)
-        ])
-        if normalize == 'bn':
-            self.norms = nn.ModuleList([
-                nn.BatchNorm1d(nb_hidden) for _ in range(nb_layer)
-            ])
-        elif normalize == 'gn':
+        elif normalize == "gn":
             if nb_hidden % 16 != 0:
-                raise Exception('linear_nb_hidden must be divisible by 16 for Group Norm')
-            self.norms = nn.ModuleList([
-                nn.GroupNorm(nb_hidden // 16, nb_hidden) for _ in range(nb_layer)
-            ])
+                raise Exception(
+                    "linear_nb_hidden must be divisible by 16 for Group Norm"
+                )
+            self.norms = nn.ModuleList(
+                [
+                    nn.GroupNorm(nb_hidden // 16, nb_hidden)
+                    for _ in range(nb_layer)
+                ]
+            )
         else:
-            self.norms = nn.ModuleList([
-                Identity() for _ in range(nb_layer)
-            ])
+            self.norms = nn.ModuleList([Identity() for _ in range(nb_layer)])
 
     @classmethod
     def from_args(cls, args, input_shape, id):
         return cls(
-            input_shape, id, args.linear_normalize, args.linear_nb_hidden,
-            args.nb_layer
+            input_shape,
+            id,
+            args.linear_normalize,
+            args.linear_nb_hidden,
+            args.nb_layer,
         )
 
     def _forward(self, xs, internals, **kwargs):
@@ -76,4 +78,4 @@ class Linear(SubModule1D):
 
     @property
     def _output_shape(self):
-        return (self._nb_hidden, )
+        return (self._nb_hidden,)

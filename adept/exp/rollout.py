@@ -21,7 +21,7 @@ from adept.exp.base.exp_module import ExpModule
 
 
 class Rollout(dict, ExpModule):
-    args = {'rollout_len': 20}
+    args = {"rollout_len": 20}
 
     def __init__(self, spec_builder, rollout_len):
         super(Rollout, self).__init__()
@@ -33,15 +33,13 @@ class Rollout(dict, ExpModule):
         self.key_types = spec_builder.key_types
         self.rollout_len = rollout_len
 
-        self.has_obs = all([
-            obs_key in self.spec for obs_key in self.obs_keys
-        ])
-        self.has_actions = all([
-            act_key in self.spec for act_key in self.action_keys
-        ])
-        self.has_internals = all([
-            internal_key in self.spec for internal_key in self.internal_keys
-        ])
+        self.has_obs = all([obs_key in self.spec for obs_key in self.obs_keys])
+        self.has_actions = all(
+            [act_key in self.spec for act_key in self.action_keys]
+        )
+        self.has_internals = all(
+            [internal_key in self.spec for internal_key in self.internal_keys]
+        )
         self.cur_idx = 0
 
         for k in self.spec.keys():
@@ -51,9 +49,7 @@ class Rollout(dict, ExpModule):
 
     @classmethod
     def from_args(cls, args, spec_builder):
-        return cls(
-            spec_builder, args.rollout_len
-        )
+        return cls(spec_builder, args.rollout_len)
 
     def write_actor(self, experience, no_env=False):
         for k in experience.keys() & self.keys():
@@ -78,12 +74,12 @@ class Rollout(dict, ExpModule):
         # write_shape = rewards.shape
         # if exp_shape != write_shape:
         #     print(f'rewards shape mismatch {exp_shape} {write_shape}')
-        self['rewards'][self.cur_idx] = rewards
+        self["rewards"][self.cur_idx] = rewards
         # exp_shape = self['terminals'][self.cur_idx].shape
         # write_shape = terminals.shape
         # if exp_shape != write_shape:
         #     print(f'terminals shape mismatch')
-        self['terminals'][self.cur_idx] = terminals
+        self["terminals"][self.cur_idx] = terminals
 
         self.cur_idx += 1
 
@@ -115,16 +111,20 @@ class Rollout(dict, ExpModule):
     def read(self):
         tmp = {}
         if self.has_obs:
-            tmp['observations'] = dlist_to_listd({k: self[k][:-1] for k in self.obs_keys})
-            tmp['next_observation'] = {k: self[k][-1] for k in self.obs_keys}
+            tmp["observations"] = dlist_to_listd(
+                {k: self[k][:-1] for k in self.obs_keys}
+            )
+            tmp["next_observation"] = {k: self[k][-1] for k in self.obs_keys}
         if self.has_actions:
-            tmp['actions'] = dlist_to_listd({k: self[k] for k in self.action_keys})
+            tmp["actions"] = dlist_to_listd(
+                {k: self[k] for k in self.action_keys}
+            )
         if self.has_internals:
-            tmp['internals'] = {k: self[k] for k in self.internal_keys}
+            tmp["internals"] = {k: self[k] for k in self.internal_keys}
         for k in self.exp_keys:
             tmp[k] = self[k]
-        tmp['rewards'] = self['rewards']
-        tmp['terminals'] = self['terminals']
+        tmp["rewards"] = self["rewards"]
+        tmp["terminals"] = self["terminals"]
         return namedtuple(self.__class__.__name__, tmp.keys())(**tmp)
 
     def clear(self):
@@ -147,14 +147,14 @@ class Rollout(dict, ExpModule):
 
     def _init_key(self, key):
         zs = torch.zeros(*self.spec[key][1:])
-        if self.key_types[key] == 'long':
+        if self.key_types[key] == "long":
             zs = zs.long()
-        elif self.key_types[key] == 'byte':
+        elif self.key_types[key] == "byte":
             zs = zs.byte()
-        elif self.key_types[key] == 'float':
+        elif self.key_types[key] == "float":
             pass
         else:
-            raise Exception(f'Unrecognized key_type: {self.key_types[key]}')
+            raise Exception(f"Unrecognized key_type: {self.key_types[key]}")
         return [zs for _ in range(self.spec[key][0])]
 
     def sync(self, src, grp, async_op=False):

@@ -13,7 +13,7 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
 
     @staticmethod
     def output_space(action_space):
-        head_dict = {'critic': (1,), **action_space}
+        head_dict = {"critic": (1,), **action_space}
         return head_dict
 
     def compute_action_exp(self, preds, internals, obs, available_actions):
@@ -26,10 +26,12 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
             action = self.select_action(softmax)
 
             actions[key] = action.cpu()
-        return actions, {'value': preds['critic'].squeeze(-1)}
+        return actions, {"value": preds["critic"].squeeze(-1)}
 
     @classmethod
-    def _exp_spec(cls, rollout_len, batch_sz, obs_space, act_space, internal_space):
+    def _exp_spec(
+        cls, rollout_len, batch_sz, obs_space, act_space, internal_space
+    ):
         return {}
 
 
@@ -44,4 +46,4 @@ class ACActorEvalSample(ACActorEval):
             action = self.sample_action(softmax)
 
             actions[key] = action.cpu()
-        return actions, {'value': preds['critic'].squeeze(-1)}
+        return actions, {"value": preds["critic"].squeeze(-1)}

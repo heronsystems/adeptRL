@@ -30,11 +30,11 @@ class ImpalaHostActor(ActorModule, ACActorHelperMixin):
 
     @staticmethod
     def output_space(action_space):
-        head_dict = {'critic': (1,), **action_space}
+        head_dict = {"critic": (1,), **action_space}
         return head_dict
 
     def compute_action_exp(self, preds, internals, obs, available_actions):
-        values = preds['critic'].squeeze(1)
+        values = preds["critic"].squeeze(1)
 
         log_softmaxes = []
         entropies = []
@@ -53,11 +53,14 @@ class ImpalaHostActor(ActorModule, ACActorHelperMixin):
         log_softmaxes = torch.stack(log_softmaxes, dim=1)
         entropies = torch.cat(entropies, dim=1)
 
-        return None, {
-            'log_softmaxes': log_softmaxes,
-            'entropies': entropies,
-            'values': values
-        }
+        return (
+            None,
+            {
+                "log_softmaxes": log_softmaxes,
+                "entropies": entropies,
+                "values": values,
+            },
+        )
 
     @classmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
@@ -66,35 +69,36 @@ class ImpalaHostActor(ActorModule, ACActorHelperMixin):
             flat_act_space += reduce(lambda a, b: a * b, shape)
         act_key_len = len(act_space.keys())
 
-        obs_spec = {k: (exp_len + 1, batch_sz, *shape) for k, shape in
-                    obs_space.items()}
+        obs_spec = {
+            k: (exp_len + 1, batch_sz, *shape) for k, shape in obs_space.items()
+        }
         action_spec = {k: (exp_len, batch_sz) for k in act_space.keys()}
         internal_spec = {
-            k: (exp_len, batch_sz, *shape) for k, shape in
-            internal_space.items()
+            k: (exp_len, batch_sz, *shape)
+            for k, shape in internal_space.items()
         }
 
         spec = {
-            'log_softmaxes': (exp_len, batch_sz, act_key_len, flat_act_space),
-            'entropies': (exp_len, batch_sz, act_key_len),
-            'values': (exp_len, batch_sz),
+            "log_softmaxes": (exp_len, batch_sz, act_key_len, flat_act_space),
+            "entropies": (exp_len, batch_sz, act_key_len),
+            "values": (exp_len, batch_sz),
             # From Workers
-            'log_probs': (exp_len, batch_sz, act_key_len),
+            "log_probs": (exp_len, batch_sz, act_key_len),
             **obs_spec,
             **action_spec,
-            **internal_spec
+            **internal_spec,
         }
 
         return spec
 
     @classmethod
     def _key_types(cls, obs_space, act_space, internal_space):
-        d = defaultdict(lambda: 'float')
+        d = defaultdict(lambda: "float")
         for k in act_space.keys():
-            d[k] = 'long'
+            d[k] = "long"
         # TODO this needs a better solution
         for k in obs_space.keys():
-            d[k] = 'byte'
+            d[k] = "byte"
         return d
 
 
@@ -107,7 +111,7 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
 
     @staticmethod
     def output_space(action_space):
-        head_dict = {'critic': (1,), **action_space}
+        head_dict = {"critic": (1,), **action_space}
         return head_dict
 
     def compute_action_exp(self, preds, internals, obs, available_actions):
@@ -129,37 +133,36 @@ class ImpalaWorkerActor(ActorModule, ACActorHelperMixin):
 
         internals = {k: torch.stack(vs) for k, vs in internals.items()}
 
-        return actions_cpu, {
-            'log_probs': log_probs,
-            **actions_gpu,
-            **internals
-        }
+        return actions_cpu, {"log_probs": log_probs, **actions_gpu, **internals}
 
     @classmethod
     def _exp_spec(cls, exp_len, batch_sz, obs_space, act_space, internal_space):
         act_key_len = len(act_space.keys())
 
-        obs_spec = {k: (exp_len + 1, batch_sz, *shape) for k, shape in obs_space.items()}
+        obs_spec = {
+            k: (exp_len + 1, batch_sz, *shape) for k, shape in obs_space.items()
+        }
         action_spec = {k: (exp_len, batch_sz) for k in act_space.keys()}
         internal_spec = {
-            k: (exp_len, batch_sz, *shape) for k, shape in internal_space.items()
+            k: (exp_len, batch_sz, *shape)
+            for k, shape in internal_space.items()
         }
 
         spec = {
-            'log_probs': (exp_len, batch_sz, act_key_len),
+            "log_probs": (exp_len, batch_sz, act_key_len),
             **obs_spec,
             **action_spec,
-            **internal_spec
+            **internal_spec,
         }
 
         return spec
 
     @classmethod
     def _key_types(cls, obs_space, act_space, internal_space):
-        d = defaultdict(lambda: 'float')
+        d = defaultdict(lambda: "float")
         for k in act_space.keys():
-            d[k] = 'long'
+            d[k] = "long"
         # TODO this needs a better solution
         for k in obs_space.keys():
-            d[k] = 'byte'
+            d[k] = "byte"
         return d

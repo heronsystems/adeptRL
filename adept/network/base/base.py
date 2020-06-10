@@ -22,12 +22,7 @@ class BaseNetwork(torch.nn.Module):
     @classmethod
     @abc.abstractmethod
     def from_args(
-        cls,
-        args,
-        observation_space,
-        output_space,
-        gpu_preprocessor,
-        net_reg
+        cls, args, observation_space, output_space, gpu_preprocessor, net_reg
     ):
         raise NotImplementedError
 
@@ -43,7 +38,7 @@ class BaseNetwork(torch.nn.Module):
         raise NotImplementedError
 
     def internal_space(self):
-        return {k: t.shape for k, t in self.new_internals('cpu').items()}
+        return {k: t.shape for k, t in self.new_internals("cpu").items()}
 
     def sync(self, src, grp=None, async_op=False):
 

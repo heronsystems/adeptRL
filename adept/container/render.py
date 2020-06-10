@@ -23,16 +23,16 @@ from adept.utils.script_helpers import LogDirHelper
 
 class RenderContainer:
     def __init__(
-            self,
-            actor,
-            epoch_id,
-            start,
-            end,
-            logger,
-            log_id_dir,
-            gpu_id,
-            seed,
-            manager
+        self,
+        actor,
+        epoch_id,
+        start,
+        end,
+        logger,
+        log_id_dir,
+        gpu_id,
+        seed,
+        manager,
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
@@ -44,7 +44,7 @@ class RenderContainer:
         else:
             epoch_ids = self.log_dir_helper.epochs()
             epoch_ids = filter(lambda eid: eid >= start, epoch_ids)
-            if end != -1.:
+            if end != -1.0:
                 epoch_ids = filter(lambda eid: eid <= end, epoch_ids)
             epoch_ids = list(epoch_ids)
         self.epoch_ids = epoch_ids
@@ -53,11 +53,7 @@ class RenderContainer:
         env_cls = REGISTRY.lookup_env(train_args.env)
         manager_cls = REGISTRY.lookup_manager(manager)
         self.env_mgr = manager_cls.from_args(
-            self.train_args,
-            engine,
-            env_cls,
-            seed=seed,
-            nb_env=1
+            self.train_args, engine, env_cls, seed=seed, nb_env=1
         )
         if train_args.agent:
             agent = train_args.agent
@@ -68,8 +64,7 @@ class RenderContainer:
         )
         actor_cls = REGISTRY.lookup_actor(actor)
         self.actor = actor_cls.from_args(
-            actor_cls.prompt(),
-            self.env_mgr.action_space
+            actor_cls.prompt(), self.env_mgr.action_space
         )
 
         self.network = self._init_network(
@@ -77,7 +72,7 @@ class RenderContainer:
             self.env_mgr.observation_space,
             self.env_mgr.gpu_preprocessor,
             output_space,
-            REGISTRY
+            REGISTRY,
         ).to(device)
 
     @staticmethod
@@ -90,11 +85,7 @@ class RenderContainer:
 
     @staticmethod
     def _init_network(
-            train_args,
-            obs_space,
-            gpu_preprocessor,
-            output_space,
-            net_reg
+        train_args, obs_space, gpu_preprocessor, output_space, net_reg
     ):
         if train_args.custom_network:
             net_cls = net_reg.lookup_network(train_args.custom_network)
@@ -102,27 +93,25 @@ class RenderContainer:
             net_cls = ModularNetwork
 
         return net_cls.from_args(
-            train_args,
-            obs_space,
-            output_space,
-            gpu_preprocessor,
-            net_reg
+            train_args, obs_space, output_space, gpu_preprocessor, net_reg
         )
 
     def run(self):
         for epoch_id in self.epoch_ids:
             reward_buf = 0
             for net_path in self.log_dir_helper.network_paths_at_epoch(
-                    epoch_id):
+                epoch_id
+            ):
                 self.network.load_state_dict(
                     torch.load(
-                        net_path,
-                        map_location=lambda storage, loc: storage
+                        net_path, map_location=lambda storage, loc: storage
                     )
                 )
                 self.network.eval()
 
-                internals = listd_to_dlist([self.network.new_internals(self.device)])
+                internals = listd_to_dlist(
+                    [self.network.new_internals(self.device)]
+                )
                 next_obs = dtensor_to_dev(self.env_mgr.reset(), self.device)
                 self.env_mgr.render()
 
@@ -130,8 +119,12 @@ class RenderContainer:
                 while not episode_complete:
                     obs = next_obs
                     with torch.no_grad():
-                        actions, _, internals = self.actor.act(self.network, obs, internals)
-                    next_obs, rewards, terminals, infos = self.env_mgr.step(actions)
+                        actions, _, internals = self.actor.act(
+                            self.network, obs, internals
+                        )
+                    next_obs, rewards, terminals, infos = self.env_mgr.step(
+                        actions
+                    )
                     self.env_mgr.render()
                     next_obs = dtensor_to_dev(next_obs, self.device)
 
@@ -140,7 +133,7 @@ class RenderContainer:
                     if terminals[0]:
                         episode_complete = True
 
-                print(f'EPOCH_ID: {epoch_id} REWARD: {reward_buf}')
+                print(f"EPOCH_ID: {epoch_id} REWARD: {reward_buf}")
 
     def close(self):
         self.env_mgr.close()

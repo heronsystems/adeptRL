@@ -32,7 +32,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         body_submodule,
         head_submodules,
         output_space,
-        gpu_preprocessor
+        gpu_preprocessor,
     ):
         """
         :param source_nets: Dict[ObsKey, SubModule]
@@ -89,18 +89,24 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                 )
             elif dim == 2:
                 layer = torch.nn.Conv1d(
-                    heads[str(dim)].output_shape(dim)[0], shape[0], kernel_size=1
+                    heads[str(dim)].output_shape(dim)[0],
+                    shape[0],
+                    kernel_size=1,
                 )
             elif dim == 3:
                 layer = torch.nn.Conv2d(
-                    heads[str(dim)].output_shape(dim)[0], shape[0], kernel_size=1
+                    heads[str(dim)].output_shape(dim)[0],
+                    shape[0],
+                    kernel_size=1,
                 )
             elif dim == 4:
                 layer = torch.nn.Conv3d(
-                    heads[str(dim)].output_shape(dim)[0], shape[0], kernel_size=1
+                    heads[str(dim)].output_shape(dim)[0],
+                    shape[0],
+                    kernel_size=1,
                 )
             else:
-                raise ValueError('Invalid dim {}'.format(dim))
+                raise ValueError("Invalid dim {}".format(dim))
             outputs.append((output_name, layer))
         return torch.nn.ModuleDict(outputs)
 
@@ -116,21 +122,21 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                 if submod.dim > 1:
                     shape = submod.output_shape(dim=self.body.dim)
                     for a, b in zip(shape[1:], self.body.input_shape[1:]):
-                        assert a == b or a == 1 or b == 1, \
-                            'Source-Body conflict: {} {}'.format(
-                                shape,
-                                self.body.input_shape
-                            )
+                        assert (
+                            a == b or a == 1 or b == 1
+                        ), "Source-Body conflict: {} {}".format(
+                            shape, self.body.input_shape
+                        )
             # non feature dims of body out must match non feature dims of head
             for submod in self.heads.values():
                 if submod.dim > 1:
                     shape = self.body.output_shape(dim=submod.dim)
                     for a, b in zip(shape[1:], submod.input_shape[1:]):
-                        assert a == b or a == 1 or b == 1, \
-                            'Body-Head conflict: {} {}'.format(
-                                shape,
-                                submod.input_shape
-                            )
+                        assert (
+                            a == b or a == 1 or b == 1
+                        ), "Body-Head conflict: {} {}".format(
+                            shape, submod.input_shape
+                        )
 
         # non-feature dims of heads == non-feature dims of output shapes
         for shape in self._output_space.values():
@@ -139,11 +145,9 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                 submod = self.heads[str(dim)]
                 head_shp = submod.output_shape(dim)
                 for a, b in zip(shape[1:], head_shp[1:]):
-                    assert a == b, \
-                        'Head-Output conflict: {}-{}'.format(
-                            head_shp,
-                            shape
-                        )
+                    assert a == b, "Head-Output conflict: {}-{}".format(
+                        head_shp, shape
+                    )
 
     def _check_outputs_have_heads(self):
         for dim in self._output_dims:
@@ -151,12 +155,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
 
     @classmethod
     def from_args(
-        cls,
-        args,
-        observation_space,
-        output_space,
-        gpu_preprocessor,
-        net_reg
+        cls, args, observation_space, output_space, gpu_preprocessor, net_reg
     ):
         """
         Construct a Modular Network from arguments.
@@ -191,16 +190,18 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
                     args, shape, obs_key
                 )
             else:
-                raise ValueError('Invalid dim: {}'.format(dim))
+                raise ValueError("Invalid dim: {}".format(dim))
             obs_key_to_submod[obs_key] = submod
 
         # SubModule
         # initialize body submodule
         body_cls = net_reg.lookup_submodule(args.netbody)
-        nb_body_feature = sum([
-            submod.output_shape(dim=body_cls.dim)[0]
-            for submod in obs_key_to_submod.values()
-        ])
+        nb_body_feature = sum(
+            [
+                submod.output_shape(dim=body_cls.dim)[0]
+                for submod in obs_key_to_submod.values()
+            ]
+        )
         if body_cls.dim > 1:
             other_dims = [
                 submod.output_shape(dim=body_cls.dim)[1:]
@@ -209,8 +210,8 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             ][0]
         else:
             other_dims = []
-        input_shape = [nb_body_feature, ] + list(other_dims)
-        body_submod = body_cls.from_args(args, input_shape, 'body')
+        input_shape = [nb_body_feature,] + list(other_dims)
+        body_submod = body_cls.from_args(args, input_shape, "body")
 
         # Dict[Dim, SubModule]
         # instantiate heads based on output_shapes
@@ -228,16 +229,19 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             elif dim == 4:
                 submod_cls = net_reg.lookup_submodule(args.head4d)
             else:
-                raise ValueError('Invalid dim: {}'.format(dim))
+                raise ValueError("Invalid dim: {}".format(dim))
             submod = submod_cls.from_args(
                 args,
                 body_submod.output_shape(submod_cls.dim),
-                'head' + str(dim) + 'd'
+                "head" + str(dim) + "d",
             )
             head_submodules[str(dim)] = submod
         return cls(
-            obs_key_to_submod, body_submod, head_submodules, output_space,
-            gpu_preprocessor
+            obs_key_to_submod,
+            body_submod,
+            head_submodules,
+            output_space,
+            gpu_preprocessor,
         )
 
     def forward(self, observation, internals):
@@ -256,9 +260,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         processed_inputs = []
         for key in self._obs_keys:
             result, nxt_internal = self.source_nets[key].forward(
-                proc_obs[key],
-                internals,
-                dim=self.body.dim
+                proc_obs[key], internals, dim=self.body.dim
             )
             processed_inputs.append(result)
             nxt_internals.append(nxt_internal)
@@ -266,8 +268,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         # Process body
         processed_inputs = self._expand_dims(processed_inputs)
         body_out, nxt_internal = self.body.forward(
-            torch.cat(processed_inputs, dim=1),
-            internals
+            torch.cat(processed_inputs, dim=1), internals
         )
         nxt_internals.append(nxt_internal)
 
@@ -276,9 +277,7 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         for dim in self._output_dims:
             cur_head = self.heads[str(dim)]
             head_out, next_internal = cur_head.forward(
-                self.body.to_dim(body_out, cur_head.dim),
-                internals,
-                dim=dim
+                self.body.to_dim(body_out, cur_head.dim), internals, dim=dim
             )
             head_out_by_dim[dim] = head_out
             nxt_internals.append(nxt_internal)
@@ -325,13 +324,11 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
         :return: Dict[
         """
         internals = [
-            submod.new_internals(device)
-            for submod in self.source_nets.values()
+            submod.new_internals(device) for submod in self.source_nets.values()
         ]
         internals.append(self.body.new_internals(device))
         internals += [
-            submod.new_internals(device)
-            for submod in self.heads.values()
+            submod.new_internals(device) for submod in self.heads.values()
         ]
 
         merged_internals = {}

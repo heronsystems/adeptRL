@@ -93,20 +93,25 @@ import ray
 from adept.container import Init
 from adept.container import ActorLearnerHost, ActorLearnerWorker
 from adept.utils.script_helpers import (
-    parse_list_str, parse_path, parse_none, LogDirHelper, parse_bool_str
+    parse_list_str,
+    parse_path,
+    parse_none,
+    LogDirHelper,
+    parse_bool_str,
 )
 from adept.utils.util import DotDict
 from adept.registry import REGISTRY as R
 
-MODE = 'ActorLearner'
+MODE = "ActorLearner"
 
 
 def parse_args():
     from docopt import docopt
+
     args = docopt(__doc__)
-    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
-    del args['h']
-    del args['help']
+    args = {k.strip("--").replace("-", "_"): v for k, v in args.items()}
+    del args["h"]
+    del args["help"]
     args = DotDict(args)
 
     # Ignore other args if resuming
@@ -139,8 +144,11 @@ def parse_args():
     args.rollout_queue_size = int(args.rollout_queue_size)
 
     # arg checking
-    assert args.nb_learn_batch <= args.nb_workers, 'WARNING: nb_learn_batch must be <= nb_workers. Got {} <= {}' \
-           .format(args.nb_learn_batch, args.nb_workers)
+    assert (
+        args.nb_learn_batch <= args.nb_workers
+    ), "WARNING: nb_learn_batch must be <= nb_workers. Got {} <= {}".format(
+        args.nb_learn_batch, args.nb_workers
+    )
     return args
 
 
@@ -156,14 +164,19 @@ def main(args):
     # start ray
     if args.ray_addr is not None:
         ray.init(address=args.ray_addr)
-        logger.info('Using Ray on a cluster. Head node address: {}'.format(args.ray_addr))
+        logger.info(
+            "Using Ray on a cluster. Head node address: {}".format(
+                args.ray_addr
+            )
+        )
     else:
-        logger.info('Using Ray on a single machine.')
+        logger.info("Using Ray on a single machine.")
         ray.init()
 
     # create a main learner which logs summaries and saves weights
-    main_learner_cls = ActorLearnerHost.as_remote(num_cpus=args.learner_cpu_alloc,
-                                                  num_gpus=args.learner_gpu_alloc)
+    main_learner_cls = ActorLearnerHost.as_remote(
+        num_cpus=args.learner_cpu_alloc, num_gpus=args.learner_gpu_alloc
+    )
     main_learner = main_learner_cls.remote(
         args, log_id_dir, initial_step, rank=0
     )
@@ -173,21 +186,33 @@ def main(args):
         # create N peer learners
         peer_learners = []
         for p_ind in range(args.nb_learners - 1):
-            remote_cls = ActorLearnerHost.as_remote(num_cpus=args.learner_cpu_alloc,
-                                                    num_gpus=args.learner_gpu_alloc)
+            remote_cls = ActorLearnerHost.as_remote(
+                num_cpus=args.learner_cpu_alloc, num_gpus=args.learner_gpu_alloc
+            )
             # init
-            remote = remote_cls.remote(args, log_id_dir, initial_step, rank=p_ind + 1)
+            remote = remote_cls.remote(
+                args, log_id_dir, initial_step, rank=p_ind + 1
+            )
             peer_learners.append(remote)
 
         # figure out main learner node ip
-        nccl_addr, nccl_ip, nccl_port = ray.get(main_learner._rank0_nccl_port_init.remote())
+        nccl_addr, nccl_ip, nccl_port = ray.get(
+            main_learner._rank0_nccl_port_init.remote()
+        )
 
         # setup all nccls
-        nccl_inits = [main_learner._nccl_init.remote(nccl_addr, nccl_ip, nccl_port)]
-        nccl_inits.extend([p._nccl_init.remote(nccl_addr, nccl_ip, nccl_port) for p in peer_learners])
+        nccl_inits = [
+            main_learner._nccl_init.remote(nccl_addr, nccl_ip, nccl_port)
+        ]
+        nccl_inits.extend(
+            [
+                p._nccl_init.remote(nccl_addr, nccl_ip, nccl_port)
+                for p in peer_learners
+            ]
+        )
         # wait for all
         ray.get(nccl_inits)
-        logger.info('NCCL initialized')
+        logger.info("NCCL initialized")
 
         # have all sync parameters
         [f._sync_peer_parameters.remote() for f in peer_learners]
@@ -197,36 +222,48 @@ def main(args):
         peer_learners = []
 
     # create workers
-    workers = [ActorLearnerWorker.as_remote(num_cpus=args.worker_cpu_alloc,
-                                            num_gpus=args.worker_gpu_alloc)
-                    .remote(args, log_id_dir, initial_step, w_ind)
-                    for w_ind in range(args.nb_workers)]
+    workers = [
+        ActorLearnerWorker.as_remote(
+            num_cpus=args.worker_cpu_alloc, num_gpus=args.worker_gpu_alloc
+        ).remote(args, log_id_dir, initial_step, w_ind)
+        for w_ind in range(args.nb_workers)
+    ]
 
     # synchronize worker variables
-    ray.get(main_learner.synchronize_worker_parameters.remote(workers, initial_step, blocking=True))
+    ray.get(
+        main_learner.synchronize_worker_parameters.remote(
+            workers, initial_step, blocking=True
+        )
+    )
+
+    def close():
+        closes = [main_learner.close.remote()]
+        closes.extend([f.close.remote() for f in peer_learners])
+        closes.extend([w.close.remote() for w in workers])
+        return ray.wait(closes)
 
     try:
         # startup the run method of all containers
         runs = [main_learner.run.remote(workers, args.profile)]
         runs.extend([f.run.remote(workers) for f in peer_learners])
         done_training = ray.wait(runs)
-
+    except KeyboardInterrupt:
+        done_closing = close()
     finally:
-        closes = [main_learner.close.remote()]
-        closes.extend([f.close.remote() for f in peer_learners])
-        done_closing = ray.wait(closes)
+        done_closing = close()
 
     if args.eval:
         from adept.scripts.evaluate import main
+
         eval_args = {
-            'log_id_dir': log_id_dir,
-            'gpu_id': 0,
-            'nb_episode': 30,
+            "log_id_dir": log_id_dir,
+            "gpu_id": 0,
+            "nb_episode": 30,
         }
         if args.custom_network:
-            eval_args['custom_network'] = args.custom_network
+            eval_args["custom_network"] = args.custom_network
         main(eval_args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())

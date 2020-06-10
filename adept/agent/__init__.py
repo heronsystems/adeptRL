@@ -6,5 +6,3 @@ AGENT_REG = [
     ActorCritic,
     PPO
 ]
-
-

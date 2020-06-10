@@ -77,30 +77,21 @@ Logging Options:
 Troubleshooting Options:
     --profile               Profile this script
 """
-import os
-
-from absl import flags
-
 from adept.container import Init, Local
-from adept.utils.script_helpers import (
-    parse_none, parse_path
-)
-from adept.utils.util import DotDict
 from adept.registry import REGISTRY as R
+from adept.utils.script_helpers import parse_none, parse_path
+from adept.utils.util import DotDict
 
-# hack to use bypass pysc2 flags
-FLAGS = flags.FLAGS
-FLAGS(['local.py'])
-
-MODE = 'Local'
+MODE = "Local"
 
 
 def parse_args():
     from docopt import docopt
+
     args = docopt(__doc__)
-    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
-    del args['h']
-    del args['help']
+    args = {k.strip("--").replace("-", "_"): v for k, v in args.items()}
+    del args["h"]
+    del args["help"]
     args = DotDict(args)
 
     # Ignore other args if resuming
@@ -141,7 +132,7 @@ def main(args):
         try:
             from pyinstrument import Profiler
         except:
-            raise ImportError('You must install pyinstrument to use profiling.')
+            raise ImportError("You must install pyinstrument to use profiling.")
         container.nb_step = 10e3
         profiler = Profiler()
         profiler.start()
@@ -156,15 +147,16 @@ def main(args):
 
     if args.eval:
         from adept.scripts.evaluate import main
+
         eval_args = {
-            'log_id_dir': log_id_dir,
-            'gpu_id': 0,
-            'nb_episode': 30,
+            "log_id_dir": log_id_dir,
+            "gpu_id": 0,
+            "nb_episode": 30,
         }
         if args.custom_network:
-            eval_args['custom_network'] = args.custom_network
+            eval_args["custom_network"] = args.custom_network
         main(eval_args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())

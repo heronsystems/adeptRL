@@ -21,6 +21,7 @@ class Init:
     * log args
     * create log dir
     """
+
     @staticmethod
     def main(mode, args):
         args = DotDict(args)
@@ -60,7 +61,7 @@ class Init:
         """
         resume = args.resume
         log_dir_helper = LogDirHelper(args.resume)
-        with open(log_dir_helper.args_file_path(), 'r') as args_file:
+        with open(log_dir_helper.args_file_path(), "r") as args_file:
             args = DotDict(json.load(args_file))
             args.resume = resume
 
@@ -74,8 +75,11 @@ class Init:
             name = args.actor_host
 
         log_id = Init.make_log_id(
-            args.tag, mode, name, args.netbody,
-            timestamp=log_dir_helper.timestamp()
+            args.tag,
+            mode,
+            name,
+            args.netbody,
+            timestamp=log_dir_helper.timestamp(),
         )
         log_id_path = Init.log_id_dir(args.logdir, args.env, log_id)
         return args, log_id_path, initial_step_count
@@ -101,15 +105,15 @@ class Init:
             net_args = R.lookup_network(args.custom_network).args
         else:
             net_args = R.lookup_modular_args(args)
-        args = DotDict({
-            **args, **agent_args, **env_args, **rwdnorm_args, **net_args
-        })
+        args = DotDict(
+            {**args, **agent_args, **env_args, **rwdnorm_args, **net_args}
+        )
 
         return args
 
     @staticmethod
     def from_config(args):
-        with open(args.config, 'r') as args_file:
+        with open(args.config, "r") as args_file:
             config_args = json.load(args_file)
         return DotDict({**args, **config_args})
 
@@ -124,8 +128,10 @@ class Init:
             l = R.lookup_learner(args.learner)
             e = R.lookup_exp(args.exp)
             agent_args = {
-                **h.prompt(args), **w.prompt(args),
-                **l.prompt(args), **e.prompt(args)
+                **h.prompt(args),
+                **w.prompt(args),
+                **l.prompt(args),
+                **e.prompt(args),
             }
 
         env_cls = R.lookup_env(args.env)
@@ -137,9 +143,9 @@ class Init:
             net_args = R.lookup_network(args.custom_network).prompt()
         else:
             net_args = R.prompt_modular_args(args)
-        args = DotDict({
-            **args, **agent_args, **env_args, **rwdnorm_args, **net_args
-        })
+        args = DotDict(
+            {**args, **agent_args, **env_args, **rwdnorm_args, **net_args}
+        )
         return args
 
     @staticmethod
@@ -152,9 +158,10 @@ class Init:
              / __ `/ __  / _ \/ __ \/ __/
             / /_/ / /_/ /  __/ /_/ / /_
             \__,_/\__,_/\___/ .___/\__/
-                           /_/           """ + '\n' +
-            '                                     '[:-(version_len + 2)] +
-            'v{} '.format(VERSION)
+                           /_/           """
+            + "\n"
+            + "                                     "[: -(version_len + 2)]
+            + "v{} ".format(VERSION)
         )
 
     @staticmethod
@@ -162,20 +169,20 @@ class Init:
         return os.makedirs(log_id_dir, exist_ok=True)
 
     @staticmethod
-    def setup_logger(log_id_dir, log_name='train'):
-        logger = logging.getLogger(log_id_dir + '_' + log_name)
+    def setup_logger(log_id_dir, log_name="train"):
+        logger = logging.getLogger(log_id_dir + "_" + log_name)
         logger.setLevel(logging.INFO)
         logger.propagate = False
 
         sh = logging.StreamHandler()
         sh.setLevel(logging.INFO)
-        fmt = logging.Formatter('%(message)s')
+        fmt = logging.Formatter("%(message)s")
         sh.setFormatter(fmt)
 
-        log_path = os.path.join(log_id_dir, f'{log_name}_log.txt')
-        fh = logging.FileHandler(log_path, mode='a')
+        log_path = os.path.join(log_id_dir, f"{log_name}_log.txt")
+        fh = logging.FileHandler(log_path, mode="a")
         fh.setLevel(logging.DEBUG)
-        fmt = logging.Formatter('%(asctime)s  [%(levelname)s] %(message)s')
+        fmt = logging.Formatter("%(asctime)s  [%(levelname)s] %(message)s")
         fh.setFormatter(fmt)
 
         logger.addHandler(sh)
@@ -187,23 +194,23 @@ class Init:
     def log_args(logger, args):
         args = args if isinstance(args, dict) else vars(args)
         for k in sorted(args):
-            logger.info('{}: {}'.format(k, args[k]))
+            logger.info("{}: {}".format(k, args[k]))
 
     @staticmethod
     def write_args_file(log_id_dir, args):
         args = args if isinstance(args, dict) else vars(args)
-        with open(os.path.join(log_id_dir, 'args.json'), 'w') as args_file:
+        with open(os.path.join(log_id_dir, "args.json"), "w") as args_file:
             json.dump(args, args_file, indent=4, sort_keys=True)
 
     @staticmethod
     def make_log_id(tag, mode_name, agent_name, network_name, timestamp=None):
         if timestamp is None:
-            timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         parts = [mode_name, agent_name, network_name, timestamp]
         if tag:
             parts = [tag] + parts
-        return '_'.join(parts)
+        return "_".join(parts)
 
     @staticmethod
     def log_id_dir(logdir, env, log_id):

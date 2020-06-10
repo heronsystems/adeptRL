@@ -27,15 +27,13 @@ class Space(dict):
     @staticmethod
     def _detect_gym_spaces(gym_space):
         if isinstance(gym_space, spaces.Discrete):
-            return {'Discrete': (gym_space.n,)}
+            return {"Discrete": (gym_space.n,)}
         elif isinstance(gym_space, spaces.MultiDiscrete):
             raise NotImplementedError
         elif isinstance(gym_space, spaces.MultiBinary):
-            return {'MultiBinary': (gym_space.n,)}
+            return {"MultiBinary": (gym_space.n,)}
         elif isinstance(gym_space, spaces.Box):
-            return {
-                'Box': gym_space.shape
-            }
+            return {"Box": gym_space.shape}
         elif isinstance(gym_space, spaces.Dict):
             return {
                 name: list(Space._detect_gym_spaces(s).values())[0]
@@ -50,15 +48,13 @@ class Space(dict):
     @staticmethod
     def dtypes_from_gym(gym_space):
         if isinstance(gym_space, spaces.Discrete):
-            return {'Discrete': gym_space.dtype}
+            return {"Discrete": gym_space.dtype}
         elif isinstance(gym_space, spaces.MultiDiscrete):
             raise NotImplementedError
         elif isinstance(gym_space, spaces.MultiBinary):
-            return {'MultiBinary': gym_space.dtype}
+            return {"MultiBinary": gym_space.dtype}
         elif isinstance(gym_space, spaces.Box):
-            return {
-                'Box': gym_space.dtype
-            }
+            return {"Box": gym_space.dtype}
         elif isinstance(gym_space, spaces.Dict):
             return {
                 name: list(Space._detect_gym_spaces(s).values())[0]

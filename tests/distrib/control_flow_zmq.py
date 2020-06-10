@@ -3,13 +3,13 @@ import os
 import time
 from collections import deque
 
-WORLD_SIZE = int(os.environ['WORLD_SIZE'])
-GLOBAL_RANK = int(os.environ['RANK'])
-LOCAL_RANK = int(os.environ['LOCAL_RANK'])
-NB_NODE = int(os.environ['NB_NODE'])
+WORLD_SIZE = int(os.environ["WORLD_SIZE"])
+GLOBAL_RANK = int(os.environ["RANK"])
+LOCAL_RANK = int(os.environ["LOCAL_RANK"])
+NB_NODE = int(os.environ["NB_NODE"])
 LOCAL_SIZE = WORLD_SIZE // NB_NODE
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if LOCAL_RANK == 0:
         context = zmq.Context()
         h_to_w = context.socket(zmq.PUBLISH)
@@ -20,12 +20,11 @@ if __name__ == '__main__':
 
         step_count = 0
         nb_batch = 2
-        while step_count < 100:
-            q, q_lookup = deque(), set()
-            while len(q) < nb_batch:
-                for i, hand in enumerate(handles):
-                    if i not in q_lookup:
-                        
+        # while step_count < 100:
+        #     q, q_lookup = deque(), set()
+        #     while len(q) < nb_batch:
+        #         for i, hand in enumerate(handles):
+        #             if i not in q_lookup:
 
     else:
         context = zmq.Context()
@@ -39,7 +38,7 @@ if __name__ == '__main__':
 
         while not done:
 
-            print('worker received')
+            print("worker received")
 
     time.sleep(1)
 

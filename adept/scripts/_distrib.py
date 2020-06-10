@@ -19,47 +19,39 @@ Distributed worker script. Called from launcher (distrib.py).
 import argparse
 import json
 import os
-
 import torch.distributed as dist
 
-from adept.registry import REGISTRY as R
 from adept.container import Init, DistribHost, DistribWorker
-from adept.utils.script_helpers import (
-    LogDirHelper
-)
+from adept.registry import REGISTRY as R
+from adept.utils.script_helpers import LogDirHelper
 from adept.utils.util import DotDict
 
-MODE = 'Distrib'
-WORLD_SIZE = int(os.environ['WORLD_SIZE'])
-GLOBAL_RANK = int(os.environ['RANK'])
-LOCAL_RANK = int(os.environ['LOCAL_RANK'])
-
-# hack to use bypass pysc2 flags
-from absl import flags
-FLAGS = flags.FLAGS
-FLAGS(['local.py'])
+MODE = "Distrib"
+WORLD_SIZE = int(os.environ["WORLD_SIZE"])
+GLOBAL_RANK = int(os.environ["RANK"])
+LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 
 
 def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+    if v.lower() in ("yes", "true", "t", "y", "1"):
         return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+    elif v.lower() in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--log-id-dir', required=True)
+    parser.add_argument("--log-id-dir", required=True)
     parser.add_argument(
-        '--resume', type=str2bool, nargs='?', const=True, default=False
+        "--resume", type=str2bool, nargs="?", const=True, default=False
     )
-    parser.add_argument('--load-network', default=None)
-    parser.add_argument('--load-optim', default=None)
-    parser.add_argument('--initial-step-count', type=int, default=0)
-    parser.add_argument('--init-method', default=None)
-    parser.add_argument('--custom-network', default=None)
+    parser.add_argument("--load-network", default=None)
+    parser.add_argument("--load-optim", default=None)
+    parser.add_argument("--initial-step-count", type=int, default=0)
+    parser.add_argument("--init-method", default=None)
+    parser.add_argument("--custom-network", default=None)
     args = parser.parse_args()
     return args
 
@@ -76,34 +68,43 @@ def main(local_args):
 
     R.load_extern_classes(log_id_dir)
     logger = Init.setup_logger(
-        log_id_dir + '_' + str(LOCAL_RANK),
-        'train{}'.format(GLOBAL_RANK)
+        log_id_dir + "_" + str(LOCAL_RANK), "train{}".format(GLOBAL_RANK)
     )
 
     helper = LogDirHelper(log_id_dir)
-    with open(helper.args_file_path(), 'r') as args_file:
+    with open(helper.args_file_path(), "r") as args_file:
         args = DotDict(json.load(args_file))
 
     if local_args.resume:
         args = DotDict({**args, **vars(local_args)})
 
     dist.init_process_group(
-        backend='nccl',
+        backend="nccl",
         init_method=args.init_method,
         world_size=WORLD_SIZE,
-        rank=LOCAL_RANK
+        rank=LOCAL_RANK,
     )
-    logger.info('Rank {} initialized.'.format(GLOBAL_RANK))
+    logger.info("Rank {} initialized.".format(GLOBAL_RANK))
 
     if LOCAL_RANK == 0:
         container = DistribHost(
-            args, logger, log_id_dir, initial_step_count,
-            LOCAL_RANK, GLOBAL_RANK, WORLD_SIZE
+            args,
+            logger,
+            log_id_dir,
+            initial_step_count,
+            LOCAL_RANK,
+            GLOBAL_RANK,
+            WORLD_SIZE,
         )
     else:
         container = DistribWorker(
-            args, logger, log_id_dir, initial_step_count,
-            LOCAL_RANK, GLOBAL_RANK, WORLD_SIZE
+            args,
+            logger,
+            log_id_dir,
+            initial_step_count,
+            LOCAL_RANK,
+            GLOBAL_RANK,
+            WORLD_SIZE,
         )
 
     try:
@@ -112,5 +113,5 @@ def main(local_args):
         container.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())

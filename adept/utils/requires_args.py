@@ -62,16 +62,16 @@ class RequiresArgsMixin(metaclass=abc.ABCMeta):
             return args
 
         user_input = input(
-            '\n{} Defaults:\n{}\n'
-            'Press ENTER to use defaults. Otherwise, '
-            'modify JSON keys then press ENTER.\n'.format(
-                name,
-                json.dumps(args, indent=2, sort_keys=True)
-            ) + 'Example: {"x": True, "gamma": 0.001}\n'
+            "\n{} Defaults:\n{}\n"
+            "Press ENTER to use defaults. Otherwise, "
+            "modify JSON keys then press ENTER.\n".format(
+                name, json.dumps(args, indent=2, sort_keys=True)
+            )
+            + 'Example: {"x": True, "gamma": 0.001}\n'
         )
 
         # use defaults if no changes specified
-        if user_input == '':
+        if user_input == "":
             return args
 
         updates = json.loads(user_input)

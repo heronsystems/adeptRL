@@ -71,7 +71,7 @@ def dtensor_to_dev(d_tensor, device):
 
 def json_to_dict(file_path):
     """Read JSON config."""
-    json_object = json.load(open(file_path, 'r'))
+    json_object = json.load(open(file_path, "r"))
     return json_object
 
 
@@ -109,7 +109,7 @@ class CircularBuffer(object):
 
     def __repr__(self):
         """return string representation"""
-        return self._data.__repr__() + ' (' + str(len(self._data)) + ' items)'
+        return self._data.__repr__() + " (" + str(len(self._data)) + " items)"
 
     def __len__(self):
         return len(self._data)
@@ -139,6 +139,7 @@ class DotDict(dict):
     """
     Dictionary to access attributes
     """
+
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
@@ -149,4 +150,3 @@ class DotDict(dict):
 
     def __setstate__(cls, attributes):
         return DotDict(**attributes)
-

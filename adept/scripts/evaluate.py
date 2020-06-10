@@ -42,27 +42,21 @@ Options:
     --end <float>           Epoch to end on [default: -1]
     --seed <int>            Seed for random variables [default: 512]
     --custom-network <str>  Name of custom network class
-    --manager <str>         Name of manager [default: SubProcEnvManager]
 """
-from absl import flags
-
 from adept.container import EvalContainer
-from adept.utils.script_helpers import parse_path, parse_none
-from adept.utils.util import DotDict
 from adept.container import Init
 from adept.registry import REGISTRY as R
-
-# hack to use argparse for SC2
-FLAGS = flags.FLAGS
-FLAGS(['local.py'])
+from adept.utils.script_helpers import parse_path, parse_none
+from adept.utils.util import DotDict
 
 
 def parse_args():
     from docopt import docopt
+
     args = docopt(__doc__)
-    args = {k.strip('--').replace('-', '_'): v for k, v in args.items()}
-    del args['h']
-    del args['help']
+    args = {k.strip("--").replace("-", "_"): v for k, v in args.items()}
+    del args["h"]
+    del args["help"]
     args = DotDict(args)
     args.logdir = parse_path(args.logdir)
     # TODO implement Option utility
@@ -88,7 +82,7 @@ def main(args):
     args = DotDict(args)
 
     Init.print_ascii_logo()
-    logger = Init.setup_logger(args.logdir, 'eval')
+    logger = Init.setup_logger(args.logdir, "eval")
     Init.log_args(logger, args)
     R.load_extern_classes(args.logdir)
 
@@ -102,7 +96,6 @@ def main(args):
         args.start,
         args.end,
         args.seed,
-        args.manager
     )
     try:
         eval_container.run()
@@ -110,5 +103,5 @@ def main(args):
         eval_container.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(parse_args())
