@@ -64,6 +64,20 @@ class CastToFloat(Operation):
         return {k: ob.float() for k, ob in obs.items()}
 
 
+class CastToHalf(Operation):
+    def __init__(self, name_filters=None, rank_filters=None):
+        super(CastToHalf, self).__init__(name_filters, rank_filters)
+
+    def update_shape(self, old_shape):
+        return old_shape
+
+    def update_dtype(self, old_dtype):
+        return {k: torch.float16 for k in old_dtype.keys()}
+
+    def update_obs(self, obs):
+        return {k: ob.half() for k, ob in obs.items()}
+
+
 class GrayScaleAndMoveChannel(Operation):
     def __init__(self, name_filters=None, rank_filters=frozenset([3])):
         super(GrayScaleAndMoveChannel, self).__init__(
