@@ -68,7 +68,7 @@ def main(local_args):
 
     R.load_extern_classes(log_id_dir)
     logger = Init.setup_logger(
-        log_id_dir + "_" + str(LOCAL_RANK), "train{}".format(GLOBAL_RANK)
+        log_id_dir, "train{}".format(GLOBAL_RANK)
     )
 
     helper = LogDirHelper(log_id_dir)
