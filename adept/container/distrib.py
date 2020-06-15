@@ -1,10 +1,9 @@
 # Copyright (C) 2020 Heron Systems, Inc.
-import os
-from time import time
-
 import numpy as np
+import os
 import torch
 import torch.distributed as dist
+from time import time
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
@@ -14,14 +13,14 @@ from adept.registry import REGISTRY
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
 from .base import Container
+from .base.updater import Updater
 
 
-class DistribUpdater:
+class DistribUpdater(Updater):
     def __init__(
-        self, optimizer, network, world_sz, divide_grad, grad_norm_clip
+        self, optimizer, network, grad_norm_clip, world_sz, divide_grad
     ):
-        self.optimizer = optimizer
-        self.network = network
+        super().__init__(optimizer, network, grad_norm_clip)
         self.world_sz = world_sz
         self.divide_grad = divide_grad
         self.grad_norm_clip = grad_norm_clip
@@ -133,9 +132,9 @@ class DistribHost(Container):
         self.updater = DistribUpdater(
             self.optimizer,
             self.network,
+            args.grad_norm_clip,
             world_size,
             not args.no_divide,
-            args.grad_norm_clip,
         )
 
         if args.load_network:
@@ -329,9 +328,9 @@ class DistribWorker(Container):
         self.updater = DistribUpdater(
             self.optimizer,
             self.network,
+            args.grad_norm_clip,
             world_size,
             not args.no_divide,
-            args.grad_norm_clip,
         )
 
         if args.load_network:

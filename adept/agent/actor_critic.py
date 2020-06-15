@@ -83,7 +83,7 @@ class ActorCritic(AgentModule):
             predictions, internals, obs, available_actions
         )
 
-    def learn_step(self, updater, next_obs, internals):
-        return self._learner.compute_loss(
-            updater, self.exp_cache.read(), next_obs, internals
+    def learn_step(self, updater, network, next_obs, internals):
+        return self._learner.learn_step(
+            updater, network, self.exp_cache.read(), next_obs, internals
         )

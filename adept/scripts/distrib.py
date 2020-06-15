@@ -40,7 +40,7 @@ Distributed Options:
     --master-addr <str>     Master node (rank 0's) address [default: 127.0.0.1]
     --master-port <int>     Master node (rank 0's) comm port [default: 29500]
     --init-method <str>     torch.distrib init [default: file:///tmp/adept_init]
-    --no-divide <bool>      Don't divide gradients by world size
+    --no-divide             Don't divide gradients by world size
 
 Agent Options:
     --agent <str>           Name of agent class [default: ActorCritic]
