@@ -101,7 +101,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_loss(self, network, next_obs, internals):
+    def learn_step(self, updater, network, next_obs, internals):
         raise NotImplementedError
 
     def is_ready(self):
@@ -109,19 +109,6 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     def clear(self):
         self.exp_cache.clear()
-
-    def compute_loss_and_step(self, network, optimizer, next_obs, internals):
-        loss_dict, metric_dict = self.compute_loss(
-            network, next_obs, internals
-        )
-        total_loss = torch.sum(
-            torch.stack(tuple(loss for loss in loss_dict.values()))
-        )
-
-        optimizer.zero_grad()
-        total_loss.backward()
-        optimizer.step()
-        return loss_dict, total_loss, metric_dict
 
     def act(self, network, obs, prev_internals):
         """

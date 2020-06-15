@@ -213,7 +213,7 @@ class ActorLearnerHost(Container):
                         internals[k][i] = v
 
             # compute loss
-            loss_dict, metric_dict = self.learner.compute_loss(
+            loss_dict, metric_dict = self.learner.learn_step(
                 self.network, self.exp.read(), r.next_observation, internals
             )
             total_loss = torch.sum(

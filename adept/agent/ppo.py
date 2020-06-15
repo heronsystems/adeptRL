@@ -113,7 +113,7 @@ class PPO(AgentModule):
     def compute_action_exp(self, predictions, internals, obs, available_actions):
         return self._actor.compute_action_exp(predictions, internals, obs, available_actions)
 
-    def compute_loss_and_step(self, network, optimizer, next_obs, next_internals):
+    def learn_step(self, updater, network, next_obs, next_internals):
         r = self.exp_cache.read()
         device = r.rewards[0].device
         rollout_len = self.exp_cache.rollout_len
@@ -196,15 +196,11 @@ class PPO(AgentModule):
                     tuple(loss for loss in losses.values())
                 ))
 
-                # backprop
-                optimizer.zero_grad()
-                total_loss.backward()
-                nn.utils.clip_grad_norm_(network.parameters(), self.gradient_norm_clipping)
-                optimizer.step()
+                updater.step(total_loss)
 
         # TODO: metrics: average loss, policy % change, loss over epochs?, value change
         metrics = {'advantage': torch.mean(adv_targets_batch)}
-        return losses, total_loss, metrics
+        return losses, metrics
 
     def act_batch(self, network, batch_obs, batch_terminals, batch_actions, internals, device):
         exp_cache = []
@@ -246,6 +242,3 @@ class PPO(AgentModule):
             'entropies': entropies,
             'values': values
         }
-
-    def compute_loss(self, *args):
-        pass
