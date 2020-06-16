@@ -57,7 +57,7 @@ class ImpalaLearner(LearnerModule):
             entropy_weight=args.entropy_weight,
         )
 
-    def learn_step(self, network, experiences, next_obs, internals):
+    def learn_step(self, updater, network, experiences, next_obs, internals):
         # estimate value of next state
         with torch.no_grad():
             results, _, _ = network(next_obs, internals)
@@ -101,6 +101,8 @@ class ImpalaLearner(LearnerModule):
         value_loss = 0.5 * (vtrace_target - r_values).pow(2).mean()
         policy_loss = torch.mean(-r_log_probs_learner * pg_advantage)
         entropy_loss = torch.mean(-r_entropies) * self.entropy_weight
+
+        updater.step(value_loss + policy_loss + entropy_loss)
 
         losses = {
             "value_loss": value_loss,

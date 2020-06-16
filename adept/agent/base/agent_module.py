@@ -15,9 +15,9 @@
 """
 An Agent interacts with the environment and accumulates experience.
 """
-import abc
 from collections import defaultdict
-import torch
+
+import abc
 
 from adept.exp import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin

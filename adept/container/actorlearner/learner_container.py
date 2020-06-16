@@ -24,6 +24,7 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
 from adept.container.base import Container, NCCLOptimizer
+from adept.container.local import LocalUpdater
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.container.actorlearner.rollout_queuer import RolloutQueuerAsync
@@ -126,12 +127,6 @@ class ActorLearnerHost(Container):
             net.internal_space(),
             args.nb_env * args.nb_learn_batch,
         )
-        w_builder = REGISTRY.lookup_actor(args.actor_worker).exp_spec_builder(
-            env.observation_space,
-            env.action_space,
-            net.internal_space(),
-            args.nb_env,
-        )
         actor = actor_cls.from_args(args, env.action_space)
         learner = REGISTRY.lookup_learner(args.learner).from_args(
             args, rwd_norm
@@ -142,6 +137,9 @@ class ActorLearnerHost(Container):
         self.actor = actor
         self.learner = learner
         self.exp = exp_cls.from_args(args, builder).to(device)
+        self.updater = LocalUpdater(
+            self.optimizer, self.network, args.grad_norm_clip
+        )
 
         # Rank 0 setup, load network/optimizer and create SummaryWriter/Saver
         if rank == 0:
@@ -214,15 +212,15 @@ class ActorLearnerHost(Container):
 
             # compute loss
             loss_dict, metric_dict = self.learner.learn_step(
-                self.network, self.exp.read(), r.next_observation, internals
+                self.updater,
+                self.network,
+                self.exp.read(),
+                r.next_observation,
+                internals,
             )
             total_loss = torch.sum(
                 torch.stack(tuple(loss for loss in loss_dict.values()))
             )
-
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
 
             # Perform state updates
             global_step_count += (

@@ -65,6 +65,7 @@ Network Options:
 Optimizer Options:
     --optim <str>           Name of optimizer [default: RMSprop]
     --lr <float>            Learning rate [default: 0.0007]
+    --grad-norm-clip <float>  Clip gradient norms [default: 0.5]
     --warmup <int>          Number of steps to warm up for [default: 100]
 
 Logging Options:
