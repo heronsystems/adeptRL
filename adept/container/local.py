@@ -1,7 +1,7 @@
-from time import time
-
 import numpy as np
 import torch
+from time import time
+from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
@@ -10,6 +10,16 @@ from adept.registry import REGISTRY
 from adept.utils.logging import SimpleModelSaver
 from adept.utils.util import dtensor_to_dev, listd_to_dlist
 from .base import Container
+from .base.updater import Updater
+
+
+class LocalUpdater(Updater):
+    def step(self, loss):
+        self.optimizer.zero_grad()
+        loss.backward()
+        if self.grad_norm_clip:
+            clip_grad_norm_(self.network.parameters(), self.grad_norm_clip)
+        self.optimizer.step()
 
 
 class Local(Container):
@@ -47,7 +57,7 @@ class Local(Container):
             if args.optim == "RMSprop":
                 return torch.optim.RMSprop(x, lr=args.lr, eps=1e-5, alpha=0.99)
             elif args.optim == "Adam":
-                return torch.optim.Adam(x, lr=args.lr)
+                return torch.optim.Adam(x, lr=args.lr, eps=1e-5)
 
         def warmup_schedule(back_step):
             return back_step / args.warmup if back_step < args.warmup else 1.0
@@ -82,6 +92,9 @@ class Local(Container):
         self.logger = logger
         self.summary_writer = SummaryWriter(log_id_dir)
         self.saver = SimpleModelSaver(log_id_dir)
+        self.updater = LocalUpdater(
+            self.optimizer, self.network, args.grad_norm_clip
+        )
 
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
@@ -166,16 +179,14 @@ class Local(Container):
 
             # Learn
             if self.agent.is_ready():
-                loss_dict, metric_dict = self.agent.compute_loss(
-                    self.network, next_obs, internals
+                loss_dict, metric_dict = self.agent.learn_step(
+                    self.updater,
+                    self.network,
+                    next_obs,
+                    internals,
                 )
-                total_loss = torch.sum(
-                    torch.stack(tuple(loss for loss in loss_dict.values()))
-                )
+                total_loss = sum(loss_dict.values())
 
-                self.optimizer.zero_grad()
-                total_loss.backward()
-                self.optimizer.step()
                 epoch = step_count / self.nb_env
                 self.scheduler.step(epoch)
 

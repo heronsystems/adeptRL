@@ -1,20 +1,10 @@
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import os
-from time import time
-
+# Copyright (C) 2020 Heron Systems, Inc.
 import numpy as np
+import os
 import torch
 import torch.distributed as dist
+from time import time
+from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
 from adept.manager import SubProcEnvManager
@@ -23,6 +13,35 @@ from adept.registry import REGISTRY
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.logging import SimpleModelSaver
 from .base import Container
+from .base.updater import Updater
+
+
+class DistribUpdater(Updater):
+    def __init__(
+        self, optimizer, network, grad_norm_clip, world_sz, divide_grad
+    ):
+        super().__init__(optimizer, network, grad_norm_clip)
+        self.world_sz = world_sz
+        self.divide_grad = divide_grad
+        self.grad_norm_clip = grad_norm_clip
+
+    def step(self, loss):
+        self.optimizer.zero_grad()
+        loss.backward()
+        dist.barrier()
+        handles = []
+        for param in self.network.parameters():
+            handles.append(dist.all_reduce(param.grad, async_op=True))
+        for handle in handles:
+            handle.wait()
+        if self.divide_grad:
+            for param in self.network.parameters():
+                param.grad.mul_(1.0 / self.world_sz)
+        if self.grad_norm_clip:
+            nn.utils.clip_grad_norm_(
+                self.network.parameters(), self.grad_norm_clip
+            )
+        self.optimizer.step()
 
 
 class DistribHost(Container):
@@ -110,6 +129,13 @@ class DistribHost(Container):
         self.local_rank = local_rank
         self.global_rank = global_rank
         self.world_size = world_size
+        self.updater = DistribUpdater(
+            self.optimizer,
+            self.network,
+            args.grad_norm_clip,
+            world_size,
+            not args.no_divide,
+        )
 
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
@@ -192,24 +218,12 @@ class DistribHost(Container):
 
             # Learn
             if self.agent.is_ready():
-                loss_dict, metric_dict = self.agent.compute_loss(
-                    self.network, next_obs, internals
+                loss_dict, metric_dict = self.agent.learn_step(
+                    self.updater, self.network, next_obs, internals
                 )
                 total_loss = torch.sum(
                     torch.stack(tuple(loss for loss in loss_dict.values()))
                 )
-
-                self.optimizer.zero_grad()
-                total_loss.backward()
-                dist.barrier()
-                handles = []
-                for param in self.network.parameters():
-                    handles.append(dist.all_reduce(param.grad, async_op=True))
-                for handle in handles:
-                    handle.wait()
-                # for param in self.network.parameters():
-                #     param.grad.mul_(1. / self.world_size)
-                self.optimizer.step()
 
                 self.agent.clear()
                 for k, vs in internals.items():
@@ -311,6 +325,13 @@ class DistribWorker(Container):
         self.local_rank = local_rank
         self.global_rank = global_rank
         self.world_size = world_size
+        self.updater = DistribUpdater(
+            self.optimizer,
+            self.network,
+            args.grad_norm_clip,
+            world_size,
+            not args.no_divide,
+        )
 
         if args.load_network:
             self.network = self.load_network(self.network, args.load_network)
@@ -382,24 +403,9 @@ class DistribWorker(Container):
 
             # Learn
             if self.agent.is_ready():
-                loss_dict, metric_dict = self.agent.compute_loss(
-                    self.network, next_obs, internals
+                _, _ = self.agent.learn_step(
+                    self.updater, self.network, next_obs, internals
                 )
-                total_loss = torch.sum(
-                    torch.stack(tuple(loss for loss in loss_dict.values()))
-                )
-
-                self.optimizer.zero_grad()
-                total_loss.backward()
-                dist.barrier()
-                handles = []
-                for param in self.network.parameters():
-                    handles.append(dist.all_reduce(param.grad, async_op=True))
-                for handle in handles:
-                    handle.wait()
-                # for param in self.network.parameters():
-                #     param.grad.mul_(1. / self.world_size)
-                self.optimizer.step()
 
                 self.agent.clear()
                 for k, vs in internals.items():

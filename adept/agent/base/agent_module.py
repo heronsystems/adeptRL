@@ -15,8 +15,9 @@
 """
 An Agent interacts with the environment and accumulates experience.
 """
-import abc
 from collections import defaultdict
+
+import abc
 
 from adept.exp import ExpSpecBuilder
 from adept.utils.requires_args import RequiresArgsMixin
@@ -100,7 +101,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_loss(self, network, next_obs, internals):
+    def learn_step(self, updater, network, next_obs, internals):
         raise NotImplementedError
 
     def is_ready(self):

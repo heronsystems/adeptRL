@@ -77,6 +77,7 @@ Network Options:
 
 Optimizer Options:
     --lr <float>               Learning rate [default: 0.0007]
+    --grad-norm-clip <float>  Clip gradient norms [default: 0.5]
 
 Logging Options:
     --tag <str>                Name your run [default: None]

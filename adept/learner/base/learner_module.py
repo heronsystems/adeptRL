@@ -31,5 +31,5 @@ class LearnerModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def compute_loss(self, network, experiences, next_obs, internals):
+    def learn_step(self, updater, network, experiences, next_obs, internals):
         raise NotImplementedError

@@ -42,7 +42,7 @@ class ACRolloutLearner(LearnerModule):
             args.return_scale,
         )
 
-    def compute_loss(self, network, experiences, next_obs, internals):
+    def learn_step(self, updater, network, experiences, next_obs, internals):
         # normalize rewards
         rewards = self.reward_normalizer(torch.stack(experiences.rewards))
 
@@ -75,6 +75,8 @@ class ACRolloutLearner(LearnerModule):
         policy_loss = policy_loss.mean()
         entropy_loss = -r_entropies.mean() * self.entropy_weight
         value_loss = 0.5 * (r_tgt_returns - r_values).pow(2).mean()
+
+        updater.step(value_loss + policy_loss + entropy_loss)
 
         losses = {
             "value_loss": value_loss,
