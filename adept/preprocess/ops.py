@@ -38,6 +38,29 @@ class Operation(abc.ABC):
     def reset(self):
         pass
 
+    def correct_invalid_obs(obs):
+        """Checks for and corrects invalid observations (NaNs in observation)
+
+        Parameters
+        ----------
+        obs : torch.tensor
+            observation to be checked/corrected
+
+        Returns
+        -------
+        torch.Tensor, torch.Tensor
+            checked/corrected observation, indices of NaNs
+
+        Raises
+        ------
+        RuntimeWarning
+            raises RuntimeWarning if NaNs are found in observation
+        """
+        nan_idxs = torch.isnan(obs)
+        obs[nan_idxs] = 0               # set NaNs to 0
+
+        return obs, nan_idxs
+
     @abc.abstractmethod
     def update_shape(self, old_shape):
         raise NotImplementedError
