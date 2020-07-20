@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import json
 import os
+from time import sleep
 
 from adept.utils.util import DotDict
 
@@ -94,13 +95,45 @@ class LogDirHelper:
     def epoch_path_at_epoch(self, epoch):
         return os.path.join(self._log_id_path, str(epoch))
 
-    def network_path_at_epoch(self, epoch):
+    def network_path_at_epoch(self, epoch, num_tries=1, retry_delay=3):
+        """Find network path at epoch
+
+        Parameters
+        ----------
+        epoch : int
+            epoch to find network path for
+        num_tries: int, optional
+            number of tries to do, by default 1 (no retries)
+        retry_delay : int, optional
+            delay between retry attempts, by default 3 (seconds)
+
+        Returns
+        -------
+        str
+            path to network file
+        """
+        assert num_tries, "num_tries must be greater than 0"
+
         epoch_path = self.epoch_path_at_epoch(epoch)
-        network_files = [f for f in os.listdir(epoch_path) if ("model" in f)]
-        assert len(network_files), (
-            "More than one network file, "
+
+        for try_idx in range(num_tries):
+            if try_idx > 0:
+                sleep(retry_delay)
+
+            network_files = [f for f in os.listdir(epoch_path) if ("model" in f)]
+
+            if len(network_files):
+                break
+        else:
+            raise AssertionError(
+                "No network files found at epoch {epoch} for {self._log_id_path} after {num_tries} tries"
+            )
+
+        assert len(network_files) <= 1, (
+            "More than one network paths at epoch {epoch}, "
             "maybe you want network_paths_at_epoch()"
         )
+
         network_file = network_files[0]
         return os.path.join(epoch_path, network_file)
 
