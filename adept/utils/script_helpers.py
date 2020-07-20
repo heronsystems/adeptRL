@@ -113,11 +113,13 @@ class LogDirHelper:
             path to network file
         """
         assert num_tries, "num_tries must be greater than 0"
+
+        epoch_path = self.epoch_path_at_epoch(epoch)
+
         for try_idx in range(num_tries):
             if try_idx > 0:
                 sleep(retry_delay)
 
-            epoch_path = self.epoch_path_at_epoch(epoch)
             network_files = [f for f in os.listdir(epoch_path) if ("model" in f)]
 
             if len(network_files):
