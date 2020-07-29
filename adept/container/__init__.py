@@ -17,3 +17,4 @@ from .distrib import DistribHost, DistribWorker
 from .actorlearner import ActorLearnerHost, ActorLearnerWorker
 from .evaluation import EvalContainer
 from .init import Init
+from .base.updater import Updater
