@@ -21,6 +21,8 @@ import torch
 from torch.nn import functional as F
 import numpy as np
 
+from adept.utils.util import numpy_to_torch_dtype
+
 cv2.ocl.setUseOpenCL(False)
 
 
@@ -249,34 +251,10 @@ class FromNumpy(Operation):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        updated = {}
-        for k, v in old_dtype.items():
-            if v == np.float32:
-                dt = torch.float32
-            elif v == np.float64:
-                dt = torch.float64
-            elif v == np.float16:
-                dt = torch.float16
-            elif v == np.uint8:
-                dt = torch.uint8
-            elif v == np.int8:
-                dt = torch.int8
-            elif v == np.int16:
-                dt = torch.int16
-            elif v == np.int32:
-                dt = torch.int32
-            elif v == np.int16:
-                dt = torch.int16
-            else:
-                raise ValueError("Unsupported dtype {}".format(v))
-            updated[k] = dt
-        return updated
+        return {k: numpy_to_torch_dtype(v) for k, v in old_dtype.items()}
 
     def update_obs(self, obs):
-        updated = {}
-        for k, v in obs.items():
-            updated[k] = torch.from_numpy(v)
-        return updated
+        return {k: torch.from_numpy(v) for k, v in obs.items()}
 
 
 if __name__ == "__main__":

@@ -16,6 +16,9 @@ import json
 import heapq
 from collections import OrderedDict
 
+import numpy as np
+import torch
+
 
 def listd_to_dlist(list_of_dicts):
     """
@@ -73,6 +76,41 @@ def json_to_dict(file_path):
     """Read JSON config."""
     json_object = json.load(open(file_path, "r"))
     return json_object
+
+
+_numpy_to_torch_dtype = {
+    np.float16: torch.float16,
+    np.float32: torch.float32,
+    np.float64: torch.float64,
+    np.uint8: torch.uint8,
+    np.int8: torch.int8,
+    np.int16: torch.int16,
+    np.int32: torch.int32,
+    np.int64: torch.int64,
+}
+_torch_to_numpy_dtype = {v: k for k, v in _numpy_to_torch_dtype.items()}
+
+
+def numpy_to_torch_dtype(dtype):
+    if dtype not in _numpy_to_torch_dtype:
+        raise ValueError(
+            "Could not convert supposed numpy dtype {} to a torch dtype.".format(
+                dtype
+            )
+        )
+
+    return _numpy_to_torch_dtype[dtype]
+
+
+def torch_to_numpy_dtype(dtype):
+    if dtype not in _torch_to_numpy_dtype:
+        raise ValueError(
+            "Could not convert supposed torch dtype {} to a numpy dtype.".format(
+                dtype
+            )
+        )
+
+    return _torch_to_numpy_dtype[dtype]
 
 
 class CircularBuffer(object):
