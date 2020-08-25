@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import json
 import os
 import pickle
 
@@ -110,8 +109,8 @@ class SubProcEnvManager(EnvManagerModule):
         action_dicts = dlist_to_listd(actions)
         # zmq send
         for socket, action in zip(self._zmq_sockets, action_dicts):
-            msg = json.dumps({k: v.item() for k, v in action.items()})
-            socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
+            msg = pickle.dumps(action)
+            socket.send(msg, zmq.NOBLOCK, copy=False, track=False)
 
         self.waiting = True
 
@@ -120,9 +119,9 @@ class SubProcEnvManager(EnvManagerModule):
         self.waiting = False
 
         # check for errors and parse
-        self._check_for_errors(results)
-        results = [json.loads(res.decode()) for res in results]
-        obs, rews, dones, infos = zip(*results)
+        # self._check_for_errors(results)
+        asdf = [pickle.loads(res) for res in results]
+        obs, rews, dones, infos = zip(*asdf)
 
         obs = listd_to_dlist(obs)
         shared_mems = {
@@ -133,9 +132,9 @@ class SubProcEnvManager(EnvManagerModule):
 
     def reset(self):
         for socket in self._zmq_sockets:
-            socket.send("reset".encode())
+            socket.send(pickle.dumps("reset"))
         obs = listd_to_dlist(
-            [json.loads(remote.recv().decode()) for remote in self._zmq_sockets]
+            [pickle.loads(remote.recv()) for remote in self._zmq_sockets]
         )
         shared_mems = {
             k: torch.stack(v) for k, v in self.shared_memories.items()
@@ -145,10 +144,8 @@ class SubProcEnvManager(EnvManagerModule):
 
     def reset_task(self):
         for socket in self._zmq_sockets:
-            socket.send("reset_task".encode())
-        return [
-            json.loads(remote.recv().decode()) for remote in self._zmq_sockets
-        ]
+            socket.send(pickle.dumps("reset_task"))
+        return [pickle.loads(remote.recv()) for remote in self._zmq_sockets]
 
     def close(self):
         if self.closed:
@@ -157,7 +154,7 @@ class SubProcEnvManager(EnvManagerModule):
             for remote in self._zmq_sockets:
                 remote.recv()
         for socket in self._zmq_sockets:
-            socket.send("close".encode())
+            socket.send(pickle.dumps("close"))
         for p in self.processes:
             p.join()
         self.closed = True
@@ -222,7 +219,7 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
     while running:
         try:
             socket_data = socket.recv()
-            socket_parsed = socket_data.decode()
+            socket_parsed = pickle.loads(socket_data)
 
             # commands that aren't action dictionaries
             if socket_parsed == "reset":
@@ -230,41 +227,40 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
                 socket.send(
-                    json.dumps(ob).encode(),
-                    zmq.NOBLOCK,
-                    copy=False,
-                    track=False,
+                    pickle.dumps(ob), zmq.NOBLOCK, copy=False, track=False,
                 )
             elif cmd == "reset_task":
                 ob = env.reset_task()
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
                 socket.send(
-                    json.dumps(ob).encode(),
-                    zmq.NOBLOCK,
-                    copy=False,
-                    track=False,
+                    pickle.dumps(ob), zmq.NOBLOCK, copy=False, track=False,
                 )
             elif socket_parsed == "close":
                 env.close()
                 running = False
             # else action dictionary
             else:
-                action_dictionary = json.loads(socket_parsed)
+                action_dictionary = socket_parsed
                 ob, reward, done, info = env.step(action_dictionary)
                 if done:
                     ob = env.reset()
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
-                msg = json.dumps((ob, reward, done, info))
-                socket.send(msg.encode(), zmq.NOBLOCK, copy=False, track=False)
+                msg = pickle.dumps((ob, reward, done, info))
+                socket.send(msg, zmq.NOBLOCK, copy=False, track=False)
         except KeyboardInterrupt:
             pass
-        except Exception as e:
-            running = False
-            e_str = '{}: {}'.format(type(e).__name__, e)
-            print('Subprocess environment has an error', e_str)
-            socket.send('error. {}'.format(e_str).encode(), zmq.NOBLOCK, copy=False, track=False)
+        # except Exception as e:
+        #     running = False
+        #     e_str = "{}: {}".format(type(e).__name__, e)
+        #     print("Subprocess environment has an error", e_str)
+        #     socket.send(
+        #         pickle.dumps("error. {}".format(e_str)),
+        #         zmq.NOBLOCK,
+        #         copy=False,
+        #         track=False,
+        #     )
 
 
 def handle_ob(ob, shared_memory):
