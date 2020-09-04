@@ -129,6 +129,7 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         actions, experience = self.compute_action_exp(
             predictions, prev_internals, pobs, av_actions
         )
+        print("values" in experience)
         self.exp_cache.write_actor(experience)
         return actions, internal_states
 
