@@ -148,7 +148,7 @@ class SubProcEnvManager(EnvManagerModule):
 
     def reset(self):
         """Tell all subprocess environments to reset to initial state.
-        
+
         Returns
         -------
         obs : dict[str, torch.Tensor]
