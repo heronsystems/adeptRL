@@ -32,12 +32,22 @@ class WorkerError(BaseException):
 
 
 class SubProcEnvManager(EnvManagerModule):
-    """
-    Modified.
-    MIT License
-    Copyright (c) 2017 OpenAI (http://openai.com)
-    """
+    """Subprocess Environment Manager
 
+    This class uses torch multiprocessing to establish ZMQ connections to the
+    environment subprocesses. Once ZMQ connections are established, the multiprocessing
+    pipes are closed and ZMQ is used.
+
+    This class is responsible for two main jobs:
+        1) Aggregating the environment observations into a batch for learning.
+        2) Unbundling a batch of agent actions and distributing them out to
+         the environment subprocesses.
+
+    Observation tensors are communicated via torch shared memory. Non-tensors
+    are shared via pickling.
+
+    Actions are serialized via pickling.
+    """
     args = {}
 
     def __init__(self, env_fns, engine):
@@ -120,8 +130,8 @@ class SubProcEnvManager(EnvManagerModule):
 
         # check for errors and parse
         # self._check_for_errors(results)
-        asdf = [pickle.loads(res) for res in results]
-        obs, rews, dones, infos = zip(*asdf)
+        transition = [pickle.loads(res) for res in results]
+        obs, rews, dones, infos = zip(*transition)
 
         obs = listd_to_dlist(obs)
         shared_mems = {
