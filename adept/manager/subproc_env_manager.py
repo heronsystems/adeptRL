@@ -112,6 +112,12 @@ class SubProcEnvManager(EnvManagerModule):
         return self._gpu_preprocessor
 
     def step(self, actions):
+        """Submits actions to the environment processes
+
+        Parameters
+        ----------
+        actions : dict[str, torch.Tensor]
+        """
         self.step_async(actions)
         return self.step_wait()
 
@@ -141,6 +147,13 @@ class SubProcEnvManager(EnvManagerModule):
         return obs, torch.tensor(rews), torch.tensor(dones), infos
 
     def reset(self):
+        """Tell all subprocess environments to reset to initial state.
+        
+        Returns
+        -------
+        obs : dict[str, torch.Tensor]
+            Observation
+        """
         for socket in self._zmq_sockets:
             socket.send(pickle.dumps("reset"))
         obs = listd_to_dlist(
