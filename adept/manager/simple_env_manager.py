@@ -64,10 +64,7 @@ class SimpleEnvManager(EnvManagerModule):
         return self.step_wait()
 
     def step_async(self, actions):
-        actions_tensor = dlist_to_listd(actions)
-        self.actions = [
-            {k: v.item() for k, v in a_ten.items()} for a_ten in actions_tensor
-        ]
+        self.actions = dlist_to_listd(actions)
 
     def step_wait(self):
         obs = []
