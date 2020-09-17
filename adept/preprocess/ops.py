@@ -52,6 +52,20 @@ class Operation(abc.ABC):
         raise NotImplementedError
 
 
+class CastToDouble(Operation):
+    def __init__(self, name_filters=None, rank_filters=None):
+        super(CastToDouble, self).__init__(name_filters, rank_filters)
+
+    def update_shape(self, old_shape):
+        return old_shape
+
+    def update_dtype(self, old_dtype):
+        return {k: torch.float64 for k in old_dtype.keys()}
+
+    def update_obs(self, obs):
+        return {k: ob.double() for k, ob in obs.items()}
+
+
 class CastToFloat(Operation):
     def __init__(self, name_filters=None, rank_filters=None):
         super(CastToFloat, self).__init__(name_filters, rank_filters)
