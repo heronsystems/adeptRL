@@ -32,6 +32,7 @@ setup(
     python_requires=">=3.5.0",
     packages=find_packages(),
     install_requires=[
+        "protobuf==3.13.0",
         "numpy>=1.14",
         "gym[atari]>=0.10",
         "tensorboard>=1.14",
@@ -41,6 +42,8 @@ setup(
         "docopt>=0.6",
         "torch>=1.3.1",
         "torchvision>=0.4.2",
+        "ray[tune]>=0.8.6",
+        "pandas>=1.0.5"
     ],
     test_requires=test_deps,
     extras_require=extras,
