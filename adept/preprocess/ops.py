@@ -77,7 +77,7 @@ class CastToDouble(Operation):
         return {k: torch.float64 for k in old_dtype.keys()}
 
     def update_obs(self, obs):
-        return {k: ob.float() for k, ob in obs.items()}
+        return {k: ob.double() for k, ob in obs.items()}
 
 
 class CastToHalf(Operation):
