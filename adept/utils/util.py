@@ -92,9 +92,14 @@ _torch_to_numpy_dtype = {v: k for k, v in _numpy_to_torch_dtype.items()}
 
 
 def numpy_to_torch_dtype(dtype):
+
+    # check if dtype is weird and convert to familiar format
+    if type(dtype) == np.dtype:
+        dtype = dtype.type
+
     if dtype not in _numpy_to_torch_dtype:
         raise ValueError(
-            "Could not convert supposed numpy dtype {} to a torch dtype.".format(
+            "Could not convert numpy dtype {} to a torch dtype.".format(
                 dtype
             )
         )
@@ -105,7 +110,7 @@ def numpy_to_torch_dtype(dtype):
 def torch_to_numpy_dtype(dtype):
     if dtype not in _torch_to_numpy_dtype:
         raise ValueError(
-            "Could not convert supposed torch dtype {} to a numpy dtype.".format(
+            "Could not convert torch dtype {} to a numpy dtype.".format(
                 dtype
             )
         )
