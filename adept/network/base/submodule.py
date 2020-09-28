@@ -173,11 +173,11 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
 
     def new_internals(self, device):
         return {
-            self.id + k: v.to(device) for k, v in self._new_internals().items()
+            k: v.to(device) for k, v in self._new_internals().items()
         }
 
     def stacked_internals(self, key, internals):
-        return torch.stack(internals[self.id + key])
+        return torch.stack(internals[key])
 
     def to_dim(self, submodule_output, dim):
         """
@@ -200,17 +200,14 @@ class SubModule(torch.nn.Module, RequiresArgsMixin, metaclass=abc.ABCMeta):
     def forward(self, *input, dim=None):
         submodule_output, internals = self._forward(*input)
         if dim is None:
-            return submodule_output, self._id_internals(internals)
+            return submodule_output, internals
         if dim == 1:
-            return self._to_1d(submodule_output), self._id_internals(internals)
+            return self._to_1d(submodule_output), internals
         elif dim == 2:
-            return self._to_2d(submodule_output), self._id_internals(internals)
+            return self._to_2d(submodule_output), internals
         elif dim == 3:
-            return self._to_3d(submodule_output), self._id_internals(internals)
+            return self._to_3d(submodule_output), internals
         elif dim == 4:
-            return self._to_4d(submodule_output), self._id_internals(internals)
+            return self._to_4d(submodule_output), internals
         else:
             raise ValueError("Invalid dim: {}".format(dim))
-
-    def _id_internals(self, internals):
-        return {self.id + k: v for k, v in internals.items()}
