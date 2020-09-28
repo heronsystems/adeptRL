@@ -55,7 +55,7 @@ class BasePotentialBasedReward:
 
         self._midpoint = (self._maximum - self._minimum) / 2 + self._minimum
 
-    def __call__(self, observation, next_observation, action,) -> float:
+    def __call__(self, observation, next_observation) -> float:
         return self._potential_shaping_function(observation, next_observation)
 
     def name(self) -> str:
