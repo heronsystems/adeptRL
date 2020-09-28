@@ -7,10 +7,12 @@ class BasePotentialBasedReward:
     Class for applying potential reward shaping to a set of observations. Potential based rewards
     are used to prevent the learning of suboptimal policies. The reward for executing a transition
     between states is the difference in value between the potential function applied to each state.
-    This condition is sufficient to guarentee policy invariance
+    This condition is sufficient to guarantee policy invariance.
+
+    This implementation provides support for potential based reward shaping over scalar observations
+    of length 1.
 
     For details, see
-
     "Policy invariance under reward transformations:
     Theory and application to reward shaping"
     https://people.eecs.berkeley.edu/~pabbeel/cs287-fa09/readings/NgHaradaRussell-shaping-ICML1999.pdf
