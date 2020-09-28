@@ -14,8 +14,6 @@ class BasePotentialBasedReward:
     "Policy invariance under reward transformations:
     Theory and application to reward shaping"
     https://people.eecs.berkeley.edu/~pabbeel/cs287-fa09/readings/NgHaradaRussell-shaping-ICML1999.pdf
-
-
     """
 
     def __init__(
@@ -57,9 +55,7 @@ class BasePotentialBasedReward:
 
         self._midpoint = (self._maximum - self._minimum) / 2 + self._minimum
 
-
     def __call__(self, observation, next_observation, action,) -> float:
-
         return self._potential_shaping_function(observation, next_observation)
 
     def name(self) -> str:
@@ -72,7 +68,7 @@ class BasePotentialBasedReward:
         return min(max(self._minimum, x), self._maximum)
 
     def _potential_shaping_function(self, current_observation, next_observation) -> float:
-       return (self._gamma * self._phi(next_observation)) - self._phi(current_observation)
+        return (self._gamma * self._phi(next_observation)) - self._phi(current_observation)
 
     @abc.abstractmethod
     def _phi(self, x) -> float:
