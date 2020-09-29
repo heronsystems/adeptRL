@@ -79,43 +79,14 @@ class GrayScaleAndMoveChannel(SimpleOperation):
             )
 
 
-class ResizeTo84x84(SimpleOperation):
-    def update_shape(self, old_shape):
-        return tuple(1, 84, 84)
-
-    def update_dtype(self, old_dtype):
-        return old_dtype
-
-    def preprocess_cpu(self, tensor):
-        if tensor.dim() == 3:
-            temp = cv2.resize(
-                tensor.squeeze(0).numpy(),
-                (84, 84),
-                interpolation=cv2.INTER_AREA,
-            )
-            return torch.from_numpy(temp).unsqueeze(0)
-        else:
-            raise ValueError(
-                "cant resize a rank" + str(tensor.dim()) + " tensor to 84x84"
-            )
-
-    def preprocess_gpu(self, tensor):
-        if tensor.dim() == 4:
-            return F.interpolate(tensor, (84, 84), mode="area")
-        else:
-            raise ValueError(
-                "cant resize a rank" + str(tensor.dim()) + " tensor to 84x84"
-            )
-
-
 class ResizeToNxM(SimpleOperation):
-    def __init__(self, input_field, output_field, N, M):
+    def __init__(self, input_field, output_field, n, m):
         super().__init__(input_field, output_field)
-        self.N = N
-        self.M = M
+        self.n = n
+        self.m = m
 
     def update_shape(self, old_shape):
-        return tuple(1, self.N, self.M)
+        return 1, self.n, self.m
 
     def update_dtype(self, old_dtype):
         return old_dtype
@@ -124,7 +95,7 @@ class ResizeToNxM(SimpleOperation):
         if tensor.dim() == 3:
             temp = cv2.resize(
                 tensor.squeeze(0).numpy(),
-                (self.N, self.M),
+                (self.n, self.m),
                 interpolation=cv2.INTER_AREA,
             )
             return torch.from_numpy(temp).unsqueeze(0)
@@ -132,50 +103,46 @@ class ResizeToNxM(SimpleOperation):
             raise ValueError(
                 "cant resize a rank"
                 + str(tensor.dim())
-                + " tensor to {}x{}".format(self.N, self.M)
+                + " tensor to {}x{}".format(self.n, self.m)
             )
 
     def preprocess_gpu(self, tensor):
         if tensor.dim() == 4:
-            return F.interpolate(tensor, (self.N, self.M), mode="area")
+            return F.interpolate(tensor, (self.n, self.m), mode="area")
         else:
             raise ValueError(
                 "cant resize a rank"
                 + str(tensor.dim())
-                + " tensor to {}x{}".format(self.N, self.M)
+                + " tensor to {}x{}".format(self.n, self.m)
             )
-
-
-class Divide255(SimpleOperation):
-    def update_shape(self, old_shape):
-        return old_shape
-
-    def update_dtype(self, old_dtype):
-        return torch.float32
-
-    def preprocess_cpu(self, tensor):
-        return tensor.float() * (1.0 / 255.0)
-
-    def preprocess_gpu(self, tensor):
-        return tensor.float() * (1.0 / 255.0)
 
 
 class Divide(SimpleOperation):
-    def __init__(self, input_field, output_field, N):
+    def __init__(self, input_field, output_field, n):
         super().__init__(input_field, output_field)
-        self.N = N
+        self.n = n
 
     def update_shape(self, old_shape):
         return old_shape
 
     def update_dtype(self, old_dtype):
-        return torch.float32
+        if old_dtype in {
+            torch.bool,
+            torch.uint8,
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+        }:
+            return torch.float32
+        else:
+            return old_dtype
 
     def preprocess_cpu(self, tensor):
-        return tensor.float() * (1.0 / self.N)
+        return tensor * (1.0 / self.n)
 
     def preprocess_gpu(self, tensor):
-        return tensor.float() * (1.0 / self.N)
+        return tensor * (1.0 / self.n)
 
 
 class FrameStackCPU(SimpleOperation):
@@ -229,9 +196,7 @@ class FrameStackGPU(FrameStackCPU):
 
 class FlattenSpace(SimpleOperation):
     def update_shape(self, old_shape):
-        return tuple(
-            reduce(lambda prev, cur: prev * cur, old_shape),
-        )
+        return (reduce(lambda prev, cur: prev * cur, old_shape),)
 
     def update_dtype(self, old_dtype):
         return old_dtype
