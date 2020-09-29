@@ -1,5 +1,9 @@
+from collections import deque
+from functools import reduce
+
 import cv2
 import torch
+from torch.nn import functional as F
 
 from adept.preprocess.base import SimpleOperation
 from adept.utils.util import numpy_to_torch_dtype
@@ -73,6 +77,170 @@ class GrayScaleAndMoveChannel(SimpleOperation):
             raise ValueError(
                 "can't grayscale a rank" + str(tensor.dim()) + "tensor"
             )
+
+
+class ResizeTo84x84(SimpleOperation):
+    def update_shape(self, old_shape):
+        return tuple(1, 84, 84)
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
+
+    def preprocess_cpu(self, tensor):
+        if tensor.dim() == 3:
+            temp = cv2.resize(
+                tensor.squeeze(0).numpy(),
+                (84, 84),
+                interpolation=cv2.INTER_AREA,
+            )
+            return torch.from_numpy(temp).unsqueeze(0)
+        else:
+            raise ValueError(
+                "cant resize a rank" + str(tensor.dim()) + " tensor to 84x84"
+            )
+
+    def preprocess_gpu(self, tensor):
+        if tensor.dim() == 4:
+            return F.interpolate(tensor, (84, 84), mode="area")
+        else:
+            raise ValueError(
+                "cant resize a rank" + str(tensor.dim()) + " tensor to 84x84"
+            )
+
+
+class ResizeToNxM(SimpleOperation):
+    def __init__(self, input_field, output_field, N, M):
+        super().__init__(input_field, output_field)
+        self.N = N
+        self.M = M
+
+    def update_shape(self, old_shape):
+        return tuple(1, self.N, self.M)
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
+
+    def preprocess_cpu(self, tensor):
+        if tensor.dim() == 3:
+            temp = cv2.resize(
+                tensor.squeeze(0).numpy(),
+                (self.N, self.M),
+                interpolation=cv2.INTER_AREA,
+            )
+            return torch.from_numpy(temp).unsqueeze(0)
+        else:
+            raise ValueError(
+                "cant resize a rank"
+                + str(tensor.dim())
+                + " tensor to {}x{}".format(self.N, self.M)
+            )
+
+    def preprocess_gpu(self, tensor):
+        if tensor.dim() == 4:
+            return F.interpolate(tensor, (self.N, self.M), mode="area")
+        else:
+            raise ValueError(
+                "cant resize a rank"
+                + str(tensor.dim())
+                + " tensor to {}x{}".format(self.N, self.M)
+            )
+
+
+class Divide255(SimpleOperation):
+    def update_shape(self, old_shape):
+        return old_shape
+
+    def update_dtype(self, old_dtype):
+        return torch.float32
+
+    def preprocess_cpu(self, tensor):
+        return tensor.float() * (1.0 / 255.0)
+
+    def preprocess_gpu(self, tensor):
+        return tensor.float() * (1.0 / 255.0)
+
+
+class Divide(SimpleOperation):
+    def __init__(self, input_field, output_field, N):
+        super().__init__(input_field, output_field)
+        self.N = N
+
+    def update_shape(self, old_shape):
+        return old_shape
+
+    def update_dtype(self, old_dtype):
+        return torch.float32
+
+    def preprocess_cpu(self, tensor):
+        return tensor.float() * (1.0 / self.N)
+
+    def preprocess_gpu(self, tensor):
+        return tensor.float() * (1.0 / self.N)
+
+
+class FrameStackCPU(SimpleOperation):
+    def __init__(self, input_field, output_field, nb_frame):
+        super().__init__(input_field, output_field)
+        self.nb_frame = nb_frame
+        self.frames = None
+        self.obs_space = None
+
+    def update_shape(self, old_shape):
+        if self.obs_space is None:
+            self.obs_space = old_shape
+            self.reset()
+        return (old_shape[0] * self.nb_frame,) + old_shape[1:]
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
+
+    def preprocess_cpu(self, tensor):
+        self.frames.append(tensor)
+        if tensor.dim() == 3:
+            if len(self.frames) == self.nb_frame:
+                return torch.cat(list(self.frames))
+        else:
+            raise NotImplementedError(
+                f"Dimensionality not supported: {tensor.dim()}"
+            )
+
+    def preprocess_gpu(self, tensor):
+        raise NotImplementedError(f"GPU preprocessing not supported")
+
+    def reset(self):
+        self.frames = deque(
+            [torch.zeros(self.obs_space)] * self.nb_frame, maxlen=self.nb_frame
+        )
+
+
+class FrameStackGPU(FrameStackCPU):
+    def preprocess_cpu(self, tensor):
+        raise NotImplementedError(f"CPU preprocessing not supported")
+
+    def preprocess_gpu(self, tensor):
+        if tensor.dim() == 4:
+            if len(self.frames) == self.nb_frame:
+                return torch.cat(list(self.frames), dim=1)
+        else:
+            raise NotImplementedError(
+                f"Dimensionality not supported: {tensor.dim()}"
+            )
+
+
+class FlattenSpace(SimpleOperation):
+    def update_shape(self, old_shape):
+        return tuple(
+            reduce(lambda prev, cur: prev * cur, old_shape),
+        )
+
+    def update_dtype(self, old_dtype):
+        return old_dtype
+
+    def preprocess_cpu(self, tensor):
+        return tensor.view(-1)
+
+    def preprocess_gpu(self, tensor):
+        return tensor.view(-1)
 
 
 class FromNumpy(SimpleOperation):
