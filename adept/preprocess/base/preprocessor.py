@@ -79,31 +79,40 @@ class _Preprocessor:
         """
         cur_space = deepcopy(observation_space)
         cur_dtypes = deepcopy(observation_dtypes)
-
-        for op in ops:
-            names = list(cur_space.keys())
-
-            cur_space = self._update(names, cur_space, op.update_shape)
-            if observation_dtypes:
-                cur_dtypes = self._update(names, cur_dtypes, op.update_dtype)
+        print(cur_space)
+        print(cur_dtypes)
 
         self.ops = ops
-        self.observation_space = cur_space
-        self.observation_dtypes = cur_dtypes
+        self.observation_space, self.observation_dtypes = self._update(
+            cur_space, cur_dtypes
+        )
+        print(self.observation_space)
+        print(self.observation_dtypes)
 
-    def _bld_rank_to_names(self, obs_space):
-        d = {1: [], 2: [], 3: [], 4: []}
-        for name, shape in obs_space.items():
-            d[len(shape)].append(name)
-        return d
-
-    def _update(self, names, prev, fn):
-        cur = {}
-        for name in names:
-            cur[name] = prev[name]
-            del prev[name]
-        update = fn(cur)
-        return {**prev, **update}
+    def _update(self, cur_space, cur_dtypes):
+        cur_space = copy(cur_space)
+        cur_dtypes = copy(cur_dtypes)
+        for op in self.ops:
+            if isinstance(op, SimpleOperation):
+                cur_space[op.output_field] = op.update_shape(
+                    cur_space[op.input_field]
+                )
+                if cur_dtypes:
+                    cur_dtypes[op.output_field] = op.update_dtype(
+                        cur_dtypes[op.input_field]
+                    )
+            elif isinstance(op, MultiOperation):
+                input_shapes = [cur_space[k] for k in op.input_fields]
+                input_dtypes = [cur_dtypes[k] for k in op.input_fields]
+                output_shapes = op.update_shape(input_shapes)
+                output_dtypes = op.update_dtype(input_dtypes)
+                for k, shape, dtype in zip(
+                    op.output_fields, output_shapes, output_dtypes
+                ):
+                    cur_space[k] = shape
+                    if cur_dtypes:
+                        cur_dtypes[k] = dtype
+        return cur_space, cur_dtypes
 
 
 class CPUPreprocessor(_Preprocessor):
