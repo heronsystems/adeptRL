@@ -79,15 +79,11 @@ class _Preprocessor:
         """
         cur_space = deepcopy(observation_space)
         cur_dtypes = deepcopy(observation_dtypes)
-        print(cur_space)
-        print(cur_dtypes)
 
         self.ops = ops
         self.observation_space, self.observation_dtypes = self._update(
             cur_space, cur_dtypes
         )
-        print(self.observation_space)
-        print(self.observation_dtypes)
 
     def _update(self, cur_space, cur_dtypes):
         cur_space = copy(cur_space)
