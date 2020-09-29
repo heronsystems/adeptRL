@@ -17,7 +17,7 @@ import torch
 from gym import spaces
 
 from adept.env._spaces import Space
-from adept.preprocess.observation import ObsPreprocessor
+from adept.preprocess.base.preprocessor import ObsPreprocessor
 from adept.preprocess.ops import (
     CastToFloat,
     GrayScaleAndMoveChannel,

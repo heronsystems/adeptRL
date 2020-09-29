@@ -3,7 +3,8 @@ import torch
 
 from adept.agent import AgentModule
 from adept.env import EnvModule
-from adept.preprocess.observation import ObsPreprocessor
+from adept.preprocess.base.preprocessor import ObsPreprocessor
+from adept.preprocess import CPUPreprocessor, GPUPreprocessor
 from adept.registry import Registry
 
 
@@ -23,8 +24,8 @@ class DummyEnv(EnvModule):
     def __init__(self):
         obs_space = {"screen": (3, 84, 84)}
         action_space = {"action": (8,)}
-        cpu_preprocessor = ObsPreprocessor([], obs_space)
-        gpu_preprocessor = ObsPreprocessor(
+        cpu_preprocessor = CPUPreprocessor([], obs_space)
+        gpu_preprocessor = GPUPreprocessor(
             [], cpu_preprocessor.observation_space
         )
         super(DummyEnv, self).__init__(

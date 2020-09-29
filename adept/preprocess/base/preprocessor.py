@@ -13,15 +13,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from copy import copy, deepcopy
-from adept.preprocess.ops2 import MultiOperation, Operation
+from adept.preprocess.base import MultiOperation, SimpleOperation
+
 
 class ObsPreprocessor:
     def __init__(self, ops, observation_space, observation_dtypes=None):
-        """
-        :param ops: List[Operation]
-        :param observation_space: Dict[ObsKey, Shape]
-        :param observation_dtypes: Dict[ObsKey, dtype_str]
-        """
+
         cur_space = deepcopy(observation_space)
         cur_dtypes = deepcopy(observation_dtypes)
 
@@ -71,12 +68,14 @@ class ObsPreprocessor:
         return {**prev, **update}
 
 
-class Preprocessor:
+class _Preprocessor:
     def __init__(self, ops, observation_space, observation_dtypes=None):
         """
-        :param ops: List[Operation]
-        :param observation_space: Dict[ObsKey, Shape]
-        :param observation_dtypes: Dict[ObsKey, dtype_str]
+        Parameters
+        ----------
+        ops : list[gamebreaker.preprocess.Operation]
+        observation_space : dict[str, Shape]
+        observation_dtypes : dict[str, dtype]
         """
         cur_space = deepcopy(observation_space)
         cur_dtypes = deepcopy(observation_dtypes)
@@ -107,13 +106,13 @@ class Preprocessor:
         return {**prev, **update}
 
 
-class CPUPreprocessor(Preprocessor):
+class CPUPreprocessor(_Preprocessor):
     def __call__(self, obs):
         obs = copy(obs)
         for op in self.ops:
-            if issubclass(type(op), Operation):
-                obs[op.output_field] = op.preprocess_gpu(obs[op.input_field])
-            elif issubclass(type(op), MultiOperation):
+            if isinstance(op, SimpleOperation):
+                obs[op.output_field] = op.preprocess_cpu(obs[op.input_field])
+            elif isinstance(op, MultiOperation):
                 input_tensors = [obs[k] for k in op.input_fields]
                 output_tensors = op.preprocess_gpu(input_tensors)
                 for k, tensor in zip(op.output_fields, output_tensors):
@@ -125,13 +124,13 @@ class CPUPreprocessor(Preprocessor):
             o.reset()
 
 
-class GPUPreprocessor(Preprocessor):
+class GPUPreprocessor(_Preprocessor):
     def __call__(self, obs):
         obs = copy(obs)
         for op in self.ops:
-            if issubclass(type(op), Operation):
+            if isinstance(op, SimpleOperation):
                 obs[op.output_field] = op.preprocess_gpu(obs[op.input_field])
-            elif issubclass(type(op), MultiOperation):
+            elif isinstance(op, MultiOperation):
                 input_tensors = [obs[k] for k in op.input_fields]
                 output_tensors = op.preprocess_gpu(input_tensors)
                 for k, tensor in zip(op.output_fields, output_tensors):
