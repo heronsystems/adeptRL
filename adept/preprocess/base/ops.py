@@ -10,6 +10,9 @@ class Operation(abc.ABC):
     def update_dtype(self, old_dtype):
         raise NotImplementedError
 
+    def reset(self):
+        pass
+
     def to(self, device):
         return self
 
