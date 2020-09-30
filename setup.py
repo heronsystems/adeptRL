@@ -43,7 +43,9 @@ setup(
         "torch>=1.3.1",
         "torchvision>=0.4.2",
         "ray[tune]>=0.8.6",
-        "pandas>=1.0.5"
+        "pandas>=1.0.5",
+        "msgpack",
+        "msgpack-numpy",
     ],
     test_requires=test_deps,
     extras_require=extras,

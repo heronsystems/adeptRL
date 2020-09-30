@@ -15,6 +15,11 @@
 import os
 import pickle
 
+import msgpack
+import msgpack_numpy as m
+
+m.patch()
+
 import cloudpickle
 import numpy as np
 import torch
@@ -48,6 +53,7 @@ class SubProcEnvManager(EnvManagerModule):
 
     Actions are serialized via pickling.
     """
+
     args = {}
 
     def __init__(self, env_fns, engine):
@@ -125,7 +131,8 @@ class SubProcEnvManager(EnvManagerModule):
         action_dicts = dlist_to_listd(actions)
         # zmq send
         for socket, action in zip(self._zmq_sockets, action_dicts):
-            msg = pickle.dumps(action)
+            action = {k: v.numpy() for k, v in action.items()}
+            msg = msgpack.dumps(action)
             socket.send(msg, zmq.NOBLOCK, copy=False, track=False)
 
         self.waiting = True
@@ -155,9 +162,9 @@ class SubProcEnvManager(EnvManagerModule):
             Observation
         """
         for socket in self._zmq_sockets:
-            socket.send(pickle.dumps("reset"))
+            socket.send(msgpack.dumps("reset"))
         obs = listd_to_dlist(
-            [pickle.loads(remote.recv()) for remote in self._zmq_sockets]
+            [msgpack.loads(remote.recv()) for remote in self._zmq_sockets]
         )
         shared_mems = {
             k: torch.stack(v) for k, v in self.shared_memories.items()
@@ -167,8 +174,8 @@ class SubProcEnvManager(EnvManagerModule):
 
     def reset_task(self):
         for socket in self._zmq_sockets:
-            socket.send(pickle.dumps("reset_task"))
-        return [pickle.loads(remote.recv()) for remote in self._zmq_sockets]
+            socket.send(msgpack.dumps("reset_task"))
+        return [msgpack.loads(remote.recv()) for remote in self._zmq_sockets]
 
     def close(self):
         if self.closed:
@@ -177,7 +184,7 @@ class SubProcEnvManager(EnvManagerModule):
             for remote in self._zmq_sockets:
                 remote.recv()
         for socket in self._zmq_sockets:
-            socket.send(pickle.dumps("close"))
+            socket.send(msgpack.dumps("close"))
         for p in self.processes:
             p.join()
         self.closed = True
@@ -242,7 +249,7 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
     while running:
         try:
             socket_data = socket.recv()
-            socket_parsed = pickle.loads(socket_data)
+            socket_parsed = msgpack.loads(socket_data)
 
             # commands that aren't action dictionaries
             if socket_parsed == "reset":
@@ -250,14 +257,20 @@ def worker(remote, parent_remote, port, env_fn_wrapper):
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
                 socket.send(
-                    pickle.dumps(ob), zmq.NOBLOCK, copy=False, track=False,
+                    msgpack.dumps(ob),
+                    zmq.NOBLOCK,
+                    copy=False,
+                    track=False,
                 )
             elif cmd == "reset_task":
                 ob = env.reset_task()
                 ob = handle_ob(ob, shared_memory)
                 # only the non-shared obs are returned here
                 socket.send(
-                    pickle.dumps(ob), zmq.NOBLOCK, copy=False, track=False,
+                    msgpack.dumps(ob),
+                    zmq.NOBLOCK,
+                    copy=False,
+                    track=False,
                 )
             elif socket_parsed == "close":
                 env.close()
@@ -310,7 +323,7 @@ class CloudpickleWrapper(object):
         return cloudpickle.dumps(self.x)
 
     def __setstate__(self, ob):
-        self.x = pickle.loads(ob)
+        self.x = msgpack.loads(ob)
 
 
 def zmq_robust_bind_socket(zmq_context):
