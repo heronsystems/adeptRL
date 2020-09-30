@@ -16,58 +16,6 @@ from copy import copy, deepcopy
 from adept.preprocess.base import MultiOperation, SimpleOperation
 
 
-class ObsPreprocessor:
-    def __init__(self, ops, observation_space, observation_dtypes=None):
-
-        cur_space = deepcopy(observation_space)
-        cur_dtypes = deepcopy(observation_dtypes)
-
-        rank_to_names = self._bld_rank_to_names(observation_space)
-
-        for op in ops:
-            if op.name_filters:
-                names = op.name_filters
-            elif op.rank_filters:
-                names = []
-                for rank in op.rank_filters:
-                    names += rank_to_names[rank]
-            else:
-                names = list(cur_space.keys())
-
-            cur_space = self._update(names, cur_space, op.update_shape)
-            if observation_dtypes:
-                cur_dtypes = self._update(names, cur_dtypes, op.update_dtype)
-            rank_to_names = self._bld_rank_to_names(observation_space)
-
-        self.ops = ops
-        self.observation_space = cur_space
-        self.observation_dtypes = cur_dtypes
-        self.rank_to_names = rank_to_names
-
-    def __call__(self, obs):
-        for op in self.ops:
-            obs = op.update_obs(obs)
-        return obs
-
-    def reset(self):
-        for o in self.ops:
-            o.reset()
-
-    def _bld_rank_to_names(self, obs_space):
-        d = {1: [], 2: [], 3: [], 4: []}
-        for name, shape in obs_space.items():
-            d[len(shape)].append(name)
-        return d
-
-    def _update(self, names, prev, fn):
-        cur = {}
-        for name in names:
-            cur[name] = prev[name]
-            del prev[name]
-        update = fn(cur)
-        return {**prev, **update}
-
-
 class _Preprocessor:
     def __init__(self, ops, observation_space, observation_dtypes=None):
         """

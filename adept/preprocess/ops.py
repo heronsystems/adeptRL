@@ -80,7 +80,7 @@ class GrayScaleAndMoveChannel(SimpleOperation):
 
 
 class ResizeToNxM(SimpleOperation):
-    def __init__(self, input_field, output_field, n, m):
+    def __init__(self, n, m, input_field, output_field):
         super().__init__(input_field, output_field)
         self.n = n
         self.m = m

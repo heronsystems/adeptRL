@@ -21,9 +21,7 @@ from adept.preprocess.base.preprocessor import CPUPreprocessor, GPUPreprocessor
 from adept.preprocess.ops import (
     CastToFloat,
     GrayScaleAndMoveChannel,
-    # ResizeTo84x84,
     ResizeToNxM,
-    # Divide255,
     Divide,
     FrameStackCPU,
     FromNumpy,
@@ -118,7 +116,7 @@ class AdeptGymEnv(EnvModule):
         cpu_ops = [
             FromNumpy("Box", "Box"),
             GrayScaleAndMoveChannel("Box", "Box"),
-            ResizeToNxM("Box", "Box", 84, 84),
+            ResizeToNxM(84, 84, "Box", "Box"),
         ]
         if do_frame_stack:
             cpu_ops.append(FrameStackCPU('Box', 'Box', 4))
