@@ -18,8 +18,6 @@ import pickle
 import msgpack
 import msgpack_numpy as m
 
-m.patch()
-
 import cloudpickle
 import numpy as np
 import torch
@@ -73,6 +71,9 @@ class SubProcEnvManager(EnvManagerModule):
         self._cpu_preprocessor = dummy.cpu_preprocessor
         self._gpu_preprocessor = dummy.gpu_preprocessor
         dummy.close()
+
+        # Allows msgpack to work with NumPy
+        m.patch()
 
         # iterate envs to get torch shared memory through pipe then close it
         shared_memories = []
