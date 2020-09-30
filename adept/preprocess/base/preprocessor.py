@@ -38,13 +38,21 @@ class _Preprocessor:
         cur_dtypes = copy(cur_dtypes)
         for op in self.ops:
             if isinstance(op, SimpleOperation):
-                cur_space[op.output_field] = op.update_shape(
+                output_shape = op.update_shape(
                     cur_space[op.input_field]
                 )
+                if output_shape:
+                    cur_space[op.output_field] = output_shape
+                else:
+                    del cur_space[op.output_field]
                 if cur_dtypes:
-                    cur_dtypes[op.output_field] = op.update_dtype(
+                    output_dtype = op.update_dtype(
                         cur_dtypes[op.input_field]
                     )
+                    if output_dtype:
+                        cur_dtypes[op.output_field] = output_dtype
+                    else:
+                        del cur_dtypes[op.output_field]
             elif isinstance(op, MultiOperation):
                 input_shapes = [cur_space[k] for k in op.input_fields]
                 input_dtypes = [cur_dtypes[k] for k in op.input_fields]
@@ -53,9 +61,15 @@ class _Preprocessor:
                 for k, shape, dtype in zip(
                     op.output_fields, output_shapes, output_dtypes
                 ):
-                    cur_space[k] = shape
+                    if shape:
+                        cur_space[k] = shape
+                    else:
+                        del cur_space[k]
                     if cur_dtypes:
-                        cur_dtypes[k] = dtype
+                        if dtype:
+                            cur_dtypes[k] = dtype
+                        else:
+                            del cur_dtypes[k]
         return cur_space, cur_dtypes
 
 
@@ -64,12 +78,19 @@ class CPUPreprocessor(_Preprocessor):
         obs = copy(obs)
         for op in self.ops:
             if isinstance(op, SimpleOperation):
-                obs[op.output_field] = op.preprocess_cpu(obs[op.input_field])
+                output_tensor = op.preprocess_cpu(obs[op.input_field])
+                if output_tensor is not None:
+                    obs[op.output_field] = output_tensor
+                else:
+                    del obs[op.output_field]
             elif isinstance(op, MultiOperation):
                 input_tensors = [obs[k] for k in op.input_fields]
-                output_tensors = op.preprocess_gpu(input_tensors)
+                output_tensors = op.preprocess_cpu(input_tensors)
                 for k, tensor in zip(op.output_fields, output_tensors):
-                    obs[k] = tensor
+                    if tensor is not None:
+                        obs[k] = tensor
+                    else:
+                        del obs[k]
         return obs
 
     def reset(self):
@@ -82,12 +103,19 @@ class GPUPreprocessor(_Preprocessor):
         obs = copy(obs)
         for op in self.ops:
             if isinstance(op, SimpleOperation):
-                obs[op.output_field] = op.preprocess_gpu(obs[op.input_field])
+                output_tensor = op.preprocess_gpu(obs[op.input_field])
+                if output_tensor is not None:
+                    obs[op.output_field] = output_tensor
+                else:
+                    del obs[op.output_field]
             elif isinstance(op, MultiOperation):
                 input_tensors = [obs[k] for k in op.input_fields]
                 output_tensors = op.preprocess_gpu(input_tensors)
                 for k, tensor in zip(op.output_fields, output_tensors):
-                    obs[k] = tensor
+                    if tensor is not None:
+                        obs[k] = tensor
+                    else:
+                        del obs[k]
         return obs
 
     def to(self, device):
