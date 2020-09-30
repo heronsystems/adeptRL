@@ -1,20 +1,17 @@
 """
 Use a custom environment.
 """
-from adept.env import EnvModule, EnvRegistry
+from adept.env import EnvModule
 from adept.scripts.local import parse_args, main
 
 
 class MyCustomEnv(EnvModule):
     # You will be prompted for these when training script starts
     args = {"example_arg1": True, "example_arg2": 5}
+    ids = ["scenario1", "scenario2"]
 
-    def __init__(
-        self, action_space, cpu_preprocessor, gpu_preprocessor, *args, **kwargs
-    ):
-        super(MyCustomEnv, self).__init__(
-            action_space, cpu_preprocessor, gpu_preprocessor
-        )
+    def __init__(self, action_space, cpu_ops, gpu_ops, *args, **kwargs):
+        super(MyCustomEnv, self).__init__(action_space, cpu_ops, gpu_ops)
 
     @classmethod
     def from_args(cls, args, seed, **kwargs):
@@ -64,9 +61,10 @@ class MyCustomEnv(EnvModule):
 
 
 if __name__ == "__main__":
-    env_reg = EnvRegistry()
-    env_reg.register_env(MyCustomEnv, ["scenario1", "scenario2"])
-    main(parse_args(), env_registry=env_reg)
+    import adept
+
+    adept.register_env(MyCustomEnv)
+    main(parse_args())
 
     # Call script like this to train agent:
     # python -m custom_env_stub.py --env scenario1

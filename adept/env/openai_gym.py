@@ -17,12 +17,12 @@ import torch
 from gym import spaces
 
 from adept.env._spaces import Space
-from adept.preprocess.observation import ObsPreprocessor
+from adept.preprocess.base.preprocessor import CPUPreprocessor, GPUPreprocessor
 from adept.preprocess.ops import (
     CastToFloat,
     GrayScaleAndMoveChannel,
-    ResizeTo84x84,
-    Divide255,
+    ResizeToNxM,
+    Divide,
     FrameStackCPU,
     FromNumpy,
 )
@@ -113,18 +113,22 @@ class AdeptGymEnv(EnvModule):
     def __init__(self, env, do_frame_stack):
         # Define the preprocessing operations to be performed on observations
         # CPU Ops
-        cpu_ops = [FromNumpy(), GrayScaleAndMoveChannel(), ResizeTo84x84()]
+        cpu_ops = [
+            FromNumpy("Box", "Box"),
+            GrayScaleAndMoveChannel("Box", "Box"),
+            ResizeToNxM(84, 84, "Box", "Box"),
+        ]
         if do_frame_stack:
-            cpu_ops.append(FrameStackCPU(4))
-        cpu_preprocessor = ObsPreprocessor(
+            cpu_ops.append(FrameStackCPU('Box', 'Box', 4))
+        cpu_preprocessor = CPUPreprocessor(
             cpu_ops,
             Space.from_gym(env.observation_space),
             Space.dtypes_from_gym(env.observation_space),
         )
 
         # GPU Ops
-        gpu_preprocessor = ObsPreprocessor(
-            [CastToFloat(), Divide255()],
+        gpu_preprocessor = GPUPreprocessor(
+            [CastToFloat("Box", "Box"), Divide("Box", "Box", 255)],
             cpu_preprocessor.observation_space,
             cpu_preprocessor.observation_dtypes,
         )
