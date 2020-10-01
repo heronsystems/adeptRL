@@ -31,7 +31,6 @@ class PPO(AgentModule):
         'discount': 0.99,
         'normalize_advantage': True,
         'entropy_weight': 0.01,
-        'gradient_norm_clipping': 0.5,
         'gae_discount': 0.95,
         'rollout_minibatch_len': 32,
         'nb_rollout_epoch': 4,
@@ -47,7 +46,6 @@ class PPO(AgentModule):
             discount,
             normalize_advantage,
             entropy_weight,
-            gradient_norm_clipping,
             gae_discount,
             rollout_minibatch_len,
             nb_rollout_epoch,
@@ -64,7 +62,6 @@ class PPO(AgentModule):
         self._exp_cache = Rollout(spec_builder, rollout_len)
         self._actor = PPOActorTrain(action_space)
         self.reward_normalizer = reward_normalizer
-        self.gradient_norm_clipping = gradient_norm_clipping
         self.gae_discount = gae_discount
         self.rollout_minibatch_len = rollout_minibatch_len
         self.nb_rollout_epoch = nb_rollout_epoch
@@ -84,7 +81,6 @@ class PPO(AgentModule):
             discount=args.discount,
             normalize_advantage=args.normalize_advantage,
             entropy_weight=args.entropy_weight,
-            gradient_norm_clipping=args.gradient_norm_clipping,
             gae_discount=args.gae_discount,
             rollout_minibatch_len=args.rollout_minibatch_len,
             nb_rollout_epoch=args.nb_rollout_epoch,
@@ -128,7 +124,7 @@ class PPO(AgentModule):
         next_values = last_values
         gae_returns = []
         for i in reversed(range(rollout_len)):
-            rewards = r.rewards[i]
+            rewards = self.reward_normalizer(r.rewards[i])
             terminal_mask = 1. - r.terminals[i].float()
             current_values = r.values[i].squeeze(-1)
             # generalized advantage estimation
