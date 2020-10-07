@@ -67,7 +67,7 @@ class CPUPreprocessor(_Preprocessor):
                 obs[op.output_field] = op.preprocess_cpu(obs[op.input_field])
             elif isinstance(op, MultiOperation):
                 input_tensors = [obs[k] for k in op.input_fields]
-                output_tensors = op.preprocess_gpu(input_tensors)
+                output_tensors = op.preprocess_cpu(input_tensors)
                 for k, tensor in zip(op.output_fields, output_tensors):
                     obs[k] = tensor
         return obs

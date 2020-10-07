@@ -42,6 +42,8 @@ Options:
     --manager <str>         Manager to use [default: SimpleEnvManager]
 """
 
+from absl import flags
+
 from adept.container import Init
 from adept.container.render import RenderContainer
 from adept.registry import REGISTRY as R
@@ -106,4 +108,6 @@ def main(args):
 
 
 if __name__ == "__main__":
+    FLAGS = flags.FLAGS
+    FLAGS([""])
     main(parse_args())
