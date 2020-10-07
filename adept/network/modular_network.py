@@ -336,3 +336,8 @@ class ModularNetwork(BaseNetwork, metaclass=abc.ABCMeta):
             for k, v in internal.items():
                 merged_internals[k] = v
         return merged_internals
+
+    def to(self, device):
+        super().to(device)
+        self.gpu_preprocessor = self.gpu_preprocessor.to(device)
+        return self
