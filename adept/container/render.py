@@ -14,11 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import torch
 
-from adept.manager import SimpleEnvManager
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.utils import dtensor_to_dev, listd_to_dlist
 from adept.utils.script_helpers import LogDirHelper
+from adept.utils.util import DotDict
 
 
 class RenderContainer:
@@ -33,9 +33,11 @@ class RenderContainer:
         gpu_id,
         seed,
         manager,
+        extra_args,
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
+        self.train_args = DotDict(**self.train_args, **extra_args)
         self.device = device = self._device_from_gpu_id(gpu_id)
         self.logger = logger
 
