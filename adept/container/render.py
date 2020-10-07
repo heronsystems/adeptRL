@@ -15,6 +15,7 @@
 import torch
 
 from adept.manager import SimpleEnvManager
+from adept.agent import AgentModule
 from adept.network import ModularNetwork
 from adept.registry import REGISTRY
 from adept.utils import dtensor_to_dev, listd_to_dlist
@@ -36,6 +37,7 @@ class RenderContainer:
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
+        self.train_args["render_env"] = True
         self.device = device = self._device_from_gpu_id(gpu_id)
         self.logger = logger
 
