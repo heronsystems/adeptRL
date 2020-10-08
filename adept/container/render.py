@@ -33,7 +33,7 @@ class RenderContainer:
         gpu_id,
         seed,
         manager,
-        extra_args,
+        extra_args={},
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
