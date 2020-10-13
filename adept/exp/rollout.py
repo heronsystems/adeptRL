@@ -62,7 +62,7 @@ class Rollout(dict, ExpModule):
         if no_env:
             self.cur_idx += 1
 
-    def write_env(self, obs, rewards, terminals, infos):
+    def write_env(self, obs, rewards, terminals, infos, actions):
         if self.has_obs:
             for k in self.obs_keys:
                 # exp_shape = self[k][self.cur_idx].shape
@@ -80,6 +80,10 @@ class Rollout(dict, ExpModule):
         # if exp_shape != write_shape:
         #     print(f'terminals shape mismatch')
         self["terminals"][self.cur_idx] = terminals
+
+        if actions:
+            for action in self.action_keys:
+                self[action][self.cur_idx] = actions[action]
 
         self.cur_idx += 1
 
