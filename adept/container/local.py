@@ -129,6 +129,7 @@ class Local(Container):
                 rewards.to(self.device).float(),
                 terminals.to(self.device).float(),
                 infos,
+                actions=actions,
             )
 
             # Perform state updates
@@ -180,10 +181,7 @@ class Local(Container):
             # Learn
             if self.agent.is_ready():
                 loss_dict, metric_dict = self.agent.learn_step(
-                    self.updater,
-                    self.network,
-                    next_obs,
-                    internals,
+                    self.updater, self.network, next_obs, internals,
                 )
                 total_loss = sum(loss_dict.values())
 

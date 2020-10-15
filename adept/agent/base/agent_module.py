@@ -132,8 +132,10 @@ class AgentModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         self.exp_cache.write_actor(experience)
         return actions, internal_states
 
-    def observe(self, obs, rewards, terminals, infos):
-        self.exp_cache.write_env(obs, rewards, terminals, infos)
+    # TODO: let's turn actions into an arg rather than a kwarg once the other parts of
+    # Adept have properly been tested with this change.
+    def observe(self, obs, rewards, terminals, infos, actions=None):
+        self.exp_cache.write_env(obs, rewards, terminals, infos, actions)
         return rewards, terminals, infos
 
     def to(self, device):
