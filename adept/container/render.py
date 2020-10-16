@@ -37,11 +37,7 @@ class RenderContainer:
     ):
         self.log_dir_helper = log_dir_helper = LogDirHelper(log_id_dir)
         self.train_args = train_args = log_dir_helper.load_args()
-        if not set(extra_args.keys()).union(set(self.train_args.keys())):
-            self.train_args = DotDict(**self.train_args, **extra_args)
-        else:
-            for key in extra_args:
-                self.train_args[key] = extra_args[key]
+        self.train_args = DotDict({**self.train_args, **extra_args})
         self.device = device = self._device_from_gpu_id(gpu_id)
         self.logger = logger
 
