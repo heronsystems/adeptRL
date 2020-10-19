@@ -18,7 +18,7 @@ import datetime
 
 import numpy as np
 import ray
-from ray.experimental.sgd.utils import find_free_port
+from ray.util.sgd.utils import find_free_port
 import torch
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
