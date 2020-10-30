@@ -1,14 +1,18 @@
 from collections import deque
 from functools import reduce
 
-import cv2
 import torch
 from torch.nn import functional as F
 
 from adept.preprocess.base import SimpleOperation
 from adept.utils.util import numpy_to_torch_dtype
 
-cv2.ocl.setUseOpenCL(False)
+try:
+    import cv2
+    cv2.ocl.setUseOpenCL(False)
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
 
 
 class CastToFloat(SimpleOperation):
@@ -54,6 +58,11 @@ class CastToHalf(SimpleOperation):
 
 
 class GrayScaleAndMoveChannel(SimpleOperation):
+    def __init__(self, *args, **kwargs):
+        if not CV2_AVAILABLE:
+            raise NotImplementedError("GrayScaleAndMoveChannel requires cv2")
+        super().__init__(*args, **kwargs)
+
     def update_shape(self, old_shape):
         return (1,) + old_shape[:-1]
 
@@ -81,6 +90,8 @@ class GrayScaleAndMoveChannel(SimpleOperation):
 
 class ResizeToNxM(SimpleOperation):
     def __init__(self, n, m, input_field, output_field):
+        if not CV2_AVAILABLE:
+            raise NotImplementedError("ResizeToNxM requires cv2")
         super().__init__(input_field, output_field)
         self.n = n
         self.m = m

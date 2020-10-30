@@ -9,6 +9,10 @@ with open("README.md", "r") as fh:
 
 extras = {
     "profiler": ["pyinstrument>=2.0"],
+    "atari": [
+        "gym[atari]>=0.10",
+        "opencv-python-headless>=3.4",
+    ]
 }
 test_deps = ["pytest"]
 
@@ -34,10 +38,8 @@ setup(
     install_requires=[
         "protobuf==3.13.0",
         "numpy>=1.14",
-        "gym[atari]>=0.10",
         "tensorboard>=1.14",
         "cloudpickle>=0.5",
-        "opencv-python-headless>=3.4",
         "pyzmq>=17.1.2",
         "docopt>=0.6",
         "torch>=1.3.1",
