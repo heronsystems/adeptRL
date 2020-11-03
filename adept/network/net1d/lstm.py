@@ -44,6 +44,7 @@ class LSTM(SubModule1D):
     def _forward(self, xs, internals, **kwargs):
         hxs = self.stacked_internals("hx", internals)
         cxs = self.stacked_internals("cx", internals)
+        hxs, cxs = hxs.to(xs.device), cxs.to(xs.device)
         hxs, cxs = self.lstm(xs, (hxs, cxs))
 
         return (

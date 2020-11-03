@@ -219,7 +219,7 @@ class ResNet(nn.Module):
         self.layer1 = self._make_layer(block, 64, layer_sizes[0])
         self.layer2 = self._make_layer(block, 128, layer_sizes[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layer_sizes[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layer_sizes[3], stride=2)
+        # self.layer4 = self._make_layer(block, 512, layer_sizes[3], stride=2)
         self.avgpool = nn.AvgPool2d(5, stride=1)
         self.nb_output_channel = 512 * block.expansion
 
@@ -257,7 +257,7 @@ class ResNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        x = self.layer4(x)
+        # x = self.layer4(x)
         x = self.avgpool(x)
         return x
 

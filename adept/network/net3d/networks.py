@@ -30,6 +30,9 @@ from ._resnets import (
     resnet152v2,
 )
 from ..base.submodule import SubModule
+from .submodule_3d import SubModule3D
+
+from adept.network.net3d.four_conv import calc_output_dim
 
 
 class Nature(SubModule):
@@ -246,9 +249,9 @@ class FourConvLarger(SubModule):
         return xs
 
 
-class BaseResNet(SubModule, metaclass=abc.ABCMeta):
-    def __init__(self, in_shape, normalize):
-        super().__init__()
+class BaseResNet(SubModule3D, metaclass=abc.ABCMeta):
+    def __init__(self, in_shape, id, normalize):
+        super().__init__(in_shape, id)
         bias = not normalize
         self.conv1 = Conv2d(
             in_shape[0], 64, 7, stride=2, padding=1, bias=bias
@@ -267,28 +270,44 @@ class BaseResNet(SubModule, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     @classmethod
-    def from_args(cls, in_shape, args):
-        return cls(in_shape, args.normalize)
+    def from_args(cls, args, id, in_shape):
+        return cls(in_shape, id, args.normalize)
 
     @property
-    def nb_output_channel(self):
-        return self.resnet.nb_output_channel
+    def _output_shape(self):
+        return (self.resnet.nb_input_channel,)
 
-    def forward(self, xs):
+    def _forward(self, xs, internals, **kwargs):
         xs = F.relu(self.bn1(self.conv1(xs)))
         xs = self.resnet(xs)
         xs = xs.view(xs.size(0), -1)
-        return xs
+        return xs, {}
+
+    def _new_internals(self):
+        return {}
 
 
 class ResNet18(BaseResNet):
-    def __init__(self, in_shape, normalize):
-        super().__init__(in_shape, normalize)
+    def __init__(self, in_shape, id, normalize):
+        super().__init__(in_shape, id, normalize)
+        self._input_shape = in_shape
         self._resnet = resnet18()
 
     @property
     def resnet(self):
         return self._resnet
+
+    @property
+    def _output_shape(self):
+        dim1 = calc_output_dim(self._input_shape[0], 1, 1, 0, 1)
+        dim1 = calc_output_dim(dim1, 1, 2, 0, 1)
+        dim1 = calc_output_dim(dim1, 1, 2, 0, 1)
+        # dim1 = calc_output_dim(dim1, 1, 2, 0, 1)
+        dim2 = calc_output_dim(self._input_shape[1], 1, 1, 0, 1)
+        dim2 = calc_output_dim(dim2, 1, 2, 0, 1)
+        dim2 = calc_output_dim(dim2, 1, 2, 0, 1)
+        # dim2 = calc_output_dim(dim2, 1, 2, 0, 1)
+        return (dim1, dim2, self.resnet.nb_input_channel)
 
 
 class ResNet18V2(BaseResNet):
