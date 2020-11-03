@@ -129,7 +129,6 @@ class Local(Container):
                 rewards.to(self.device).float(),
                 terminals.to(self.device).float(),
                 infos,
-                actions=actions,
             )
 
             # Perform state updates
