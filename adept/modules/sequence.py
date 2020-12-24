@@ -63,7 +63,7 @@ class LSTMCellLayerNorm(Module):
         # cell computations
         print(c.device, f_t.device, i_t.device, g_t.device)
         c_t = torch.mul(c, f_t) + torch.mul(i_t, g_t)
-        c_t = self.ln_csell(c_t)
+        c_t = self.ln_cell(c_t)
         h_t = torch.mul(o_t, c_t.tanh())
 
         return h_t, c_t

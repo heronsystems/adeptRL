@@ -55,8 +55,8 @@ class LSTM(SubModule1D):
             },
         )
 
-    def _new_internals(self):
+    def _new_internals(self, device=None):
         return {
-            "hx": torch.zeros(self._nb_hidden),
-            "cx": torch.zeros(self._nb_hidden),
+            "hx": torch.zeros(self._nb_hidden).to(device),
+            "cx": torch.zeros(self._nb_hidden).to(device),
         }
