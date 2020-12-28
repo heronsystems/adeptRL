@@ -11,7 +11,7 @@ extras = {
     "profiler": ["pyinstrument>=2.0"],
     "atari": [
         "gym[atari]>=0.10",
-        "opencv-python-headless>=3.4",
+        "opencv-python-headless<4,>=3.4",
     ]
 }
 test_deps = ["pytest"]
@@ -36,15 +36,14 @@ setup(
     python_requires=">=3.5.0",
     packages=find_packages(),
     install_requires=[
-        "protobuf==3.13.0",
         "numpy>=1.14",
-        "tensorboard>=1.14",
+        "tensorflow<3,>=2.4.0",
         "cloudpickle>=0.5",
         "pyzmq>=17.1.2",
         "docopt>=0.6",
         "torch>=1.3.1",
         "torchvision>=0.4.2",
-        "ray>=0.8.6",
+        "ray[tune]<1,>=0.8.6",
         "pandas>=1.0.5",
         "msgpack<2,>=1.0.2",
         "msgpack-numpy<1,>=0.4.7",

@@ -36,7 +36,7 @@ We're happy to accept feedback and contributions.
 ```bash
 git clone https://github.com/heronsystems/adeptRL
 cd adeptRL
-pip install .
+pip install -e .[all]
 ```
 
 **From docker:**
