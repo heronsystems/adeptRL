@@ -98,6 +98,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             internal_states: Dict[str, Tensor]
         """
 
+        network = network.eval()
         predictions, internal_states, pobs = network(obs, prev_internals)
 
         if "available_actions" in obs:
