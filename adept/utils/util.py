@@ -79,32 +79,24 @@ def json_to_dict(file_path):
 
 
 _numpy_to_torch_dtype = {
-    np.float16: torch.float16,
-    np.float32: torch.float32,
-    np.float64: torch.float64,
-    np.uint8: torch.uint8,
-    np.int8: torch.int8,
-    np.int16: torch.int16,
-    np.int32: torch.int32,
-    np.int64: torch.int64,
+    "float16": torch.float16,
+    "float32": torch.float32,
+    "float64": torch.float64,
+    "uint8": torch.uint8,
+    "int8": torch.int8,
+    "int16": torch.int16,
+    "int32": torch.int32,
+    "int64": torch.int64,
 }
 _torch_to_numpy_dtype = {v: k for k, v in _numpy_to_torch_dtype.items()}
 
 
 def numpy_to_torch_dtype(dtype):
-
-    # check if dtype is weird and convert to familiar format
-    if type(dtype) == np.dtype:
-        dtype = dtype.type
-
-    if dtype not in _numpy_to_torch_dtype:
+    if dtype.name not in _numpy_to_torch_dtype:
         raise ValueError(
-            "Could not convert numpy dtype {} to a torch dtype.".format(
-                dtype
-            )
+            f"Could not convert numpy dtype {dtype.name} to a torch dtype."
         )
-
-    return _numpy_to_torch_dtype[dtype]
+    return _numpy_to_torch_dtype[dtype.name]
 
 
 def torch_to_numpy_dtype(dtype):
