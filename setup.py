@@ -36,7 +36,7 @@ setup(
     python_requires=">=3.5.0",
     packages=find_packages(),
     install_requires=[
-        "protobuf==3.13.0",
+        "protobuf==3.15.3",
         "numpy>=1.14",
         "tensorboard>=1.14",
         "cloudpickle>=0.5",
