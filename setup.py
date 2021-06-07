@@ -44,7 +44,7 @@ setup(
         "docopt>=0.6",
         "torch>=1.3.1",
         "torchvision>=0.4.2",
-        "ray>=0.8.6",
+        "ray>=1.3.0",
         "pandas>=1.0.5",
         "msgpack",
         "msgpack-numpy",
