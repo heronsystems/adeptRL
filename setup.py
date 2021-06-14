@@ -36,6 +36,7 @@ setup(
     python_requires=">=3.5.0",
     packages=find_packages(),
     install_requires=[
+        "protobuf>=3.15.3",
         "numpy>=1.14",
         "tensorflow<3,>=2.4.0",
         "cloudpickle>=0.5",
@@ -43,7 +44,7 @@ setup(
         "docopt>=0.6",
         "torch>=1.3.1",
         "torchvision>=0.4.2",
-        "ray[tune]<1,>=0.8.6",
+        "ray>=1.3.0",
         "pandas>=1.0.5",
         "msgpack<2,>=1.0.2",
         "msgpack-numpy<1,>=0.4.7",
