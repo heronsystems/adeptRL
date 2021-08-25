@@ -1,4 +1,5 @@
 import abc
+from typing import Generator
 import torch
 from torch.nn import functional as F
 
@@ -63,14 +64,15 @@ class ACActorHelperMixin(metaclass=abc.ABCMeta):
         return -(log_softmax * softmax).sum(1, keepdim=True)
 
     @staticmethod
-    def sample_action(softmax):
+    def sample_action(softmax, entropy_generator=None):
         """
         Samples an action from a softmax distribution.
 
         :param softmax: torch.Tensor (N, X)
+        :param entropy_generator: torch.Generator
         :return: torch.Tensor (N)
         """
-        return softmax.multinomial(1).squeeze(1)
+        return softmax.multinomial(1, generator=entropy_generator).squeeze(1)
 
     @staticmethod
     def select_action(softmax):

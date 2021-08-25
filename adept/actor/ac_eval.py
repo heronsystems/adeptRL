@@ -36,14 +36,14 @@ class ACActorEval(ActorModule, ACActorHelperMixin):
 
 
 class ACActorEvalSample(ACActorEval):
-    def compute_action_exp(self, preds, internals, obs, available_actions):
+    def compute_action_exp(self, preds, internals, obs, available_actions, entropy_generator):
         actions = OrderedDict()
 
         for key in self.action_keys:
             logit = self.flatten_logits(preds[key])
 
             softmax = self.softmax(logit)
-            action = self.sample_action(softmax)
+            action = self.sample_action(softmax, entropy_generator)
 
             actions[key] = action.cpu()
         return actions, {"value": preds["critic"].squeeze(-1)}

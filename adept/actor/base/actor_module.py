@@ -88,7 +88,7 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    def act(self, network, obs, prev_internals):
+    def act(self, network, obs, prev_internals, entropy_generator=None):
         """
         :param obs: Dict[str, Tensor]
         :param prev_internals: previous interal states. Dict[str, Tensor]
@@ -106,6 +106,6 @@ class ActorModule(RequiresArgsMixin, metaclass=abc.ABCMeta):
             av_actions = None
 
         actions, exp = self.compute_action_exp(
-            predictions, prev_internals, pobs, av_actions
+            predictions, prev_internals, pobs, av_actions, entropy_generator=entropy_generator
         )
         return actions, exp, internal_states
